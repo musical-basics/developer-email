@@ -6,38 +6,36 @@ import { CodePane } from "./code-pane"
 import { PreviewPane } from "./preview-pane"
 import { renderTemplate } from "@/lib/render-template"
 
-const DEFAULT_HTML = `<div><img src="{{hero_src}}" class="w-full" /> <h1>{{headline}}</h1></div>`
-
-const DEFAULT_ASSETS: Record<string, string> = {
-    hero_src: "https://via.placeholder.com/600x200",
-    headline: "Welcome to the Tournament",
+interface EmailEditorProps {
+    html: string
+    assets: Record<string, string>
+    onHtmlChange: (html: string) => void
+    onAssetsChange: (assets: Record<string, string>) => void
+    onSave?: () => void
 }
 
-export function EmailEditor() {
-    const [code, setCode] = useState(DEFAULT_HTML)
-    const [assets, setAssets] = useState<Record<string, string>>(DEFAULT_ASSETS)
-
+export function EmailEditor({ html, assets, onHtmlChange, onAssetsChange, onSave }: EmailEditorProps) {
     // Extract variables from code using regex
     const extractedVariables = useMemo(() => {
         const regex = /\{\{(\w+)\}\}/g
         const matches: string[] = []
         let match
-        while ((match = regex.exec(code)) !== null) {
+        while ((match = regex.exec(html)) !== null) {
             if (!matches.includes(match[1])) {
                 matches.push(match[1])
             }
         }
         return matches
-    }, [code])
+    }, [html])
 
     // Update a single asset
     const updateAsset = useCallback((key: string, value: string) => {
-        setAssets((prev) => ({ ...prev, [key]: value }))
-    }, [])
+        onAssetsChange({ ...assets, [key]: value })
+    }, [assets, onAssetsChange])
 
     const previewHtml = useMemo(() => {
-        return renderTemplate(code, assets)
-    }, [code, assets])
+        return renderTemplate(html, assets)
+    }, [html, assets])
 
     return (
         <div className="flex h-full bg-background text-foreground">
@@ -45,10 +43,25 @@ export function EmailEditor() {
             <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
 
             {/* Center Pane - Code Editor */}
-            <CodePane code={code} onChange={setCode} />
+            <CodePane code={html} onChange={onHtmlChange} />
 
             {/* Right Pane - Preview */}
-            <PreviewPane html={previewHtml} />
+            <div className="flex-1 flex flex-col min-w-0">
+                <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card">
+                    <h2 className="text-sm font-semibold">Preview</h2>
+                    {onSave && (
+                        <button
+                            onClick={onSave}
+                            className="bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                        >
+                            Save Campaign
+                        </button>
+                    )}
+                </div>
+                <div className="flex-1 overflow-hidden">
+                    <PreviewPane html={previewHtml} />
+                </div>
+            </div>
         </div>
     )
 }

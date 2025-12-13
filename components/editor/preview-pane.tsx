@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Eye, Monitor, Smartphone } from "lucide-react"
 
 interface PreviewPaneProps {
     html: string
@@ -40,54 +39,52 @@ export function PreviewPane({ html }: PreviewPaneProps) {
         }
     }, [html])
 
+    // Expose view mode controller if needed, but for now we follow the exact layout request:
+    // flex-1 bg-[#0a0a0a] h-full overflow-y-auto relative
+
     return (
-        <div className="flex-1 flex flex-col bg-card">
-            <div className="p-4 border-b border-border flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <Eye className="w-4 h-4" />
-                    Live Preview
-                </h2>
-                <div className="flex items-center gap-2">
-                    <div className="flex items-center rounded-md border border-border overflow-hidden">
-                        <button
-                            onClick={() => setViewMode("desktop")}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "desktop"
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted text-muted-foreground hover:text-foreground"
-                                }`}
-                        >
-                            <Monitor className="w-3.5 h-3.5" />
-                            Desktop
-                        </button>
-                        <button
-                            onClick={() => setViewMode("mobile")}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === "mobile"
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-muted text-muted-foreground hover:text-foreground"
-                                }`}
-                        >
-                            <Smartphone className="w-3.5 h-3.5" />
-                            Mobile
-                        </button>
-                    </div>
-                    <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400 font-medium">Live</span>
-                </div>
-            </div>
-            <div className="flex-1 overflow-auto bg-muted/50 p-4 flex justify-center">
+        <div className="flex-1 bg-[#0a0a0a] h-full overflow-y-auto relative">
+            <div className="min-h-full w-full flex justify-center p-8">
                 <div
                     className="bg-white shadow-lg transition-all duration-300"
                     style={{
                         width: viewMode === "mobile" ? "375px" : "600px",
-                        height: "100%",
+                        // Resetting height to auto so it grows with content
+                        height: "max-content",
+                        minHeight: "100%",
+                        // Allow toggle externally if we refactor, but for now internal state
                     }}
                 >
                     <iframe
                         ref={iframeRef}
                         title="Email Preview"
                         className="w-full h-full border-0"
-                        sandbox="allow-same-origin"
+                        style={{ minHeight: "800px" }} // Ensure substantial height
+                        sandbox="allow-same-origin allow-scripts"
                     />
                 </div>
+            </div>
+
+            {/* View Mode Toggle Overlay */}
+            <div className="absolute bottom-4 right-4 flex items-center bg-black/50 backdrop-blur-sm p-1 rounded-md border border-white/10">
+                <button
+                    onClick={() => setViewMode("desktop")}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${viewMode === "desktop"
+                        ? "bg-white text-black"
+                        : "text-white/70 hover:text-white"
+                        }`}
+                >
+                    Desktop
+                </button>
+                <button
+                    onClick={() => setViewMode("mobile")}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-sm transition-colors ${viewMode === "mobile"
+                        ? "bg-white text-black"
+                        : "text-white/70 hover:text-white"
+                        }`}
+                >
+                    Mobile
+                </button>
             </div>
         </div>
     )
