@@ -10,3 +10,13 @@ export interface Campaign {
     variable_values: Record<string, any> | null
     status: CampaignStatus
 }
+
+export interface Subscriber {
+    id: string
+    email: string
+    first_name: string
+    last_name: string
+    tags: string[] | null
+    status: 'active' | 'unsubscribed' | 'bounced'
+    created_at: string
+}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
     Users,
     Search,
@@ -32,74 +32,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-
-// Types
-type SubscriberStatus = "Active" | "Bounced" | "Unsubscribed"
-
-interface Subscriber {
-    id: string
-    email: string
-    firstName: string
-    lastName: string
-    tags: string[]
-    status: SubscriberStatus
-    addedAt: string
-    notes: string
-}
-
-// Mock Data
-const initialSubscribers: Subscriber[] = [
-    {
-        id: "1",
-        email: "lionel@musicalbasics.com",
-        firstName: "Lionel",
-        lastName: "Yu",
-        tags: ["Admin", "Piano"],
-        status: "Active",
-        addedAt: "2024-12-12",
-        notes: "Founder and admin. Prefers communication via email.",
-    },
-    {
-        id: "2",
-        email: "student@example.com",
-        firstName: "Alice",
-        lastName: "Johnson",
-        tags: ["Student", "Theory"],
-        status: "Active",
-        addedAt: "2024-11-28",
-        notes: "Enrolled in music theory course. Very engaged student.",
-    },
-    {
-        id: "3",
-        email: "olduser@test.com",
-        firstName: "Bob",
-        lastName: "Smith",
-        tags: [],
-        status: "Bounced",
-        addedAt: "2024-10-15",
-        notes: "Email bounced multiple times. Need to verify address.",
-    },
-    {
-        id: "4",
-        email: "vip.member@music.com",
-        firstName: "Sarah",
-        lastName: "Williams",
-        tags: ["VIP", "Piano", "Theory"],
-        status: "Active",
-        addedAt: "2024-09-20",
-        notes: "Long-time VIP member. Completed multiple courses.",
-    },
-    {
-        id: "5",
-        email: "inactive@user.com",
-        firstName: "Mike",
-        lastName: "Brown",
-        tags: ["Student"],
-        status: "Unsubscribed",
-        addedAt: "2024-08-05",
-        notes: "Unsubscribed due to moving abroad.",
-    },
-]
+import { AppSidebar } from "@/components/app-sidebar"
+import { createClient } from "@/lib/supabase/client"
+import { Subscriber } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
 
 const allTags = ["Admin", "Piano", "Student", "Theory", "VIP", "Beginner", "Advanced"]
 
@@ -114,16 +50,17 @@ const tagColors: Record<string, string> = {
 }
 
 const statusStyles: Record<string, string> = {
-    Active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    Bounced: "bg-red-500/20 text-red-400 border-red-500/30",
-    Unsubscribed: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
+    active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    bounced: "bg-red-500/20 text-red-400 border-red-500/30",
+    unsubscribed: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
 }
 
 function getInitials(firstName: string, lastName: string): string {
-    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+    return `${(firstName || "").charAt(0)}${(lastName || "").charAt(0)}`.toUpperCase()
 }
 
 function formatDate(dateString: string): string {
+    if (!dateString) return ""
     return new Date(dateString).toLocaleDateString("en-US", {
         month: "short",
         day: "numeric",
@@ -131,33 +68,59 @@ function formatDate(dateString: string): string {
     })
 }
 
-import { AppSidebar } from "@/components/app-sidebar"
-
 export default function AudienceManagerPage() {
-    const [subscribers, setSubscribers] = useState<Subscriber[]>(initialSubscribers)
+    const [subscribers, setSubscribers] = useState<Subscriber[]>([])
+    const [loading, setLoading] = useState(true)
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedTags, setSelectedTags] = useState<string[]>([])
     const [selectedIds, setSelectedIds] = useState<string[]>([])
-    const [editingSubscriber, setEditingSubscriber] = useState<Subscriber | null>(null)
     const [isDrawerOpen, setIsDrawerOpen] = useState(false)
     const [isNewSubscriber, setIsNewSubscriber] = useState(false)
-    const [formData, setFormData] = useState<Subscriber>({
-        id: "",
+
+    // Form State
+    const [formData, setFormData] = useState<Partial<Subscriber>>({
         email: "",
-        firstName: "",
-        lastName: "",
+        first_name: "",
+        last_name: "",
         tags: [],
-        status: "Active",
-        addedAt: new Date().toISOString().split("T")[0],
-        notes: "",
+        status: "active",
     })
     const [newTag, setNewTag] = useState("")
+    const [saving, setSaving] = useState(false)
+
+    const supabase = createClient()
+    const { toast } = useToast()
+
+    // Fetch Subscribers
+    const fetchSubscribers = async () => {
+        setLoading(true)
+        const { data, error } = await supabase
+            .from("subscribers")
+            .select("*")
+            .order("created_at", { ascending: false })
+
+        if (data) {
+            setSubscribers(data as Subscriber[])
+        } else if (error) {
+            console.error("Error fetching subscribers:", error)
+            toast({
+                title: "Error fetching subscribers",
+                description: error.message,
+                variant: "destructive",
+            })
+        }
+        setLoading(false)
+    }
+
+    useEffect(() => {
+        fetchSubscribers()
+    }, [])
 
     // Stats
     const stats = useMemo(() => {
         const total = subscribers.length
-        const active = subscribers.filter((s) => s.status === "Active").length
-        const unsubscribed = subscribers.filter((s) => s.status === "Unsubscribed").length
+        const active = subscribers.filter((s) => s.status === "active").length
+        const unsubscribed = subscribers.filter((s) => s.status === "unsubscribed").length
         return { total, active, unsubscribed }
     }, [subscribers])
 
@@ -166,10 +129,11 @@ export default function AudienceManagerPage() {
         return subscribers.filter((subscriber) => {
             const matchesSearch =
                 subscriber.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                subscriber.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                subscriber.lastName.toLowerCase().includes(searchQuery.toLowerCase())
+                (subscriber.first_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+                (subscriber.last_name || "").toLowerCase().includes(searchQuery.toLowerCase())
 
-            const matchesTags = selectedTags.length === 0 || selectedTags.some((tag) => subscriber.tags.includes(tag))
+            const subscriberTags = subscriber.tags || []
+            const matchesTags = selectedTags.length === 0 || selectedTags.some((tag) => subscriberTags.includes(tag))
 
             return matchesSearch && matchesTags
         })
@@ -192,51 +156,97 @@ export default function AudienceManagerPage() {
     }
 
     const handleEdit = (subscriber: Subscriber) => {
-        setEditingSubscriber(subscriber)
         setFormData(subscriber)
         setIsNewSubscriber(false)
         setIsDrawerOpen(true)
     }
 
     const handleAddSubscriber = () => {
-        setEditingSubscriber(null)
         setFormData({
-            id: crypto.randomUUID(),
             email: "",
-            firstName: "",
-            lastName: "",
+            first_name: "",
+            last_name: "",
             tags: [],
-            status: "Active",
-            addedAt: new Date().toISOString().split("T")[0],
-            notes: "",
+            status: "active",
         })
         setIsNewSubscriber(true)
         setIsDrawerOpen(true)
     }
 
-    const handleSave = () => {
-        if (isNewSubscriber) {
-            setSubscribers((prev) => [formData, ...prev])
-        } else {
-            setSubscribers((prev) => prev.map((s) => (s.id === formData.id ? formData : s)))
+    const handleSave = async () => {
+        setSaving(true)
+        const payload = {
+            email: formData.email,
+            first_name: formData.first_name,
+            last_name: formData.last_name,
+            tags: formData.tags || [],
+            status: formData.status,
         }
-        setIsDrawerOpen(false)
+
+        let error
+
+        if (isNewSubscriber) {
+            const { error: insertError } = await supabase
+                .from("subscribers")
+                .insert([payload])
+            error = insertError
+        } else if (formData.id) {
+            const { error: updateError } = await supabase
+                .from("subscribers")
+                .update(payload)
+                .eq("id", formData.id)
+            error = updateError
+        }
+
+        if (error) {
+            toast({
+                title: "Error saving subscriber",
+                description: error.message,
+                variant: "destructive",
+            })
+        } else {
+            toast({
+                title: isNewSubscriber ? "Subscriber added" : "Subscriber updated",
+                description: "The changes have been saved successfully.",
+            })
+            setIsDrawerOpen(false)
+            fetchSubscribers()
+        }
+        setSaving(false)
     }
 
-    const handleDelete = (id: string) => {
-        setSubscribers((prev) => prev.filter((s) => s.id !== id))
-        setSelectedIds((prev) => prev.filter((i) => i !== id))
+    const handleDelete = async (id: string) => {
+        const { error } = await supabase.from("subscribers").delete().eq("id", id)
+
+        if (error) {
+            toast({
+                title: "Error deleting subscriber",
+                description: error.message,
+                variant: "destructive",
+            })
+        } else {
+            toast({
+                title: "Subscriber deleted",
+                description: "The subscriber has been removed.",
+            })
+            // Optimistic update or refresh
+            setSubscribers((prev) => prev.filter((s) => s.id !== id))
+            setSelectedIds((prev) => prev.filter((i) => i !== id))
+        }
     }
 
     const handleAddTag = () => {
-        if (newTag.trim() && !formData.tags.includes(newTag.trim())) {
-            setFormData({ ...formData, tags: [...formData.tags, newTag.trim()] })
+        const tag = newTag.trim()
+        const currentTags = formData.tags || []
+        if (tag && !currentTags.includes(tag)) {
+            setFormData({ ...formData, tags: [...currentTags, tag] })
             setNewTag("")
         }
     }
 
     const handleRemoveTag = (tagToRemove: string) => {
-        setFormData({ ...formData, tags: formData.tags.filter((tag) => tag !== tagToRemove) })
+        const currentTags = formData.tags || []
+        setFormData({ ...formData, tags: currentTags.filter((tag) => tag !== tagToRemove) })
     }
 
     const allSelected = filteredSubscribers.length > 0 && selectedIds.length === filteredSubscribers.length
@@ -379,99 +389,97 @@ export default function AudienceManagerPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {filteredSubscribers.map((subscriber) => (
-                                    <TableRow
-                                        key={subscriber.id}
-                                        className="border-border cursor-pointer hover:bg-muted/50"
-                                        onClick={() => handleEdit(subscriber)}
-                                    >
-                                        <TableCell onClick={(e) => e.stopPropagation()}>
-                                            <Checkbox
-                                                checked={selectedIds.includes(subscriber.id)}
-                                                onCheckedChange={() => handleSelectOne(subscriber.id)}
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-3">
-                                                <Avatar className="h-9 w-9 border border-border">
-                                                    <AvatarFallback className="bg-muted text-muted-foreground text-sm">
-                                                        {getInitials(subscriber.firstName, subscriber.lastName)}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div>
-                                                    <p className="font-medium text-foreground">{subscriber.email}</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {subscriber.firstName} {subscriber.lastName}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {subscriber.tags.length > 0 ? (
-                                                    subscriber.tags.map((tag) => (
-                                                        <Badge
-                                                            key={tag}
-                                                            variant="outline"
-                                                            className={tagColors[tag] || "bg-muted text-muted-foreground"}
-                                                        >
-                                                            {tag}
-                                                        </Badge>
-                                                    ))
-                                                ) : (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            handleEdit(subscriber)
-                                                        }}
-                                                    >
-                                                        <Plus className="mr-1 h-3 w-3" />
-                                                        Add tag
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline" className={statusStyles[subscriber.status]}>
-                                                {subscriber.status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">{formatDate(subscriber.addedAt)}</TableCell>
-                                        <TableCell onClick={(e) => e.stopPropagation()}>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                        <span className="sr-only">Open menu</span>
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleEdit(subscriber)}>
-                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                        Edit
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => handleDelete(subscriber.id)}
-                                                        className="text-red-400 focus:text-red-400"
-                                                    >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Delete
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                            Loading subscribers...
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                ) : filteredSubscribers.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                            No subscribers found.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    filteredSubscribers.map((subscriber) => (
+                                        <TableRow
+                                            key={subscriber.id}
+                                            className="border-border cursor-pointer hover:bg-muted/50"
+                                            onClick={() => handleEdit(subscriber)}
+                                        >
+                                            <TableCell onClick={(e) => e.stopPropagation()}>
+                                                <Checkbox
+                                                    checked={selectedIds.includes(subscriber.id)}
+                                                    onCheckedChange={() => handleSelectOne(subscriber.id)}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-9 w-9 border border-border">
+                                                        <AvatarFallback className="bg-muted text-muted-foreground text-sm">
+                                                            {getInitials(subscriber.first_name, subscriber.last_name)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <div>
+                                                        <p className="font-medium text-foreground">{subscriber.email}</p>
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {subscriber.first_name} {subscriber.last_name}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {(subscriber.tags || []).length > 0 ? (
+                                                        (subscriber.tags || []).map((tag) => (
+                                                            <Badge
+                                                                key={tag}
+                                                                variant="outline"
+                                                                className={tagColors[tag] || "bg-muted text-muted-foreground"}
+                                                            >
+                                                                {tag}
+                                                            </Badge>
+                                                        ))
+                                                    ) : (
+                                                        <span className="text-xs text-muted-foreground">-</span>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant="outline" className={statusStyles[subscriber.status] || "bg-muted"}>
+                                                    {subscriber.status.charAt(0).toUpperCase() + subscriber.status.slice(1)}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{formatDate(subscriber.created_at)}</TableCell>
+                                            <TableCell onClick={(e) => e.stopPropagation()}>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                            <span className="sr-only">Open menu</span>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => handleEdit(subscriber)}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Edit
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => handleDelete(subscriber.id)}
+                                                            className="text-red-400 focus:text-red-400"
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
                             </TableBody>
                         </Table>
-                        {filteredSubscribers.length === 0 && (
-                            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                                <p>No subscribers found</p>
-                            </div>
-                        )}
                     </div>
 
                     {/* Edit Drawer */}
@@ -506,8 +514,8 @@ export default function AudienceManagerPage() {
                                             <Label htmlFor="firstName">First Name</Label>
                                             <Input
                                                 id="firstName"
-                                                value={formData.firstName}
-                                                onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                                                value={formData.first_name}
+                                                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
                                                 placeholder="John"
                                                 className="bg-card"
                                             />
@@ -516,11 +524,29 @@ export default function AudienceManagerPage() {
                                             <Label htmlFor="lastName">Last Name</Label>
                                             <Input
                                                 id="lastName"
-                                                value={formData.lastName}
-                                                onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                                                value={formData.last_name}
+                                                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                                                 placeholder="Doe"
                                                 className="bg-card"
                                             />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="status">Status</Label>
+                                        <div className="flex gap-2">
+                                            {['active', 'unsubscribed', 'bounced'].map((s) => (
+                                                <Button
+                                                    key={s}
+                                                    type="button"
+                                                    variant={formData.status === s ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={() => setFormData({ ...formData, status: s as any })}
+                                                    className="capitalize"
+                                                >
+                                                    {s}
+                                                </Button>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
@@ -548,8 +574,8 @@ export default function AudienceManagerPage() {
                                     </div>
 
                                     <div className="flex flex-wrap gap-2">
-                                        {formData.tags.length > 0 ? (
-                                            formData.tags.map((tag) => (
+                                        {(formData.tags || []).length > 0 ? (
+                                            (formData.tags || []).map((tag) => (
                                                 <Badge
                                                     key={tag}
                                                     variant="outline"
@@ -571,24 +597,13 @@ export default function AudienceManagerPage() {
                                     </div>
                                 </div>
 
-                                {/* Internal Notes */}
-                                <div className="space-y-4">
-                                    <h3 className="text-sm font-medium text-foreground">Internal Notes</h3>
-                                    <Textarea
-                                        value={formData.notes}
-                                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                        placeholder="Add notes about this subscriber..."
-                                        className="min-h-[100px] bg-card"
-                                    />
-                                </div>
-
                                 {/* Actions */}
                                 <div className="flex gap-3 pt-4">
                                     <Button variant="outline" onClick={() => setIsDrawerOpen(false)} className="flex-1 bg-transparent">
                                         Cancel
                                     </Button>
-                                    <Button onClick={handleSave} className="flex-1 bg-amber-500 text-zinc-900 hover:bg-amber-400">
-                                        {isNewSubscriber ? "Add Subscriber" : "Save Changes"}
+                                    <Button onClick={handleSave} disabled={saving} className="flex-1 bg-amber-500 text-zinc-900 hover:bg-amber-400">
+                                        {saving ? "Saving..." : (isNewSubscriber ? "Add Subscriber" : "Save Changes")}
                                     </Button>
                                 </div>
                             </div>
