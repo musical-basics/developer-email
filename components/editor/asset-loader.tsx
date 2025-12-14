@@ -12,7 +12,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select"
-import { Upload, ImageIcon } from "lucide-react"
+import Link from "next/link"
+import { Upload, ImageIcon, ArrowLeft } from "lucide-react"
 import { AssetPickerModal } from "./asset-picker-modal"
 
 interface AssetLoaderProps {
@@ -52,10 +53,16 @@ export function AssetLoader({ variables, assets, onUpdateAsset }: AssetLoaderPro
     return (
         <aside className="w-[300px] flex-shrink-0 border-r border-border bg-card overflow-y-auto">
             <div className="p-4 border-b border-border">
-                <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <ImageIcon className="w-4 h-4" />
-                    Asset Loader
-                </h2>
+                <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                    <ArrowLeft className="w-3 h-3" />
+                    Back to Dashboard
+                </Link>
+                <div className="flex items-center gap-2">
+                    <ImageIcon className="w-4 h-4 text-primary" />
+                    <h2 className="text-sm font-semibold text-foreground">
+                        Asset Loader
+                    </h2>
+                </div>
                 <p className="text-xs text-muted-foreground mt-1">Variables detected in your template</p>
             </div>
 

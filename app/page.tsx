@@ -13,19 +13,20 @@ export default function HomePage() {
     const [loading, setLoading] = useState(true)
     const supabase = createClient()
 
+    const fetchCampaigns = async () => {
+        setLoading(true) // Set loading to true before fetching
+        const { data, error } = await supabase
+            .from("campaigns")
+            .select("*")
+            .order("created_at", { ascending: false })
+
+        if (data) setCampaigns(data)
+        if (error) console.error("Error fetching campaigns:", error)
+
+        setLoading(false)
+    }
+
     useEffect(() => {
-        const fetchCampaigns = async () => {
-            const { data, error } = await supabase
-                .from("campaigns")
-                .select("*")
-                .order("created_at", { ascending: false })
-
-            if (data) setCampaigns(data)
-            if (error) console.error("Error fetching campaigns:", error)
-
-            setLoading(false)
-        }
-
         fetchCampaigns()
     }, [supabase])
 
@@ -49,7 +50,7 @@ export default function HomePage() {
 
                     {/* Recent Campaigns */}
                     <section>
-                        <CampaignsTable campaigns={campaigns} loading={loading} />
+                        <CampaignsTable campaigns={campaigns} loading={loading} onRefresh={fetchCampaigns} />
                     </section>
                 </div>
             </main>

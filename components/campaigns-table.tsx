@@ -1,9 +1,17 @@
+"use client"
+
+import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
+import { Pencil } from "lucide-react"
+import { createClient } from "@/lib/supabase/client"
 
 const statusStyles: Record<string, string> = {
     active: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -14,9 +22,38 @@ const statusStyles: Record<string, string> = {
 interface CampaignsTableProps {
     campaigns: Campaign[]
     loading: boolean
+    onRefresh?: () => void
 }
 
-export function CampaignsTable({ campaigns = [], loading }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh }: CampaignsTableProps) {
+    const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+    const [newName, setNewName] = useState("")
+    const [renaming, setRenaming] = useState(false)
+    const supabase = createClient()
+
+    const handleEditClick = (campaign: Campaign) => {
+        setEditingCampaign(campaign)
+        setNewName(campaign.name)
+    }
+
+    const handleRename = async () => {
+        if (!editingCampaign) return
+        setRenaming(true)
+
+        const { error } = await supabase
+            .from("campaigns")
+            .update({ name: newName })
+            .eq("id", editingCampaign.id)
+
+        if (!error) {
+            setEditingCampaign(null)
+            if (onRefresh) onRefresh()
+        } else {
+            console.error("Error renaming campaign:", error)
+        }
+        setRenaming(false)
+    }
+
     if (loading) {
         return <div className="text-center py-10 text-muted-foreground">Loading campaigns...</div>
     }
@@ -29,16 +66,17 @@ export function CampaignsTable({ campaigns = [], loading }: CampaignsTableProps)
             <Table>
                 <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground">Campaign Name</TableHead>
+                        <TableHead className="text-muted-foreground w-[30%]">Campaign Name</TableHead>
                         <TableHead className="text-muted-foreground">Status</TableHead>
                         <TableHead className="text-muted-foreground">Created</TableHead>
+                        <TableHead className="text-muted-foreground">Last Modified</TableHead>
                         <TableHead className="text-right text-muted-foreground">Actions</TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
@@ -46,7 +84,15 @@ export function CampaignsTable({ campaigns = [], loading }: CampaignsTableProps)
                         campaigns.map((campaign) => (
                             <TableRow key={campaign.id} className="border-border">
                                 <TableCell className="font-medium text-card-foreground">
-                                    {campaign.name || "Untitled Campaign"}
+                                    <div className="flex items-center gap-2 group">
+                                        {campaign.name || "Untitled Campaign"}
+                                        <button
+                                            onClick={() => handleEditClick(campaign)}
+                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                                        >
+                                            <Pencil className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
                                 </TableCell>
                                 <TableCell>
                                     <Badge variant="outline" className={statusStyles[campaign.status] || statusStyles.draft}>
@@ -55,6 +101,12 @@ export function CampaignsTable({ campaigns = [], loading }: CampaignsTableProps)
                                 </TableCell>
                                 <TableCell className="text-muted-foreground">
                                     {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true })}
+                                </TableCell>
+                                <TableCell className="text-muted-foreground">
+                                    {campaign.updated_at
+                                        ? formatDistanceToNow(new Date(campaign.updated_at), { addSuffix: true })
+                                        : "-"
+                                    }
                                 </TableCell>
                                 <TableCell className="text-right space-x-2">
                                     <Button
@@ -79,6 +131,31 @@ export function CampaignsTable({ campaigns = [], loading }: CampaignsTableProps)
                     )}
                 </TableBody>
             </Table>
+
+            <Dialog open={!!editingCampaign} onOpenChange={(open) => !open && setEditingCampaign(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Rename Campaign</DialogTitle>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label htmlFor="name">Campaign Name</Label>
+                            <Input
+                                id="name"
+                                value={newName}
+                                onChange={(e) => setNewName(e.target.value)}
+                                placeholder="Enter campaign name"
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditingCampaign(null)}>Cancel</Button>
+                        <Button onClick={handleRename} disabled={renaming}>
+                            {renaming ? "Saving..." : "Save"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }
