@@ -1,7 +1,7 @@
 export type CampaignStatus = 'draft' | 'active' | 'completed'
 
 export interface Campaign {
-    id: number
+    id: string
     created_at: string
     updated_at: string
     name: string

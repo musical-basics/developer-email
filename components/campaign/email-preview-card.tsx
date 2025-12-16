@@ -33,8 +33,8 @@ export function EmailPreviewCard({ campaign, previewMode, onPreviewModeChange }:
                         size="sm"
                         onClick={() => onPreviewModeChange("desktop")}
                         className={`gap-2 ${previewMode === "desktop"
-                                ? "bg-[#D4AF37] text-[#050505] hover:bg-[#D4AF37]"
-                                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                            ? "bg-[#D4AF37] text-[#050505] hover:bg-[#D4AF37]"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                             }`}
                     >
                         <Monitor className="h-4 w-4" />
@@ -45,8 +45,8 @@ export function EmailPreviewCard({ campaign, previewMode, onPreviewModeChange }:
                         size="sm"
                         onClick={() => onPreviewModeChange("mobile")}
                         className={`gap-2 ${previewMode === "mobile"
-                                ? "bg-[#D4AF37] text-[#050505] hover:bg-[#D4AF37]"
-                                : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                            ? "bg-[#D4AF37] text-[#050505] hover:bg-[#D4AF37]"
+                            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
                             }`}
                     >
                         <Smartphone className="h-4 w-4" />
@@ -75,8 +75,8 @@ export function EmailPreviewCard({ campaign, previewMode, onPreviewModeChange }:
 
                         {/* Email Content */}
                         <div
-                            className="h-[500px] overflow-y-auto"
-                            style={{ minHeight: previewMode === "mobile" ? "600px" : "500px" }}
+                            className="h-[800px] overflow-y-auto"
+                            style={{ minHeight: previewMode === "mobile" ? "800px" : "800px" }}
                         >
                             <iframe
                                 srcDoc={renderedHtml}

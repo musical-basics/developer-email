@@ -103,10 +103,7 @@ export function CampaignLaunchChecks({ campaign, audience }: CampaignLaunchCheck
                 {/* Header */}
                 <CampaignHeader campaign={campaign} />
 
-                <div className="mt-8 flex items-center gap-3 text-lg font-medium text-foreground">
-                    <Music className="h-5 w-5 text-brand" />
-                    <span>{campaign.subject_line || "(No Subject)"}</span>
-                </div>
+
 
                 <div className="mt-6 grid gap-6 lg:grid-cols-5">
                     {/* Left Column - Controls */}
