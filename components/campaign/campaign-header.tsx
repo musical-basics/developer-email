@@ -74,7 +74,9 @@ export function CampaignHeader({ campaign }: CampaignHeaderProps) {
                     Home
                 </Link>
                 <ChevronRight className="h-4 w-4" />
-                <span className="text-muted-foreground">Campaigns</span>
+                <Link href="/campaigns" className="text-muted-foreground hover:text-foreground transition-colors">
+                    Campaigns
+                </Link>
                 <ChevronRight className="h-4 w-4" />
                 <span className="text-foreground">{campaign.name}</span>
             </nav>
