@@ -10,8 +10,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil } from "lucide-react"
+import { Pencil, Copy } from "lucide-react"
 import { createClient } from "@/lib/supabase/client"
+import { duplicateCampaign } from "@/app/actions/campaigns"
+import { useToast } from "@/hooks/use-toast"
+import { useRouter } from "next/navigation"
 
 const statusStyles: Record<string, string> = {
     active: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -29,7 +32,11 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
     const [newName, setNewName] = useState("")
     const [renaming, setRenaming] = useState(false)
+    const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+
     const supabase = createClient()
+    const { toast } = useToast()
+    const router = useRouter()
 
     const handleEditClick = (campaign: Campaign) => {
         setEditingCampaign(campaign)
@@ -48,10 +55,45 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
         if (!error) {
             setEditingCampaign(null)
             if (onRefresh) onRefresh()
+            router.refresh()
         } else {
             console.error("Error renaming campaign:", error)
+            toast({
+                title: "Error renaming campaign",
+                description: error.message,
+                variant: "destructive",
+            })
         }
         setRenaming(false)
+    }
+
+    const handleDuplicate = async (campaignId: string) => {
+        setDuplicatingId(campaignId)
+        try {
+            const result = await duplicateCampaign(campaignId)
+
+            if (result.error) {
+                throw new Error(result.error)
+            }
+
+            toast({
+                title: "Campaign duplicated",
+                description: "A copy of the campaign has been created.",
+            })
+
+            if (onRefresh) onRefresh()
+            router.refresh() // Refresh server components
+
+        } catch (error: any) {
+            console.error("Error duplicating campaign:", error)
+            toast({
+                title: "Error duplicating campaign",
+                description: error.message || "Failed to duplicate",
+                variant: "destructive",
+            })
+        } finally {
+            setDuplicatingId(null)
+        }
     }
 
     if (loading) {
@@ -89,6 +131,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
                                         <button
                                             onClick={() => handleEditClick(campaign)}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                                            title="Rename"
                                         >
                                             <Pencil className="w-3.5 h-3.5" />
                                         </button>
@@ -109,6 +152,16 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
                                     }
                                 </TableCell>
                                 <TableCell className="text-right space-x-2">
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDuplicate(campaign.id)}
+                                        disabled={duplicatingId === campaign.id}
+                                        className="text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                        title="Duplicate"
+                                    >
+                                        <Copy className="w-4 h-4" />
+                                    </Button>
                                     <Button
                                         asChild
                                         variant="ghost"

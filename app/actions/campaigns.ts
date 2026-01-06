@@ -47,3 +47,42 @@ export async function getCampaigns() {
 
     return data || []
 }
+
+export async function duplicateCampaign(campaignId: string) {
+    const supabase = await createClient()
+
+    // 1. Fetch original campaign
+    const { data: original, error: fetchError } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("id", campaignId)
+        .single()
+
+    if (fetchError || !original) {
+        console.error("Error fetching campaign to duplicate:", fetchError)
+        return { error: "Failed to fetch original campaign" }
+    }
+
+    // 2. Create new campaign with copied data
+    const { data, error: insertError } = await supabase
+        .from("campaigns")
+        .insert([
+            {
+                name: `Copy of ${original.name}`,
+                status: "draft",
+                subject_line: original.subject_line,
+                html_content: original.html_content,
+                variable_values: original.variable_values,
+            },
+        ])
+        .select()
+        .single()
+
+    if (insertError) {
+        console.error("Error duplicating campaign:", insertError)
+        return { error: insertError.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { data }
+}
