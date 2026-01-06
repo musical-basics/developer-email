@@ -30,6 +30,16 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
@@ -75,6 +85,7 @@ export default function AudienceManagerPage() {
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [isDrawerOpen, setIsDrawerOpen] = useState(false)
     const [isNewSubscriber, setIsNewSubscriber] = useState(false)
+    const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState<Partial<Subscriber>>({
@@ -234,6 +245,31 @@ export default function AudienceManagerPage() {
         }
     }
 
+    const handleBulkDelete = async () => {
+        if (selectedIds.length === 0) return
+
+        const { error } = await supabase
+            .from("subscribers")
+            .delete()
+            .in("id", selectedIds)
+
+        if (error) {
+            toast({
+                title: "Error deleting subscribers",
+                description: error.message,
+                variant: "destructive",
+            })
+        } else {
+            toast({
+                title: "Subscribers deleted",
+                description: `${selectedIds.length} subscribers have been removed.`,
+            })
+            setSubscribers((prev) => prev.filter((s) => !selectedIds.includes(s.id)))
+            setSelectedIds([])
+        }
+        setIsDeleteAlertOpen(false)
+    }
+
     const handleAddTag = () => {
         const tag = newTag.trim()
         const currentTags = formData.tags || []
@@ -345,18 +381,32 @@ export default function AudienceManagerPage() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" className="gap-2">
-                        <Download className="h-4 w-4" />
-                        Export
-                    </Button>
-                    <Button variant="secondary" className="gap-2">
-                        <Upload className="h-4 w-4" />
-                        Import CSV
-                    </Button>
-                    <Button onClick={handleAddSubscriber} className="gap-2 bg-amber-500 text-zinc-900 hover:bg-amber-400">
-                        <Plus className="h-4 w-4" />
-                        Add Subscriber
-                    </Button>
+                    {selectedIds.length > 0 ? (
+                        <>
+                            <Button variant="ghost" onClick={() => setSelectedIds([])}>
+                                Cancel ({selectedIds.length})
+                            </Button>
+                            <Button variant="destructive" onClick={() => setIsDeleteAlertOpen(true)} className="gap-2">
+                                <Trash2 className="h-4 w-4" />
+                                Delete Selected
+                            </Button>
+                        </>
+                    ) : (
+                        <>
+                            <Button variant="ghost" className="gap-2">
+                                <Download className="h-4 w-4" />
+                                Export
+                            </Button>
+                            <Button variant="secondary" className="gap-2">
+                                <Upload className="h-4 w-4" />
+                                Import CSV
+                            </Button>
+                            <Button onClick={handleAddSubscriber} className="gap-2 bg-amber-500 text-zinc-900 hover:bg-amber-400">
+                                <Plus className="h-4 w-4" />
+                                Add Subscriber
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -605,6 +655,23 @@ export default function AudienceManagerPage() {
                     </div>
                 </SheetContent>
             </Sheet>
+
+            <AlertDialog open={isDeleteAlertOpen} onOpenChange={setIsDeleteAlertOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete {selectedIds.length} subscriber{selectedIds.length === 1 ? '' : 's'}.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     )
 }
