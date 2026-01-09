@@ -86,3 +86,28 @@ export async function duplicateCampaign(campaignId: string) {
     revalidatePath("/campaigns")
     return { data }
 }
+
+export async function createCampaignForTag(tagName: string) {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from("campaigns")
+        .insert([
+            {
+                name: `Campaign for ${tagName}`,
+                status: "draft",
+                subject_line: `(Draft) Update for ${tagName}`,
+                html_content: "",
+            },
+        ])
+        .select()
+        .single()
+
+    if (error) {
+        console.error("Error creating campaign for tag:", error)
+        return { error: error.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { data }
+}

@@ -14,7 +14,12 @@ import {
     X,
     UserCheck,
     UserX,
+    LayoutGrid,
+    List,
+    Check,
+    ChevronsUpDown,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -23,6 +28,8 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { TagGroupView } from "@/components/audience/tag-group-view"
 import {
     DropdownMenu,
     DropdownMenuCheckboxItem,
@@ -31,15 +38,31 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
     AlertDialogContent,
     AlertDialogDescription,
     AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    CommandSeparator,
+} from "@/components/ui/command"
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover"
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
@@ -86,6 +109,8 @@ export default function AudienceManagerPage() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false)
     const [isNewSubscriber, setIsNewSubscriber] = useState(false)
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false)
+    const [viewMode, setViewMode] = useState<"list" | "tags">("list")
+    const [tagComboboxOpen, setTagComboboxOpen] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState<Partial<Subscriber>>({
@@ -148,6 +173,15 @@ export default function AudienceManagerPage() {
             return matchesSearch && matchesTags
         })
     }, [subscribers, searchQuery, selectedTags])
+
+    // Derived unique tags for the dropdown
+    const availableTags = useMemo(() => {
+        const subscriberTags = new Set<string>()
+        subscribers.forEach(sub => sub.tags?.forEach(t => subscriberTags.add(t)))
+        // Add defaults
+        allTags.forEach(t => subscriberTags.add(t))
+        return Array.from(subscriberTags).sort()
+    }, [subscribers])
 
     const handleTagToggle = (tag: string) => {
         setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
@@ -270,12 +304,13 @@ export default function AudienceManagerPage() {
         setIsDeleteAlertOpen(false)
     }
 
-    const handleAddTag = () => {
-        const tag = newTag.trim()
+    const handleAddTag = (tagToAdd: string) => {
+        const tag = tagToAdd.trim()
         const currentTags = formData.tags || []
         if (tag && !currentTags.includes(tag)) {
             setFormData({ ...formData, tags: [...currentTags, tag] })
             setNewTag("")
+            setTagComboboxOpen(false)
         }
     }
 
@@ -378,6 +413,21 @@ export default function AudienceManagerPage() {
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
+
+                    <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "list" | "tags")} className="w-[180px]">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="list" className="gap-2">
+                                <List className="h-4 w-4" />
+                                <span className="sr-only sm:not-sr-only">List</span>
+                            </TabsTrigger>
+                            <TabsTrigger value="tags" className="gap-2">
+                                <LayoutGrid className="h-4 w-4" />
+                                <span className="sr-only sm:not-sr-only">Tags</span>
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -410,123 +460,129 @@ export default function AudienceManagerPage() {
                 </div>
             </div>
 
-            {/* Table */}
-            <div className="rounded-lg border border-border bg-card">
-                <Table>
-                    <TableHeader>
-                        <TableRow className="border-border hover:bg-transparent">
-                            <TableHead className="w-12">
-                                <Checkbox
-                                    checked={allSelected}
-                                    ref={(el) => {
-                                        if (el) {
-                                            const element = el as HTMLButtonElement & { indeterminate: boolean }
-                                            element.indeterminate = someSelected
-                                        }
-                                    }}
-                                    onCheckedChange={handleSelectAll}
-                                />
-                            </TableHead>
-                            <TableHead>Profile</TableHead>
-                            <TableHead>Tags</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Added</TableHead>
-                            <TableHead className="w-12">Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {loading ? (
-                            <TableRow>
-                                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                                    Loading subscribers...
-                                </TableCell>
+            {/* Content */}
+            {viewMode === "list" && (
+                <div className="rounded-lg border border-border bg-card">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="border-border hover:bg-transparent">
+                                <TableHead className="w-12">
+                                    <Checkbox
+                                        checked={allSelected}
+                                        ref={(el) => {
+                                            if (el) {
+                                                const element = el as HTMLButtonElement & { indeterminate: boolean }
+                                                element.indeterminate = someSelected
+                                            }
+                                        }}
+                                        onCheckedChange={handleSelectAll}
+                                    />
+                                </TableHead>
+                                <TableHead>Profile</TableHead>
+                                <TableHead>Tags</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead>Added</TableHead>
+                                <TableHead className="w-12">Actions</TableHead>
                             </TableRow>
-                        ) : filteredSubscribers.length === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
-                                    No subscribers found.
-                                </TableCell>
-                            </TableRow>
-                        ) : (
-                            filteredSubscribers.map((subscriber) => (
-                                <TableRow
-                                    key={subscriber.id}
-                                    className="border-border cursor-pointer hover:bg-muted/50"
-                                    onClick={() => handleEdit(subscriber)}
-                                >
-                                    <TableCell onClick={(e) => e.stopPropagation()}>
-                                        <Checkbox
-                                            checked={selectedIds.includes(subscriber.id)}
-                                            onCheckedChange={() => handleSelectOne(subscriber.id)}
-                                        />
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center gap-3">
-                                            <Avatar className="h-9 w-9 border border-border">
-                                                <AvatarFallback className="bg-muted text-muted-foreground text-sm">
-                                                    {getInitials(subscriber.first_name, subscriber.last_name)}
-                                                </AvatarFallback>
-                                            </Avatar>
-                                            <div>
-                                                <p className="font-medium text-foreground">{subscriber.email}</p>
-                                                <p className="text-sm text-muted-foreground">
-                                                    {subscriber.first_name} {subscriber.last_name}
-                                                </p>
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {(subscriber.tags || []).length > 0 ? (
-                                                (subscriber.tags || []).map((tag) => (
-                                                    <Badge
-                                                        key={tag}
-                                                        variant="outline"
-                                                        className={tagColors[tag] || "bg-muted text-muted-foreground"}
-                                                    >
-                                                        {tag}
-                                                    </Badge>
-                                                ))
-                                            ) : (
-                                                <span className="text-xs text-muted-foreground">-</span>
-                                            )}
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant="outline" className={statusStyles[subscriber.status] || "bg-muted"}>
-                                            {subscriber.status.charAt(0).toUpperCase() + subscriber.status.slice(1)}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell className="text-muted-foreground">{formatDate(subscriber.created_at)}</TableCell>
-                                    <TableCell onClick={(e) => e.stopPropagation()}>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                    <span className="sr-only">Open menu</span>
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => handleEdit(subscriber)}>
-                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                    Edit
-                                                </DropdownMenuItem>
-                                                <DropdownMenuItem
-                                                    onClick={() => handleDelete(subscriber.id)}
-                                                    className="text-red-400 focus:text-red-400"
-                                                >
-                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                    Delete
-                                                </DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                        Loading subscribers...
                                     </TableCell>
                                 </TableRow>
-                            ))
-                        )}
-                    </TableBody>
-                </Table>
-            </div>
+                            ) : filteredSubscribers.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                        No subscribers found.
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                filteredSubscribers.map((subscriber) => (
+                                    <TableRow
+                                        key={subscriber.id}
+                                        className="border-border cursor-pointer hover:bg-muted/50"
+                                        onClick={() => handleEdit(subscriber)}
+                                    >
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                                checked={selectedIds.includes(subscriber.id)}
+                                                onCheckedChange={() => handleSelectOne(subscriber.id)}
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-9 w-9 border border-border">
+                                                    <AvatarFallback className="bg-muted text-muted-foreground text-sm">
+                                                        {getInitials(subscriber.first_name, subscriber.last_name)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <p className="font-medium text-foreground">{subscriber.email}</p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {subscriber.first_name} {subscriber.last_name}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {(subscriber.tags || []).length > 0 ? (
+                                                    (subscriber.tags || []).map((tag) => (
+                                                        <Badge
+                                                            key={tag}
+                                                            variant="outline"
+                                                            className={tagColors[tag] || "bg-muted text-muted-foreground"}
+                                                        >
+                                                            {tag}
+                                                        </Badge>
+                                                    ))
+                                                ) : (
+                                                    <span className="text-xs text-muted-foreground">-</span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant="outline" className={statusStyles[subscriber.status] || "bg-muted"}>
+                                                {subscriber.status.charAt(0).toUpperCase() + subscriber.status.slice(1)}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">{formatDate(subscriber.created_at)}</TableCell>
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                        <span className="sr-only">Open menu</span>
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleEdit(subscriber)}>
+                                                        <Pencil className="mr-2 h-4 w-4" />
+                                                        Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => handleDelete(subscriber.id)}
+                                                        className="text-red-400 focus:text-red-400"
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                        Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+            )}
+
+            {viewMode === "tags" && (
+                <TagGroupView subscribers={filteredSubscribers} />
+            )}
 
             {/* Edit Drawer */}
             <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
@@ -601,22 +657,66 @@ export default function AudienceManagerPage() {
                         <div className="space-y-4">
                             <h3 className="text-sm font-medium text-foreground">Tag Manager</h3>
 
-                            <div className="flex gap-2">
-                                <Input
-                                    value={newTag}
-                                    onChange={(e) => setNewTag(e.target.value)}
-                                    placeholder="Add a new tag..."
-                                    className="bg-card"
-                                    onKeyDown={(e) => {
-                                        if (e.key === "Enter") {
-                                            e.preventDefault()
-                                            handleAddTag()
-                                        }
-                                    }}
-                                />
-                                <Button type="button" onClick={handleAddTag} variant="secondary" size="icon">
-                                    <Plus className="h-4 w-4" />
-                                </Button>
+                            <div className="flex gap-2 items-start">
+                                <Popover open={tagComboboxOpen} onOpenChange={setTagComboboxOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={tagComboboxOpen}
+                                            className="justify-between w-full bg-card"
+                                        >
+                                            Add a tag...
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="p-0" align="start">
+                                        <Command>
+                                            <CommandInput
+                                                placeholder="Search tags..."
+                                                value={newTag}
+                                                onValueChange={setNewTag}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" && newTag.trim()) {
+                                                        e.preventDefault()
+                                                        handleAddTag(newTag)
+                                                    }
+                                                }}
+                                            />
+                                            <CommandList>
+                                                <CommandEmpty>
+                                                    <button
+                                                        className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground cursor-pointer"
+                                                        onClick={() => handleAddTag(newTag)}
+                                                    >
+                                                        <Plus className="h-4 w-4" />
+                                                        Create "{newTag}"
+                                                    </button>
+                                                </CommandEmpty>
+                                                <CommandGroup heading="Existing Tags">
+                                                    {availableTags.map((tag) => (
+                                                        <CommandItem
+                                                            key={tag}
+                                                            value={tag}
+                                                            onSelect={(currentValue) => {
+                                                                handleAddTag(currentValue)
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={cn(
+                                                                    "mr-2 h-4 w-4",
+                                                                    (formData.tags || []).includes(tag) ? "opacity-100" : "opacity-0"
+                                                                )}
+                                                            />
+                                                            {tag}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                             </div>
 
                             <div className="flex flex-wrap gap-2">
