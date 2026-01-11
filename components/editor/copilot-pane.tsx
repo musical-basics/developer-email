@@ -20,7 +20,7 @@ interface CopilotPaneProps {
 
 export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
     // Default to the fast one
-    const [selectedModel, setSelectedModel] = useState("gemini-2.0-flash-exp")
+    const [selectedModel, setSelectedModel] = useState("gemini-2.5-flash")
 
     const [messages, setMessages] = useState<Message[]>([
         { role: "result", content: "Hi! I'm your Copilot. Select a model above and tell me what to change." },
@@ -102,22 +102,22 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                         <SelectValue placeholder="Select Model" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="gemini-2.0-flash-exp">
+                        <SelectItem value="gemini-2.5-flash">
                             <div className="flex items-center gap-2">
                                 <Zap className="w-3 h-3 text-yellow-500" />
-                                <span>Gemini Flash</span>
+                                <span>Gemini 2.5 Flash</span>
                             </div>
                         </SelectItem>
-                        <SelectItem value="gemini-1.5-pro">
+                        <SelectItem value="gemini-2.5-pro">
                             <div className="flex items-center gap-2">
                                 <Brain className="w-3 h-3 text-blue-500" />
-                                <span>Gemini Pro</span>
+                                <span>Gemini 2.5 Pro</span>
                             </div>
                         </SelectItem>
                         <SelectItem value="claude-sonnet-4-20250514">
                             <div className="flex items-center gap-2">
                                 <Bot className="w-3 h-3 text-orange-500" />
-                                <span>Claude Sonnet</span>
+                                <span>Claude Sonnet 4</span>
                             </div>
                         </SelectItem>
                     </SelectContent>

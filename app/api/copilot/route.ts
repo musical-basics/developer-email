@@ -8,10 +8,7 @@ const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
-// --- HELPER: Strip Markdown Formatting ---
-// This fixes the "SyntaxError" when AI returns ```json ... ```
 function cleanJson(text: string) {
-    // Remove ```json at start, ``` at end, and trim whitespace
     return text.replace(/```json/g, "").replace(/```/g, "").trim();
 }
 
@@ -19,30 +16,26 @@ export async function POST(req: Request) {
     try {
         const { currentHtml, prompt, model } = await req.json();
 
-        console.log(`🤖 Copilot processing with model: ${model}`);
+        console.log(`🤖 Copilot using model: ${model}`); // Debug log
 
         const systemInstruction = `
     You are an expert Email HTML Developer. Your job is to modify the user's HTML code based on their request.
-
     ### CRITICAL RULES:
-    1. **NO LAZINESS:** You must return the FULL, COMPLETE HTML string. Do not use placeholders like "<!-- ... -->" or "...".
-    2. **PRESERVE VARIABLES:** Do NOT remove or modify existing Mustache variables like {{hero_image_url}} unless asked.
-    3. **VALID JSON:** Your output must be a single valid JSON object.
-    
+    1. **NO LAZINESS:** Return the FULL HTML. No placeholders.
+    2. **PRESERVE VARIABLES:** Keep {{mustache_vars}} intact.
+    3. **VALID JSON:** Output strictly valid JSON.
     ### RESPONSE FORMAT:
-    {
-      "explanation": "A short, 1-sentence summary of what you changed.",
-      "updatedHtml": "<!DOCTYPE html>..."
-    }
+    { "explanation": "string", "updatedHtml": "string" }
     `;
 
         let rawResponse = "";
 
-        // --- A. CLAUDE SONNET ---
+        // --- A. CLAUDE ---
         if (model.includes("claude")) {
             const msg = await anthropic.messages.create({
-                model: "claude-3-5-sonnet-20240620",
-                max_tokens: 8192, // High limit for full HTML files
+                // ⚡️ FIX: Use the 'model' variable directly. Do not hardcode "claude-3-5..."
+                model: model,
+                max_tokens: 8192,
                 temperature: 0,
                 system: systemInstruction,
                 messages: [
@@ -53,31 +46,24 @@ export async function POST(req: Request) {
                 ]
             });
 
-            // Anthropic returns an array of content blocks
             const textBlock = msg.content[0];
             if (textBlock.type === 'text') {
                 rawResponse = textBlock.text;
             }
         }
 
-        // --- B. GEMINI (Pro or Flash) ---
+        // --- B. GEMINI ---
         else {
-            // Handle "Pro" vs "Flash" naming
-            const geminiModelName = model.includes("pro") ? "gemini-1.5-pro" : "gemini-2.0-flash-exp";
-
+            // ⚡️ FIX: Pass the 'model' variable directly here too
             const geminiModel = genAI.getGenerativeModel({
-                model: geminiModelName,
-                generationConfig: {
-                    responseMimeType: "application/json" // Gemini usually respects this, but we clean it anyway
-                }
+                model: model,
+                generationConfig: { responseMimeType: "application/json" }
             });
 
             const fullPrompt = `
       ${systemInstruction}
-
       ### CURRENT HTML:
       ${currentHtml}
-
       ### USER REQUEST:
       ${prompt}
       `;
@@ -86,7 +72,7 @@ export async function POST(req: Request) {
             rawResponse = result.response.text();
         }
 
-        // --- C. CLEAN & PARSE ---
+        // --- CLEAN & PARSE ---
         try {
             const cleanedJson = cleanJson(rawResponse);
             const data = JSON.parse(cleanedJson);
@@ -101,6 +87,7 @@ export async function POST(req: Request) {
 
     } catch (error: any) {
         console.error("AI API Error:", error);
+        // Return the actual error message so we can see it in the UI
         return NextResponse.json(
             { error: error.message || "Failed to process request" },
             { status: 500 }
