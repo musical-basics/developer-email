@@ -51,7 +51,7 @@ export function AssetLoader({ variables, assets, onUpdateAsset }: AssetLoaderPro
     }
 
     return (
-        <aside className="w-[300px] flex-shrink-0 border-r border-border bg-card overflow-y-auto">
+        <aside className="w-[250px] flex-shrink-0 border-r border-border bg-card overflow-y-auto">
             <div className="p-4 border-b border-border">
                 <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
                     <ArrowLeft className="w-3 h-3" />

@@ -5,11 +5,12 @@ import { Code } from "lucide-react"
 interface CodePaneProps {
     code: string
     onChange: (code: string) => void
+    className?: string
 }
 
-export function CodePane({ code, onChange }: CodePaneProps) {
+export function CodePane({ code, onChange, className }: CodePaneProps) {
     return (
-        <div className="flex-1 flex flex-col border-r border-border bg-card">
+        <div className={`flex flex-col border-r border-border bg-card ${className || "flex-1"}`}>
             <div className="p-4 border-b border-border flex items-center justify-between">
                 <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
                     <Code className="w-4 h-4" />

@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback } from "react"
 import { AssetLoader } from "./asset-loader"
 import { CodePane } from "./code-pane"
 import { PreviewPane } from "./preview-pane"
+import { CopilotPane } from "./copilot-pane"
 import { renderTemplate } from "@/lib/render-template"
 
 interface EmailEditorProps {
@@ -42,11 +43,11 @@ export function EmailEditor({ html, assets, onHtmlChange, onAssetsChange, onSave
             {/* Left Sidebar - Asset Loader */}
             <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
 
-            {/* Center Pane - Code Editor */}
-            <CodePane code={html} onChange={onHtmlChange} />
+            {/* Center Left - Code Editor (30%) */}
+            <CodePane code={html} onChange={onHtmlChange} className="flex-[3] min-w-0" />
 
-            {/* Right Pane - Preview */}
-            <div className="flex-1 flex flex-col min-w-0">
+            {/* Center Right - Preview (40%) */}
+            <div className="flex-[4] flex flex-col min-w-0">
                 <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card">
                     <h2 className="text-sm font-semibold">Preview</h2>
                     {onSave && (
@@ -61,6 +62,11 @@ export function EmailEditor({ html, assets, onHtmlChange, onAssetsChange, onSave
                 <div className="flex-1 overflow-hidden">
                     <PreviewPane html={previewHtml} />
                 </div>
+            </div>
+
+            {/* Right Sidebar - Copilot (300px) */}
+            <div className="w-[300px] flex-shrink-0">
+                <CopilotPane html={html} onHtmlChange={onHtmlChange} />
             </div>
         </div>
     )
