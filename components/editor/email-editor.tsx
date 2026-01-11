@@ -39,16 +39,25 @@ export function EmailEditor({ html, assets, onHtmlChange, onAssetsChange, onSave
     }, [html, assets])
 
     return (
-        <div className="flex h-full bg-background text-foreground">
+        <div className="flex h-screen bg-background text-foreground overflow-hidden">
             {/* Left Sidebar - Asset Loader */}
-            <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
+            {/* ⚡️ FIX: Changed 'overflow-hidden' to 'overflow-y-auto' so you can scroll the list */}
+            <div className="flex-shrink-0 w-[250px] border-r border-border h-full overflow-y-auto">
+                <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
+            </div>
 
-            {/* Center Left - Code Editor (30%) */}
-            <CodePane code={html} onChange={onHtmlChange} className="flex-[3] min-w-0" />
+            {/* Center Left - Code Editor */}
+            <div className="flex-[3] min-w-[350px] border-r border-border h-full overflow-hidden">
+                <CodePane
+                    code={html}
+                    onChange={onHtmlChange}
+                    className="h-full"
+                />
+            </div>
 
-            {/* Center Right - Preview (40%) */}
-            <div className="flex-[4] flex flex-col min-w-0">
-                <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card">
+            {/* Center Right - Preview */}
+            <div className="flex-[4] flex flex-col min-w-[500px] h-full overflow-hidden">
+                <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card flex-shrink-0">
                     <h2 className="text-sm font-semibold">Preview</h2>
                     {onSave && (
                         <button
@@ -59,13 +68,16 @@ export function EmailEditor({ html, assets, onHtmlChange, onAssetsChange, onSave
                         </button>
                     )}
                 </div>
-                <div className="flex-1 overflow-hidden">
-                    <PreviewPane html={previewHtml} />
+                {/* Internal scrolling for Preview */}
+                <div className="flex-1 overflow-y-auto bg-[#0f0f10] p-8">
+                    <div className="min-h-full mx-auto bg-white shadow-lg" style={{ maxWidth: '600px' }}>
+                        <PreviewPane html={previewHtml} />
+                    </div>
                 </div>
             </div>
 
-            {/* Right Sidebar - Copilot (300px) */}
-            <div className="w-[300px] flex-shrink-0">
+            {/* Right Sidebar - Copilot */}
+            <div className="w-[350px] flex-shrink-0 border-l border-border bg-card h-full overflow-hidden">
                 <CopilotPane html={html} onHtmlChange={onHtmlChange} />
             </div>
         </div>

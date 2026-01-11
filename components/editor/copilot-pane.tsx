@@ -1,17 +1,16 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Sparkles, Send, Bot, Zap, Brain, X, ImageIcon } from "lucide-react"
+import { Sparkles, Send, X, Zap, Brain, Bot } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 
 interface Message {
     role: "user" | "details" | "result"
     content: string
-    images?: string[] // Store base64 images for display
+    images?: string[]
 }
 
 interface CopilotPaneProps {
@@ -20,49 +19,52 @@ interface CopilotPaneProps {
 }
 
 export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
-    const [selectedModel, setSelectedModel] = useState("claude-sonnet-4-20250514") // Default to Sonnet (Best for vision)
+    const [selectedModel, setSelectedModel] = useState("claude-sonnet-4-20250514")
 
     const [messages, setMessages] = useState<Message[]>([
         { role: "result", content: "Hi! I can see. Paste a screenshot (Ctrl+V) and tell me what to fix." },
     ])
     const [input, setInput] = useState("")
-    const [pendingImages, setPendingImages] = useState<string[]>([]) // Images waiting to be sent
+    const [pendingImages, setPendingImages] = useState<string[]>([])
     const [isLoading, setIsLoading] = useState(false)
-    const [loadingText, setLoadingText] = useState("Thinking...") // <--- NEW STATE
-    const scrollAreaRef = useRef<HTMLDivElement>(null)
+
+    // RESTORED: Progress State
+    const [progress, setProgress] = useState(0)
+
+    const scrollRef = useRef<HTMLDivElement>(null)
 
     // Auto-scroll
     useEffect(() => {
-        if (scrollAreaRef.current) {
-            const scrollContainer = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]')
-            if (scrollContainer) scrollContainer.scrollTop = scrollContainer.scrollHeight
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
-    }, [messages, pendingImages, loadingText])
+    }, [messages, pendingImages, isLoading])
 
-    // --- THE THOUGHT LOOP ---
+    // RESTORED: Zeno's Paradox Progress Bar
     useEffect(() => {
-        if (!isLoading) return
+        if (!isLoading) {
+            setProgress(0)
+            return
+        }
 
-        const thoughts = [
-            "Analyzing HTML structure...",
-            "Identifying style patterns...",
-            "Drafting CSS improvements...",
-            "Checking responsiveness...",
-            "Finalizing code..."
-        ]
-
-        let i = 0
-        setLoadingText(thoughts[0])
+        // Start at 10%
+        setProgress(10)
 
         const interval = setInterval(() => {
-            i = (i + 1) % thoughts.length
-            setLoadingText(thoughts[i])
-        }, 3000) // Change message every 3 seconds
+            setProgress((prev) => {
+                // If we hit 90%, we stall there until the real data comes back
+                if (prev >= 90) return prev
+
+                // The closer we get to 90%, the slower we move
+                const remaining = 90 - prev
+                return prev + (remaining * 0.05) // 5% of remaining distance
+            })
+        }, 500) // Update every half second
 
         return () => clearInterval(interval)
     }, [isLoading])
 
-    // --- PASTE HANDLER ---
+
     const handlePaste = (e: React.ClipboardEvent) => {
         const items = e.clipboardData.items
         for (let i = 0; i < items.length; i++) {
@@ -89,11 +91,9 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
         const userMessage = input.trim()
         const imagesToSend = [...pendingImages]
 
-        // Clear inputs immediately
         setInput("")
         setPendingImages([])
 
-        // Add to UI
         setMessages((prev) => [...prev, {
             role: "user",
             content: userMessage,
@@ -109,7 +109,7 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                 body: JSON.stringify({
                     currentHtml: html,
                     prompt: userMessage,
-                    images: imagesToSend, // Send images to backend
+                    images: imagesToSend,
                     model: selectedModel
                 }),
             })
@@ -117,6 +117,9 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
             if (!response.ok) throw new Error("Failed to get response")
 
             const data = await response.json()
+
+            // Finish the bar instantly when data arrives
+            setProgress(100)
 
             if (data.updatedHtml) onHtmlChange(data.updatedHtml)
 
@@ -131,7 +134,8 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                 { role: "result", content: "Error processing request." },
             ])
         } finally {
-            setIsLoading(false)
+            // Keep the 100% bar visible for a moment before hiding
+            setTimeout(() => setIsLoading(false), 500)
         }
     }
 
@@ -151,23 +155,37 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                     <h2 className="text-sm font-semibold">Copilot Vision</h2>
                 </div>
                 <Select value={selectedModel} onValueChange={setSelectedModel}>
-                    <SelectTrigger className="w-[140px] h-8 text-xs">
+                    <SelectTrigger className="w-[160px] h-8 text-xs">
                         <SelectValue placeholder="Select Model" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet</SelectItem>
-                        <SelectItem value="gemini-2.5-pro">Gemini Pro</SelectItem>
-                        <SelectItem value="gemini-2.5-flash">Gemini Flash</SelectItem>
+                        <SelectItem value="claude-sonnet-4-20250514">
+                            <div className="flex items-center gap-2">
+                                <Bot className="w-3 h-3 text-orange-500" />
+                                <span>Claude Sonnet 4</span>
+                            </div>
+                        </SelectItem>
+                        <SelectItem value="gemini-2.5-pro">
+                            <div className="flex items-center gap-2">
+                                <Brain className="w-3 h-3 text-blue-500" />
+                                <span>Gemini 2.5 Pro</span>
+                            </div>
+                        </SelectItem>
+                        <SelectItem value="gemini-2.5-flash">
+                            <div className="flex items-center gap-2">
+                                <Zap className="w-3 h-3 text-yellow-500" />
+                                <span>Gemini 2.5 Flash</span>
+                            </div>
+                        </SelectItem>
                     </SelectContent>
                 </Select>
             </div>
 
             {/* Chat History */}
-            <ScrollArea className="flex-1 p-4" ref={scrollAreaRef}>
+            <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
                 <div className="space-y-4">
                     {messages.map((msg, index) => (
                         <div key={index} className={cn("flex flex-col gap-2 max-w-[90%]", msg.role === "user" ? "ml-auto" : "mr-auto")}>
-                            {/* Render User Images */}
                             {msg.images && msg.images.length > 0 && (
                                 <div className="flex flex-wrap gap-2 justify-end">
                                     {msg.images.map((img, i) => (
@@ -175,8 +193,6 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                                     ))}
                                 </div>
                             )}
-
-                            {/* Render Text */}
                             {msg.content && (
                                 <div className={cn(
                                     "p-3 rounded-lg text-sm",
@@ -187,19 +203,27 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                             )}
                         </div>
                     ))}
+
+                    {/* RESTORED: Progress Bar UI */}
                     {isLoading && (
-                        <div className="bg-muted text-foreground p-3 rounded-lg text-sm mr-auto w-fit flex items-center gap-2">
-                            {/* Simple Spinner */}
-                            <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                            <span className="animate-pulse">{loadingText}</span>
+                        <div className="bg-muted p-3 rounded-lg mr-auto w-[200px] space-y-2">
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                                <span>Thinking...</span>
+                                <span>{Math.round(progress)}%</span>
+                            </div>
+                            <div className="h-2 w-full bg-black/20 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-purple-500 transition-all duration-300 ease-out"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>
-            </ScrollArea>
+            </div>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-border mt-auto shrink-0 space-y-3">
-                {/* Pending Images Preview */}
+            <div className="p-4 border-t border-border mt-auto shrink-0 space-y-3 bg-card">
                 {pendingImages.length > 0 && (
                     <div className="flex gap-2 overflow-x-auto pb-2">
                         {pendingImages.map((img, i) => (
@@ -221,7 +245,7 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         onKeyDown={handleKeyDown}
-                        onPaste={handlePaste} // <--- The Magic Listener
+                        onPaste={handlePaste}
                         placeholder="Paste image (Ctrl+V) or type..."
                         className="flex-1"
                         disabled={isLoading}
