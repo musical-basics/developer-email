@@ -11,11 +11,12 @@ function cleanJson(text: string) {
 
 export async function POST(req: Request) {
     try {
-        const { currentHtml, prompt, model, images } = await req.json(); // images is string[] (base64)
+        const { currentHtml, messages, model } = await req.json(); // 'messages' is the full array
 
         const systemInstruction = `
-    You are an expert Email HTML Developer. 
-    If the user provides an image, use it as a visual reference for how the email should look (colors, layout, spacing).
+    You are an expert Email HTML Developer.
+    The user will give you HTML and a request (or a history of requests).
+    Your job is to modify the code based on the *latest* request, while considering the context of previous messages.
     
     ### CRITICAL RULES:
     1. **NO LAZINESS:** Return the FULL HTML.
@@ -30,39 +31,52 @@ export async function POST(req: Request) {
 
         // --- A. CLAUDE (Anthropic) ---
         if (model.includes("claude")) {
-            // Build Content Array
-            const userContent: any[] = [];
 
-            // 1. Add Images (if any)
-            if (images && images.length > 0) {
-                images.forEach((img: string) => {
-                    // Strip "data:image/png;base64," prefix
-                    const base64Data = img.split(",")[1];
-                    const mediaType = img.split(";")[0].split(":")[1];
+            // Convert frontend messages to Anthropic format
+            const anthropicMessages = messages.map((msg: any) => {
+                // Map 'result' role to 'assistant'
+                const role = msg.role === 'result' ? 'assistant' : 'user';
 
-                    userContent.push({
-                        type: "image",
-                        source: {
-                            type: "base64",
-                            media_type: mediaType,
-                            data: base64Data,
-                        }
+                let content: any[] = [];
+
+                // Add Images (if any)
+                if (msg.images && msg.images.length > 0) {
+                    msg.images.forEach((img: string) => {
+                        const base64Data = img.split(",")[1];
+                        const mediaType = img.split(";")[0].split(":")[1];
+                        content.push({
+                            type: "image",
+                            source: { type: "base64", media_type: mediaType, data: base64Data }
+                        });
                     });
+                }
+
+                // Add Text
+                if (msg.content) {
+                    content.push({ type: "text", text: msg.content });
+                }
+
+                return { role, content };
+            });
+
+            // Append the "Current Context" to the VERY LAST user message
+            // We don't want to re-send the HTML 10 times in history, just the current state at the end.
+            const lastMsgIndex = anthropicMessages.length - 1;
+            const lastMsg = anthropicMessages[lastMsgIndex];
+
+            if (lastMsg.role === 'user') {
+                lastMsg.content.push({
+                    type: "text",
+                    text: `\n\n### CURRENT HTML STATE:\n${currentHtml}`
                 });
             }
-
-            // 2. Add Text Prompt + HTML
-            userContent.push({
-                type: "text",
-                text: `### CURRENT HTML:\n${currentHtml}\n\n### USER REQUEST:\n${prompt}`
-            });
 
             const msg = await anthropic.messages.create({
                 model: model,
                 max_tokens: 8192,
                 temperature: 0,
                 system: systemInstruction,
-                messages: [{ role: "user", content: userContent }]
+                messages: anthropicMessages // Send the whole chain
             });
 
             const textBlock = msg.content[0];
@@ -76,30 +90,34 @@ export async function POST(req: Request) {
                 generationConfig: { responseMimeType: "application/json" }
             });
 
-            const geminiContentParts: any[] = [];
+            const geminiHistory = messages.map((msg: any) => {
+                const role = msg.role === 'result' ? 'model' : 'user';
+                const parts = [];
 
-            // 1. Add Images
-            if (images && images.length > 0) {
-                images.forEach((img: string) => {
-                    const base64Data = img.split(",")[1];
-                    const mimeType = img.split(";")[0].split(":")[1];
-
-                    geminiContentParts.push({
-                        inlineData: {
-                            mimeType: mimeType,
-                            data: base64Data
-                        }
+                if (msg.images && msg.images.length > 0) {
+                    msg.images.forEach((img: string) => {
+                        const base64Data = img.split(",")[1];
+                        const mimeType = img.split(";")[0].split(":")[1];
+                        parts.push({ inlineData: { mimeType, data: base64Data } });
                     });
-                });
-            }
+                }
 
-            // 2. Add Text
-            geminiContentParts.push({
-                text: `${systemInstruction}\n\n### CURRENT HTML:\n${currentHtml}\n\n### USER REQUEST:\n${prompt}`
+                if (msg.content) parts.push({ text: msg.content });
+                return { role, parts };
             });
 
+            // Attach Current HTML to the last message prompt
+            const lastMsg = geminiHistory[geminiHistory.length - 1];
+            lastMsg.parts.push({ text: `\n\n### CURRENT HTML STATE:\n${currentHtml}` });
+
+            // For Gemini, we use 'generateContent' with the whole history as 'contents'
+            // Note: We prepend system instruction inside the first turn or use systemInstruction config if available (Gemini 1.5 supports it in config, but keeping it simple here)
+
+            // We'll wrap the system instruction into the first user message for guaranteed adherence
+            geminiHistory[0].parts[0].text = `${systemInstruction}\n\n${geminiHistory[0].parts[0].text}`;
+
             const result = await geminiModel.generateContent({
-                contents: [{ role: "user", parts: geminiContentParts }]
+                contents: geminiHistory
             });
             rawResponse = result.response.text();
         }

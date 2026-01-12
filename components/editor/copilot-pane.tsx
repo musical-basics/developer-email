@@ -85,6 +85,7 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
         setPendingImages(prev => prev.filter((_, i) => i !== index))
     }
 
+    // ⚡️ UPDATED: Send full history with OPTIMIZATION
     const handleSendMessage = async () => {
         if ((!input.trim() && pendingImages.length === 0) || isLoading) return
 
@@ -94,22 +95,37 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
         setInput("")
         setPendingImages([])
 
-        setMessages((prev) => [...prev, {
+        // 1. Update UI with the FULL rich history (so YOU can see old images)
+        const newMessage: Message = {
             role: "user",
             content: userMessage,
             images: imagesToSend
-        }])
+        }
+        const newUiHistory = [...messages, newMessage]
+        setMessages(newUiHistory)
 
         setIsLoading(true)
 
         try {
+            // 2. ⚡️ OPTIMIZE FOR SERVER ⚡️
+            // We create a "Lightweight" history to send to the AI.
+            // Rule: Keep ALL text, but ONLY keep images from the VERY LAST message.
+            const apiHistory = newUiHistory.map((msg, index) => {
+                const isLastMessage = index === newUiHistory.length - 1
+                return {
+                    role: msg.role,
+                    content: msg.content,
+                    // If it's not the last message, delete the images to save data
+                    images: isLastMessage ? msg.images : []
+                }
+            })
+
             const response = await fetch("/api/copilot", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     currentHtml: html,
-                    prompt: userMessage,
-                    images: imagesToSend,
+                    messages: apiHistory, // <--- Send the lightweight version
                     model: selectedModel
                 }),
             })
@@ -117,8 +133,6 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
             if (!response.ok) throw new Error("Failed to get response")
 
             const data = await response.json()
-
-            // Finish the bar instantly when data arrives
             setProgress(100)
 
             if (data.updatedHtml) onHtmlChange(data.updatedHtml)
@@ -131,10 +145,9 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
             console.error("API Error:", error)
             setMessages((prev) => [
                 ...prev,
-                { role: "result", content: "Error processing request." },
+                { role: "result", content: "I ran out of memory. Please refresh to clear history." },
             ])
         } finally {
-            // Keep the 100% bar visible for a moment before hiding
             setTimeout(() => setIsLoading(false), 500)
         }
     }
