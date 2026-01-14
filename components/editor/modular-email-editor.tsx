@@ -18,35 +18,107 @@ interface ModularEmailEditorProps {
     onSave?: () => void
 }
 
+// --- HELPER: SMART SPLITTER ---
+// This function tears apart a monolithic HTML file into logical blocks
+const parseMonolithToBlocks = (fullHtml: string): Block[] => {
+    const blocks: Block[] = []
+
+    // 1. Extract HEAD (Global Styles)
+    const headMatch = fullHtml.match(/(^[\s\S]*?<body[^>]*>)/i)
+    const headContent = headMatch ? headMatch[1] : ""
+    blocks.push({ id: "head", name: "Global Styles & Head", content: headContent })
+
+    // 2. Extract FOOTER (Closing tags)
+    const closeMatch = fullHtml.match(/(<\/body>[\s\S]*$)/i)
+    const closeContent = closeMatch ? closeMatch[1] : ""
+
+    // 3. Extract BODY CONTENT
+    let bodyContent = fullHtml
+    if (headContent) bodyContent = bodyContent.replace(headContent, "")
+    if (closeContent) bodyContent = bodyContent.replace(closeContent, "")
+    bodyContent = bodyContent.trim()
+
+    // 4. MAGIC: Split Body into Logical Sections
+    // We look for top-level HTML tags that look like containers.
+    // Regex explanation: Find a tag that starts with <div, <table, <section and capture everything until it closes.
+    // Note: Regex parsing HTML is fragile, but sufficient for top-level block splitting in emails.
+
+    // Strategy: We split by "<!-- BLOCK: Name -->" comments if they exist.
+    // If NOT, we try to split by standard container tags.
+
+    const commentSplit = bodyContent.split(/<!-- BLOCK: (.*?) -->/i)
+
+    if (commentSplit.length > 1) {
+        // Option A: The user already has "BLOCK:" comments. Use them!
+        // The split array looks like: [pre-text, "Block Name 1", "Content 1", "Block Name 2", "Content 2"...]
+        for (let i = 1; i < commentSplit.length; i += 2) {
+            const name = commentSplit[i].trim()
+            const content = commentSplit[i + 1]?.trim() || ""
+            blocks.push({ id: `block-${i}`, name: name, content: content })
+        }
+    } else {
+        // Option B: The "Wild West". We assume every top-level <table> or <div> is a block.
+        // We wrap them in comments so they persist next time.
+
+        // This regex looks for high-level containers
+        const tagRegex = /(<(table|div|section)[^>]*>[\s\S]*?<\/\2>)/gi
+        let match
+        let lastIndex = 0
+        let count = 1
+
+        while ((match = tagRegex.exec(bodyContent)) !== null) {
+            // content BEFORE the tag (usually whitespace or stray text)
+            const gap = bodyContent.slice(lastIndex, match.index).trim()
+            if (gap) {
+                blocks.push({ id: `gap-${count}`, name: `Text Section ${count}`, content: gap })
+            }
+
+            // The TAG itself
+            const tagContent = match[0]
+            // Try to guess a name based on content
+            let name = `Section ${count}`
+            if (tagContent.includes("img")) name = `Image Block ${count}`
+            if (tagContent.includes("<h")) name = `Text/Header Block ${count}`
+            if (tagContent.includes("button") || tagContent.includes("<a ")) name = `CTA Block ${count}`
+            if (tagContent.includes("social")) name = "Social Links"
+
+            blocks.push({ id: `auto-${count}`, name: name, content: tagContent })
+
+            lastIndex = tagRegex.lastIndex
+            count++
+        }
+
+        // Catch any trailing content
+        const tail = bodyContent.slice(lastIndex).trim()
+        if (tail) blocks.push({ id: "tail", name: "Footer Content", content: tail })
+    }
+
+    // 5. Add Footer
+    blocks.push({ id: "footer", name: "Closing Tags", content: closeContent })
+
+    return blocks
+}
+
+
 export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, onAssetsChange, onSave }: ModularEmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
 
-    // --- BLOCK LOGIC ---
-    const [blocks, setBlocks] = useState<Block[]>(() => {
-        // 1. Try to split HTML intelligently
-        const headMatch = initialHtml.match(/(^[\s\S]*?<body[^>]*>)/i)
-        const closeMatch = initialHtml.match(/(<\/body>[\s\S]*$)/i)
+    // INITIALIZE BLOCKS using the new Smart Parser
+    const [blocks, setBlocks] = useState<Block[]>(() => parseMonolithToBlocks(initialHtml))
 
-        if (headMatch && closeMatch) {
-            const headContent = headMatch[1]
-            const closeContent = closeMatch[1]
-            const bodyContent = initialHtml.replace(headContent, "").replace(closeContent, "").trim()
+    const [activeBlockId, setActiveBlockId] = useState<string>(blocks[1]?.id || blocks[0].id)
 
-            return [
-                { id: "head", name: "Global Styles", content: headContent },
-                { id: "body-main", name: "Body Content", content: bodyContent },
-                { id: "footer", name: "Closing Tags", content: closeContent }
-            ]
-        }
-        // 2. Fallback: One big block
-        return [{ id: "main", name: "Full Email", content: initialHtml }]
-    })
+    // Reconstruct full HTML from blocks + Enforce Block Comments
+    const fullHtml = useMemo(() => {
+        return blocks.map(b => {
+            // Don't wrap head/footer in comments to keep file clean
+            if (b.id === 'head' || b.id === 'footer') return b.content
 
-    const [activeBlockId, setActiveBlockId] = useState<string>(blocks[0].id)
-
-    // Reconstruct full HTML from blocks
-    const fullHtml = useMemo(() => blocks.map(b => b.content).join('\n'), [blocks])
+            // Wrap others in "Markers" so the parser finds them next time
+            return `<!-- BLOCK: ${b.name} -->\n${b.content}`
+        }).join('\n\n')
+    }, [blocks])
 
     // Sync to parent
     useEffect(() => {
@@ -63,11 +135,11 @@ export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, on
         const newBlock: Block = {
             id: `block-${Date.now()}`,
             name: "New Section",
-            content: "\n<div>Content...</div>"
+            content: "<div style='padding: 20px;'>New Content</div>"
         }
         const index = blocks.findIndex(b => b.id === activeBlockId)
         const newBlocks = [...blocks]
-        newBlocks.splice(index + 1, 0, newBlock) // Add after current
+        newBlocks.splice(index + 1, 0, newBlock)
         setBlocks(newBlocks)
         setActiveBlockId(newBlock.id)
     }
@@ -126,7 +198,7 @@ export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, on
                 <CodePane code={activeBlock.content} onChange={handleBlockContentChange} className="flex-1" />
             </div>
 
-            {/* 4. PREVIEW PANE */}
+            {/* 3. PREVIEW PANE */}
             <div className="flex-[4] flex flex-col min-w-[500px] h-full overflow-hidden">
                 <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card flex-shrink-0">
                     <h2 className="text-sm font-semibold">Preview</h2>
@@ -152,12 +224,26 @@ export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, on
             {/* 5. COPILOT (Context Aware) */}
             <div className="w-[350px] flex-shrink-0 border-l border-border bg-card h-full overflow-hidden">
                 <CopilotPane
-                    html={fullHtml} // We give it FULL HTML so it sees context...
+                    html={fullHtml}
                     onHtmlChange={(newHtml) => {
-                        // If Copilot returns full HTML, we try to detect if it's just a snippet update
-                        // For now, in this Pro mode, we just update the active block to be safe
-                        // OR we warn the user. Ideally, Copilot should learn to return Blocks.
-                        handleBlockContentChange(newHtml)
+                        // If Copilot returns full HTML, parse it back into blocks
+                        // NOTE: This assumes Copilot respects the Block structure or we just re-split it
+                        // Ideally we teach Copilot to return partial HTML, but for now we accept full HTML
+                        // and re-parse it to keep state in sync.
+
+                        // Check if it's a "global" update (full HTML) or a "snippet"
+                        if (newHtml.includes("<body") || newHtml.includes("Global Styles")) {
+                            // It looks like a full file
+                            const newBlocks = parseMonolithToBlocks(newHtml)
+                            setBlocks(newBlocks)
+                            // Try to keep the active block if it still exists, otherwise default
+                            if (!newBlocks.some(b => b.id === activeBlockId)) {
+                                setActiveBlockId(newBlocks[1]?.id || newBlocks[0].id)
+                            }
+                        } else {
+                            // It might be just a snippet for the active block
+                            handleBlockContentChange(newHtml)
+                        }
                     }}
                 />
             </div>

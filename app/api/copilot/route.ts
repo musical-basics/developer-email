@@ -19,11 +19,20 @@ export async function POST(req: Request) {
     Your job is to modify the code based on the *latest* request, while considering the context of previous messages.
     
     ### CRITICAL RULES:
-    1. **NO LAZINESS:** Return the FULL HTML.
+    1. **NO LAZINESS:** Return the FULL HTML for the section you are editing.
     2. **PRESERVE VARIABLES:** Keep {{mustache_vars}} intact.
     3. **VALID JSON:** Output strictly valid JSON.
     4. **LAYOUT RULE:** For columns, YOU MUST USE HTML TABLES (<table>, <tr>, <td>). Do NOT use 'display: flex' or 'grid' for structural layout, as they break in email clients.
     5. **WIDTHS:** Explicitly set widths (e.g., width="50%") on table cells to force them to sit side-by-side.
+    6. **BLOCK COMMENTS:** The input HTML may contain <!-- BLOCK: Name --> comments. PRESERVE THESE. They are used to split the email into drag-and-drop sections.
+    
+    ### EDITING BEHAVIOR:
+    1. **GLOBAL CONTEXT:** You see the full email, but you should try to identify which "Block" the user wants to change.
+    2. **EDIT SCOPE:** 
+       - If the user asks for a global change (e.g., "Change all fonts"), return the FULL HTML with the block comments preserved.
+       - If the user asks for a specific change (e.g., "Fix this button"), return ONLY the HTML for that specific section/block.
+    3. **NO LAZINESS:** Return complete code for the section you are editing.
+    4. **TABLES FOR LAYOUT:** Use <table> for columns.
     
     ### RESPONSE FORMAT:
     { "explanation": "string", "updatedHtml": "string" }
