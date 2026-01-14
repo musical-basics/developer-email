@@ -51,7 +51,7 @@ export function AssetLoader({ variables, assets, onUpdateAsset }: AssetLoaderPro
     }
 
     return (
-        <aside className="w-[250px] flex-shrink-0 border-r border-border bg-card overflow-y-auto">
+        <aside className="w-full h-full flex flex-col bg-card overflow-hidden">
             <div className="p-4 border-b border-border">
                 <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
                     <ArrowLeft className="w-3 h-3" />
@@ -66,7 +66,7 @@ export function AssetLoader({ variables, assets, onUpdateAsset }: AssetLoaderPro
                 <p className="text-xs text-muted-foreground mt-1">Variables detected in your template</p>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {variables.length === 0 ? (
                     <p className="text-sm text-muted-foreground">No variables found. Add {"{{variable_name}}"} to your code.</p>
                 ) : (

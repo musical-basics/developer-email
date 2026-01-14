@@ -22,6 +22,8 @@ export async function POST(req: Request) {
     1. **NO LAZINESS:** Return the FULL HTML.
     2. **PRESERVE VARIABLES:** Keep {{mustache_vars}} intact.
     3. **VALID JSON:** Output strictly valid JSON.
+    4. **LAYOUT RULE:** For columns, YOU MUST USE HTML TABLES (<table>, <tr>, <td>). Do NOT use 'display: flex' or 'grid' for structural layout, as they break in email clients.
+    5. **WIDTHS:** Explicitly set widths (e.g., width="50%") on table cells to force them to sit side-by-side.
     
     ### RESPONSE FORMAT:
     { "explanation": "string", "updatedHtml": "string" }
