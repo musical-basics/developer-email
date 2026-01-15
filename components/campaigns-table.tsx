@@ -10,7 +10,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy } from "lucide-react"
+import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine } from "lucide-react"
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
 import { duplicateCampaign } from "@/app/actions/campaigns"
 import { useToast } from "@/hooks/use-toast"
@@ -170,14 +176,33 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
                                     >
                                         <Link href={`/dashboard/${campaign.id}`}>Manage</Link>
                                     </Button>
-                                    <Button
-                                        asChild
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                    >
-                                        <Link href={`/editor?id=${campaign.id}`}>Edit</Link>
-                                    </Button>
+
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="text-muted-foreground hover:text-foreground hover:bg-secondary/50 gap-1"
+                                            >
+                                                Edit
+                                                <ChevronDown className="w-3 h-3 opacity-50" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem asChild>
+                                                <Link href={`/editor?id=${campaign.id}`} className="cursor-pointer flex items-center gap-2">
+                                                    <PenLine className="w-4 h-4 text-muted-foreground" />
+                                                    <span>Classic Editor</span>
+                                                </Link>
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem asChild>
+                                                <Link href={`/modular-editor?id=${campaign.id}`} className="cursor-pointer flex items-center gap-2">
+                                                    <LayoutTemplate className="w-4 h-4 text-muted-foreground" />
+                                                    <span>Modular Editor</span>
+                                                </Link>
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
                                 </TableCell>
                             </TableRow>
                         ))

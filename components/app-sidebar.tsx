@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -10,6 +10,7 @@ const navItems = [
     { name: "Campaigns", href: "/campaigns", icon: Mail },
     { name: "Audience", href: "/audience", icon: Users },
     { name: "Email Builder", href: "/editor", icon: PenTool },
+    { name: "Modular Builder", href: "/modular-editor", icon: Layers },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
     { name: "Settings", href: "/settings", icon: Settings },
 ]
