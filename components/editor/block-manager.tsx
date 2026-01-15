@@ -23,6 +23,7 @@ interface BlockManagerProps {
 export function BlockManager({ blocks, activeBlockId, onSelectBlock, onUpdateBlocks, onAddBlock }: BlockManagerProps) {
     const [editingId, setEditingId] = useState<string | null>(null)
     const [editName, setEditName] = useState("")
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null)
 
     const moveBlock = (index: number, direction: -1 | 1, e: React.MouseEvent) => {
         e.stopPropagation()
@@ -58,6 +59,31 @@ export function BlockManager({ blocks, activeBlockId, onSelectBlock, onUpdateBlo
         }
     }
 
+    // --- DnD HANDLERS ---
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        setDraggedIndex(index)
+        e.dataTransfer.effectAllowed = "move"
+        // Transparent image or simple ref logic could be used here for preview
+        // check browser default behavior
+    }
+
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault() // Necessary for onDrop to fire
+        e.dataTransfer.dropEffect = "move"
+    }
+
+    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+        e.preventDefault()
+        if (draggedIndex === null || draggedIndex === dropIndex) return
+
+        const newBlocks = [...blocks]
+        const [movedItem] = newBlocks.splice(draggedIndex, 1)
+        newBlocks.splice(dropIndex, 0, movedItem)
+
+        onUpdateBlocks(newBlocks)
+        setDraggedIndex(null)
+    }
+
     return (
         <div className="flex flex-col h-full bg-card w-full">
             <div className="p-4 border-b border-border flex items-center justify-between">
@@ -75,15 +101,20 @@ export function BlockManager({ blocks, activeBlockId, onSelectBlock, onUpdateBlo
                     {blocks.map((block, index) => (
                         <div
                             key={block.id}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDrop={(e) => handleDrop(e, index)}
                             onClick={() => onSelectBlock(block.id)}
                             className={cn(
                                 "group flex items-center gap-2 p-2 rounded-md text-sm cursor-pointer border transition-all",
                                 activeBlockId === block.id
                                     ? "bg-primary/10 border-primary/50 text-primary font-medium"
-                                    : "bg-transparent border-transparent hover:bg-muted text-muted-foreground"
+                                    : "bg-transparent border-transparent hover:bg-muted text-muted-foreground",
+                                draggedIndex === index && "opacity-50 border-dashed border-primary"
                             )}
                         >
-                            <GripVertical className="w-4 h-4 opacity-20 group-hover:opacity-100 transition-opacity cursor-grab" />
+                            <GripVertical className="w-4 h-4 opacity-20 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing" />
 
                             {editingId === block.id ? (
                                 <input
