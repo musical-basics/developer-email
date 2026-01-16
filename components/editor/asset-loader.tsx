@@ -20,9 +20,10 @@ interface AssetLoaderProps {
     variables: string[]
     assets: Record<string, string>
     onUpdateAsset: (key: string, value: string) => void
+    showBackButton?: boolean
 }
 
-export function AssetLoader({ variables, assets, onUpdateAsset }: AssetLoaderProps) {
+export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton = true }: AssetLoaderProps) {
     const [activeVariable, setActiveVariable] = useState<string | null>(null)
 
     const isImageVariable = (variable: string) => {
@@ -53,10 +54,12 @@ export function AssetLoader({ variables, assets, onUpdateAsset }: AssetLoaderPro
     return (
         <aside className="w-full h-full flex flex-col bg-card overflow-hidden">
             <div className="p-4 border-b border-border">
-                <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
-                    <ArrowLeft className="w-3 h-3" />
-                    Back to Dashboard
-                </Link>
+                {showBackButton && (
+                    <Link href="/" className="mb-4 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        <ArrowLeft className="w-3 h-3" />
+                        Back to Dashboard
+                    </Link>
+                )}
                 <div className="flex items-center gap-2">
                     <ImageIcon className="w-4 h-4 text-primary" />
                     <h2 className="text-sm font-semibold text-foreground">

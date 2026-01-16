@@ -7,8 +7,9 @@ import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
 import { BlockManager, Block } from "./block-manager"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 
 interface ModularEmailEditorProps {
     html: string
@@ -173,6 +174,12 @@ export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, on
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
             {/* 1. UNIFIED SIDEBAR (Assets + Blocks) */}
             <div className="flex-shrink-0 w-[300px] border-r border-border h-full flex flex-col bg-card">
+                <div className="p-4 border-b border-border bg-muted/20">
+                    <Link href="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        <ArrowLeft className="w-3 h-3" />
+                        Back to Dashboard
+                    </Link>
+                </div>
                 {/* Top Half: Blocks */}
                 <div className="flex-1 overflow-hidden border-b border-border">
                     <BlockManager
@@ -186,7 +193,7 @@ export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, on
 
                 {/* Bottom Half: Assets */}
                 <div className="h-[50%] overflow-hidden">
-                    <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
+                    <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} showBackButton={false} />
                 </div>
             </div>
 
