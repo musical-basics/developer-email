@@ -18,6 +18,7 @@ import {
     List,
     Check,
     ChevronsUpDown,
+    Send,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -66,6 +67,8 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
+import { createCampaignForSubscriber } from "@/app/actions/campaigns"
+import { useRouter } from "next/navigation"
 import { Subscriber } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 
@@ -125,6 +128,7 @@ export default function AudienceManagerPage() {
 
     const supabase = createClient()
     const { toast } = useToast()
+    const router = useRouter()
 
     // Fetch Subscribers
     const fetchSubscribers = async () => {
@@ -317,6 +321,35 @@ export default function AudienceManagerPage() {
     const handleRemoveTag = (tagToRemove: string) => {
         const currentTags = formData.tags || []
         setFormData({ ...formData, tags: currentTags.filter((tag) => tag !== tagToRemove) })
+    }
+
+    const handleSendToSubscriber = async (subscriber: Subscriber) => {
+        try {
+            const name = subscriber.first_name
+                ? `${subscriber.first_name} ${subscriber.last_name || ''}`.trim()
+                : ''
+
+            const result = await createCampaignForSubscriber(subscriber.id, subscriber.email, name)
+
+            if (result.error) {
+                throw new Error(result.error)
+            }
+
+            toast({
+                title: "Personal Campaign Created",
+                description: `Draft for ${subscriber.email} created. Redirecting...`,
+            })
+
+            if (result.data?.id) {
+                router.push(`/editor?id=${result.data.id}`)
+            }
+        } catch (error: any) {
+            toast({
+                title: "Error creating campaign",
+                description: error.message,
+                variant: "destructive",
+            })
+        }
     }
 
     const allSelected = filteredSubscribers.length > 0 && selectedIds.length === filteredSubscribers.length
@@ -550,27 +583,41 @@ export default function AudienceManagerPage() {
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">{formatDate(subscriber.created_at)}</TableCell>
                                         <TableCell onClick={(e) => e.stopPropagation()}>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                        <span className="sr-only">Open menu</span>
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem onClick={() => handleEdit(subscriber)}>
-                                                        <Pencil className="mr-2 h-4 w-4" />
-                                                        Edit
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => handleDelete(subscriber.id)}
-                                                        className="text-red-400 focus:text-red-400"
-                                                    >
-                                                        <Trash2 className="mr-2 h-4 w-4" />
-                                                        Delete
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            <div className="flex items-center justify-end gap-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleSendToSubscriber(subscriber)
+                                                    }}
+                                                    title="Send Campaign"
+                                                >
+                                                    <Send className="h-4 w-4" />
+                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                            <MoreHorizontal className="h-4 w-4" />
+                                                            <span className="sr-only">Open menu</span>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={() => handleEdit(subscriber)}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Edit
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem
+                                                            onClick={() => handleDelete(subscriber.id)}
+                                                            className="text-red-400 focus:text-red-400"
+                                                        >
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Delete
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                            </div>
                                         </TableCell>
                                     </TableRow>
                                 ))

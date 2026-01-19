@@ -111,3 +111,31 @@ export async function createCampaignForTag(tagName: string) {
     revalidatePath("/campaigns")
     return { data }
 }
+
+export async function createCampaignForSubscriber(subscriberId: string, email: string, name: string) {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from("campaigns")
+        .insert([
+            {
+                name: `Campaign for ${name || email}`,
+                status: "draft",
+                subject_line: `(Draft) Message for ${name || email}`,
+                html_content: "",
+                variable_values: {
+                    subscriber_id: subscriberId // Store this to lock targeting later if needed
+                }
+            },
+        ])
+        .select()
+        .single()
+
+    if (error) {
+        console.error("Error creating campaign for subscriber:", error)
+        return { error: error.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { data }
+}
