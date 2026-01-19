@@ -19,6 +19,8 @@ import {
     Check,
     ChevronsUpDown,
     Send,
+    Copy,
+    Loader2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -38,6 +40,14 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import {
     AlertDialogHeader,
     AlertDialogTitle,
@@ -67,9 +77,9 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
-import { createCampaignForSubscriber } from "@/app/actions/campaigns"
+import { createCampaignForSubscriber, getCampaigns, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
 import { useRouter } from "next/navigation"
-import { Subscriber } from "@/lib/types"
+import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 
 const allTags = ["Admin", "Piano", "Student", "Theory", "VIP", "Beginner", "Advanced"]
@@ -114,6 +124,13 @@ export default function AudienceManagerPage() {
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false)
     const [viewMode, setViewMode] = useState<"list" | "tags">("list")
     const [tagComboboxOpen, setTagComboboxOpen] = useState(false)
+
+    // Send Existing Campaign State
+    const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
+    const [targetSubscriber, setTargetSubscriber] = useState<Subscriber | null>(null)
+    const [existingCampaigns, setExistingCampaigns] = useState<Campaign[]>([])
+    const [loadingCampaigns, setLoadingCampaigns] = useState(false)
+    const [duplicating, setDuplicating] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState<Partial<Subscriber>>({
@@ -352,6 +369,57 @@ export default function AudienceManagerPage() {
         }
     }
 
+    const handleOpenSelectCampaign = async (subscriber: Subscriber) => {
+        setTargetSubscriber(subscriber)
+        setIsSelectCampaignOpen(true)
+        setLoadingCampaigns(true)
+
+        try {
+            const campaigns = await getCampaigns()
+            setExistingCampaigns(campaigns as Campaign[])
+        } catch (error) {
+            console.error("Failed to load campaigns", error)
+            toast({ title: "Error loading campaigns", variant: "destructive" })
+        } finally {
+            setLoadingCampaigns(false)
+        }
+    }
+
+    const handleSelectCampaign = async (campaign: Campaign) => {
+        if (!targetSubscriber) return
+
+        setDuplicating(true)
+        try {
+            const name = targetSubscriber.first_name
+                ? `${targetSubscriber.first_name} ${targetSubscriber.last_name || ''}`.trim()
+                : targetSubscriber.email
+
+            const result = await duplicateCampaignForSubscriber(campaign.id, targetSubscriber.id, name)
+
+            if (result.error) {
+                throw new Error(result.error)
+            }
+
+            toast({
+                title: "Campaign Duplicated",
+                description: `Created copy of "${campaign.name}" for ${targetSubscriber.email}. Redirecting...`,
+            })
+
+            if (result.data?.id) {
+                router.push(`/dashboard/${result.data.id}`)
+            }
+            setIsSelectCampaignOpen(false)
+        } catch (error: any) {
+            toast({
+                title: "Error duplicating campaign",
+                description: error.message,
+                variant: "destructive",
+            })
+        } finally {
+            setDuplicating(false)
+        }
+    }
+
     const allSelected = filteredSubscribers.length > 0 && selectedIds.length === filteredSubscribers.length
     const someSelected = selectedIds.length > 0 && selectedIds.length < filteredSubscribers.length
 
@@ -584,18 +652,33 @@ export default function AudienceManagerPage() {
                                         <TableCell className="text-muted-foreground">{formatDate(subscriber.created_at)}</TableCell>
                                         <TableCell onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation()
-                                                        handleSendToSubscriber(subscriber)
-                                                    }}
-                                                    title="Send Campaign"
-                                                >
-                                                    <Send className="h-4 w-4" />
-                                                </Button>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                                                        >
+                                                            <Send className="h-4 w-4" />
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end">
+                                                        <DropdownMenuItem onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleSendToSubscriber(subscriber)
+                                                        }}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
+                                                            Draft New Campaign
+                                                        </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleOpenSelectCampaign(subscriber)
+                                                        }}>
+                                                            <Copy className="mr-2 h-4 w-4" />
+                                                            Send Existing Campaign
+                                                        </DropdownMenuItem>
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
                                                 <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
                                                         <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -625,11 +708,14 @@ export default function AudienceManagerPage() {
                         </TableBody>
                     </Table>
                 </div>
-            )}
+            )
+            }
 
-            {viewMode === "tags" && (
-                <TagGroupView subscribers={filteredSubscribers} />
-            )}
+            {
+                viewMode === "tags" && (
+                    <TagGroupView subscribers={filteredSubscribers} />
+                )
+            }
 
             {/* Edit Drawer */}
             <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
@@ -819,6 +905,58 @@ export default function AudienceManagerPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-        </div>
+
+            {/* Select Campaign Dialog */}
+            <Dialog open={isSelectCampaignOpen} onOpenChange={setIsSelectCampaignOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Send Existing Campaign</DialogTitle>
+                        <DialogDescription>
+                            Select a campaign to duplicate and send to {targetSubscriber?.email}.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4">
+                        {loadingCampaigns ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : existingCampaigns.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-8">No campaigns found.</p>
+                        ) : (
+                            <ScrollArea className="h-[300px] pr-4">
+                                <div className="space-y-2">
+                                    {existingCampaigns.map(campaign => (
+                                        <div
+                                            key={campaign.id}
+                                            onClick={() => !duplicating && handleSelectCampaign(campaign)}
+                                            className={cn(
+                                                "p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors",
+                                                duplicating && "opacity-50 pointer-events-none"
+                                            )}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <h4 className="font-medium text-sm text-foreground truncate">{campaign.name}</h4>
+                                                <Badge variant="outline" className="text-xs">
+                                                    {campaign.status}
+                                                </Badge>
+                                            </div>
+                                            {campaign.subject_line && (
+                                                <p className="text-xs text-muted-foreground mt-1 truncate">
+                                                    Subject: {campaign.subject_line}
+                                                </p>
+                                            )}
+                                            <p className="text-[10px] text-muted-foreground mt-2">
+                                                Created: {formatDate(campaign.created_at)}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </div >
     )
 }

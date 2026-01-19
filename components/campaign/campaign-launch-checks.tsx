@@ -108,7 +108,7 @@ export function CampaignLaunchChecks({ campaign, audience }: CampaignLaunchCheck
                 <div className="mt-6 grid gap-6 lg:grid-cols-5">
                     {/* Left Column - Controls */}
                     <div className="flex flex-col gap-6 lg:col-span-2">
-                        <AudienceCard audience={audience} />
+                        <AudienceCard audience={audience} campaign={campaign} />
                         <SenderIdentityCard
                             fromName={fromName}
                             fromEmail={fromEmail}
