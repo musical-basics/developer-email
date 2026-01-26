@@ -42,11 +42,51 @@ export async function POST(request: Request) {
         if (type === "test") {
             if (!email) return NextResponse.json({ error: "Test email required" }, { status: 400 });
 
+            // ⚡️ NEW: Fetch a "Simulated" Subscriber to populate merge tags
+            // If the campaign is locked to a specific subscriber (your "CRM mode"), use them.
+            // Otherwise, just grab the most recent active subscriber to use as a "dummy".
+            let simulationSubscriber = null;
+            const lockedSubscriberId = campaign.variable_values?.subscriber_id;
+
+            if (lockedSubscriberId) {
+                const { data } = await supabase
+                    .from("subscribers")
+                    .select("*")
+                    .eq("id", lockedSubscriberId)
+                    .single();
+                simulationSubscriber = data;
+            } else {
+                // Just grab the latest person to test layout with real data length/formatting
+                const { data } = await supabase
+                    .from("subscribers")
+                    .select("*")
+                    .eq("status", "active")
+                    .limit(1)
+                    .single();
+                simulationSubscriber = data;
+            }
+
+            // ⚡️ NEW: Run the EXACT same replacement logic as broadcast
+            let finalHtml = htmlContent;
+            if (simulationSubscriber) {
+                finalHtml = finalHtml
+                    .replace(/{{first_name}}/g, simulationSubscriber.first_name || "There")
+                    .replace(/{{last_name}}/g, simulationSubscriber.last_name || "")
+                    .replace(/{{email}}/g, simulationSubscriber.email);
+            } else {
+                // Fallback if your list is completely empty
+                finalHtml = finalHtml
+                    .replace(/{{first_name}}/g, "[Test Name]")
+                    .replace(/{{email}}/g, "test@example.com");
+            }
+
             const { data, error } = await resend.emails.send({
-                from: "onboarding@resend.dev", // Use this until you verify your domain
-                to: email,
-                subject: `[TEST] ${campaign.subject_line}`,
-                html: htmlContent,
+                from: typeof fromName === 'string' && typeof fromEmail === 'string'
+                    ? `${fromName} <${fromEmail}>`
+                    : process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+                to: email, // <--- Sends to YOUR test email
+                subject: `[TEST PREVIEW] ${campaign.subject_line}`,
+                html: finalHtml, // <--- Sends the rendered HTML with "John" instead of "{{first_name}}"
                 replyTo: fromEmail,
             });
 
