@@ -118,6 +118,8 @@ export async function POST(request: Request) {
             if (subError || !recipients) throw subError;
 
             // 3. Loop and Send (For small batches, a simple loop is fine. For >1000, use Resend Batch API)
+            console.log(`🚀 Starting broadcast to ${recipients.length} subscribers...`);
+
             const results = await Promise.all(recipients.map(async (sub) => {
                 // 1. Generate the "Tracking Param"
                 // const trackingParam = `?sid=${sub.id}&cid=${campaign.id}`;
@@ -135,7 +137,7 @@ export async function POST(request: Request) {
                     .replace(/{{first_name}}/g, sub.first_name || "")
                     .replace(/{{email}}/g, sub.email);
 
-                return resend.emails.send({
+                const response = await resend.emails.send({
                     from: typeof fromName === 'string' && typeof fromEmail === 'string'
                         ? `${fromName} <${fromEmail}>`
                         : process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
@@ -144,6 +146,15 @@ export async function POST(request: Request) {
                     html: personalHtml,
                     replyTo: fromEmail,
                 });
+
+                // 🛑 LOGGING: This will show up in your Terminal
+                if (response.error) {
+                    console.error(`❌ FAILED sending to ${sub.email}:`, JSON.stringify(response.error, null, 2));
+                } else {
+                    console.log(`✅ SUCCESS sending to ${sub.email}:`, response.data);
+                }
+
+                return response;
             }));
 
             // 4. Update Campaign Status
