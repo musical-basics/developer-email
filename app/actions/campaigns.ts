@@ -37,11 +37,26 @@ export async function getCampaigns() {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, created_at, subject_line, variable_values")
+        .select("id, name, status, created_at, updated_at")
         .order("created_at", { ascending: false })
 
     if (error) {
         console.error("Error fetching campaigns:", error)
+        return []
+    }
+
+    return data || []
+}
+
+export async function getCampaignList() {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from("campaigns")
+        .select("id, name, status, created_at")
+        .order("created_at", { ascending: false })
+
+    if (error) {
+        console.error("Error fetching campaign list:", error)
         return []
     }
 

@@ -77,7 +77,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
-import { createCampaignForSubscriber, getCampaigns, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
+import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
 import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -153,7 +153,7 @@ export default function AudienceManagerPage() {
         setLoading(true)
         const { data, error } = await supabase
             .from("subscribers")
-            .select("*")
+            .select("id, email, first_name, last_name, tags, status, created_at")
             .order("created_at", { ascending: false })
 
         if (data) {
@@ -391,7 +391,7 @@ export default function AudienceManagerPage() {
         setLoadingCampaigns(true)
 
         try {
-            const campaigns = await getCampaigns()
+            const campaigns = await getCampaignList()
             setExistingCampaigns(campaigns as Campaign[])
         } catch (error) {
             console.error("Failed to load campaigns", error)

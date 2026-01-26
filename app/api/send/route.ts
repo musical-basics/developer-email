@@ -80,25 +80,27 @@ export async function POST(request: Request) {
                     .replace(/{{email}}/g, "test@example.com");
             }
 
-            console.log("🚀 Attempting to send email...");
-            console.log("FROM:", `hello@email.dreamplaypianos.com`); // verify this matches exactly
+            console.log("🚀 Sending Test Email...");
+            console.log("FROM:", `DreamPlay <hello@email.dreamplaypianos.com>`);
             console.log("TO:", email);
 
             const { data, error } = await resend.emails.send({
-                from: "DreamPlay <hello@email.dreamplaypianos.com>", // Ensure this matches your dashboard
+                from: "DreamPlay <hello@email.dreamplaypianos.com>",
                 to: email,
-                subject: campaign.subject_line,
+                subject: `[TEST] ${campaign.subject_line}`,
                 html: finalHtml,
             });
 
             if (error) {
-                // 🚨 THIS IS THE MISSING PIECE
-                console.error("❌ RESEND API ERROR:", JSON.stringify(error, null, 2));
+                // 🛑 THIS PRINTS THE REAL ERROR TO YOUR TERMINAL
+                console.error("❌ RESEND FAILED:", JSON.stringify(error, null, 2));
+
+                // This ensures the frontend gets a 500 error instead of a fake 200 OK
                 return NextResponse.json({ error: error.message }, { status: 500 });
             }
 
             console.log("✅ Email sent successfully!", data);
-            return NextResponse.json(data);
+            return NextResponse.json({ success: true, data });
         }
 
         else if (type === "broadcast") {
