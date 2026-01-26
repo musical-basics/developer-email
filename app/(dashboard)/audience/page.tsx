@@ -122,6 +122,7 @@ export default function AudienceManagerPage() {
     const [isDrawerOpen, setIsDrawerOpen] = useState(false)
     const [isNewSubscriber, setIsNewSubscriber] = useState(false)
     const [isDeleteAlertOpen, setIsDeleteAlertOpen] = useState(false)
+    const [subscriberToDelete, setSubscriberToDelete] = useState<string | null>(null)
     const [viewMode, setViewMode] = useState<"list" | "tags">("list")
     const [tagComboboxOpen, setTagComboboxOpen] = useState(false)
 
@@ -323,6 +324,21 @@ export default function AudienceManagerPage() {
             setSelectedIds([])
         }
         setIsDeleteAlertOpen(false)
+    }
+
+    const confirmDelete = (id: string) => {
+        setSubscriberToDelete(id)
+        setIsDeleteAlertOpen(true)
+    }
+
+    const handleConfirmDelete = () => {
+        if (subscriberToDelete) {
+            handleDelete(subscriberToDelete)
+            setSubscriberToDelete(null)
+            setIsDeleteAlertOpen(false)
+        } else {
+            handleBulkDelete()
+        }
     }
 
     const handleAddTag = (tagToAdd: string) => {
@@ -648,7 +664,7 @@ export default function AudienceManagerPage() {
                                                     className="h-8 w-8 text-muted-foreground hover:text-red-400"
                                                     onClick={(e) => {
                                                         e.stopPropagation()
-                                                        handleDelete(subscriber.id)
+                                                        confirmDelete(subscriber.id)
                                                     }}
                                                 >
                                                     <Trash2 className="h-4 w-4" />
@@ -902,12 +918,15 @@ export default function AudienceManagerPage() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete {selectedIds.length} subscriber{selectedIds.length === 1 ? '' : 's'}.
+                            This action cannot be undone. This will permanently delete {subscriberToDelete
+                                ? "this subscriber"
+                                : `${selectedIds.length} subscriber${selectedIds.length === 1 ? '' : 's'}`
+                            }.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleBulkDelete} className="bg-red-600 hover:bg-red-700">
+                        <AlertDialogCancel onClick={() => setSubscriberToDelete(null)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleConfirmDelete} className="bg-red-600 hover:bg-red-700">
                             Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
