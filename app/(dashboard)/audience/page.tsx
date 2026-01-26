@@ -580,6 +580,7 @@ export default function AudienceManagerPage() {
                                     />
                                 </TableHead>
                                 <TableHead>Profile</TableHead>
+                                <TableHead className="w-[100px]"></TableHead>
                                 <TableHead>Tags</TableHead>
                                 <TableHead>Status</TableHead>
                                 <TableHead>Added</TableHead>
@@ -625,6 +626,34 @@ export default function AudienceManagerPage() {
                                                         {subscriber.first_name} {subscriber.last_name}
                                                     </p>
                                                 </div>
+                                            </div>
+                                        </TableCell>
+                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleEdit(subscriber)
+                                                    }}
+                                                >
+                                                    <Pencil className="h-4 w-4" />
+                                                    <span className="sr-only">Edit</span>
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        handleDelete(subscriber.id)
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                    <span className="sr-only">Delete</span>
+                                                </Button>
                                             </div>
                                         </TableCell>
                                         <TableCell>
@@ -676,27 +705,6 @@ export default function AudienceManagerPage() {
                                                         }}>
                                                             <Copy className="mr-2 h-4 w-4" />
                                                             Send Existing Campaign
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                            <span className="sr-only">Open menu</span>
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuItem onClick={() => handleEdit(subscriber)}>
-                                                            <Pencil className="mr-2 h-4 w-4" />
-                                                            Edit
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={() => handleDelete(subscriber.id)}
-                                                            className="text-red-400 focus:text-red-400"
-                                                        >
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            Delete
                                                         </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
