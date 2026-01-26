@@ -114,8 +114,19 @@ export async function POST(request: Request) {
 
             // 3. Loop and Send (For small batches, a simple loop is fine. For >1000, use Resend Batch API)
             const results = await Promise.all(recipients.map(async (sub) => {
-                // Personalize content
+                // 1. Generate the "Tracking Param"
+                // const trackingParam = `?sid=${sub.id}&cid=${campaign.id}`;
+
+                // 2. Inject it into links
                 let personalHtml = htmlContent
+                    .replace(/href="([^"]*)"/g, (match: string, url: string) => {
+                        // Don't tag "mailto:" or anchors "#"
+                        if (url.startsWith("http")) {
+                            const separator = url.includes("?") ? "&" : "?";
+                            return `href="${url}${separator}sid=${sub.id}&cid=${campaign.id}"`;
+                        }
+                        return match;
+                    })
                     .replace(/{{first_name}}/g, sub.first_name || "")
                     .replace(/{{email}}/g, sub.email);
 
