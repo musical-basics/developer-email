@@ -1,40 +1,52 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
-// Initialize Supabase Admin Client
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-// Helper to handle CORS headers
-function corsHeaders() {
+// 1. Define your Safe List
+const allowedOrigins = [
+    "https://dreamplaypianos.com",
+    "https://www.dreamplaypianos.com"
+];
+
+// 2. Helper to generate dynamic headers based on who is asking
+function getCorsHeaders(request: Request) {
+    const origin = request.headers.get("origin");
+
+    // If the requester is in our safe list, let them in. 
+    // Otherwise, default to the main domain (which effectively blocks them).
+    const allowOrigin = (origin && allowedOrigins.includes(origin))
+        ? origin
+        : allowedOrigins[0];
+
     return {
-        // 🔒 SECURITY: Only allow your main website
-        "Access-Control-Allow-Origin": "https://dreamplaypianos.com",
+        "Access-Control-Allow-Origin": allowOrigin,
         "Access-Control-Allow-Methods": "POST, OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };
 }
 
-// Handle the "OPTIONS" pre-flight check (Required for CORS)
-export async function OPTIONS() {
-    return NextResponse.json({}, { headers: corsHeaders() });
+export async function OPTIONS(request: Request) {
+    return NextResponse.json({}, { headers: getCorsHeaders(request) });
 }
 
 export async function POST(request: Request) {
     try {
         const { email, first_name, last_name, tags } = await request.json();
 
-        // 1. Validate
         if (!email) {
-            return NextResponse.json({ error: "Email required" }, { status: 400, headers: corsHeaders() });
+            return NextResponse.json(
+                { error: "Email required" },
+                { status: 400, headers: getCorsHeaders(request) }
+            );
         }
 
-        // 2. Default tag if none provided
         const finalTags = tags && Array.isArray(tags) ? tags : ["Website Import"];
 
-        // 3. Check for existing user to merge tags
+        // Check for existing user to merge tags
         const { data: existingUser } = await supabase
             .from("subscribers")
             .select("tags")
@@ -43,11 +55,9 @@ export async function POST(request: Request) {
 
         let mergedTags = finalTags;
         if (existingUser?.tags) {
-            // Combine old tags with new tags, removing duplicates
             mergedTags = Array.from(new Set([...existingUser.tags, ...finalTags]));
         }
 
-        // 4. Upsert Subscriber
         const { data, error } = await supabase
             .from("subscribers")
             .upsert({
@@ -62,10 +72,16 @@ export async function POST(request: Request) {
 
         if (error) throw error;
 
-        return NextResponse.json({ success: true, id: data.id }, { headers: corsHeaders() });
+        return NextResponse.json(
+            { success: true, id: data.id },
+            { headers: getCorsHeaders(request) }
+        );
 
     } catch (error: any) {
         console.error("Webhook Error:", error);
-        return NextResponse.json({ error: error.message }, { status: 500, headers: corsHeaders() });
+        return NextResponse.json(
+            { error: error.message },
+            { status: 500, headers: getCorsHeaders(request) }
+        );
     }
 }
