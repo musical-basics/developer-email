@@ -621,7 +621,7 @@ export default function AudienceManagerPage() {
                                     <TableRow
                                         key={subscriber.id}
                                         className="border-border cursor-pointer hover:bg-muted/50"
-                                        onClick={() => handleEdit(subscriber)}
+                                        onClick={() => router.push(`/audience/${subscriber.id}`)}
                                     >
                                         <TableCell onClick={(e) => e.stopPropagation()}>
                                             <Checkbox
