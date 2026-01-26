@@ -52,7 +52,9 @@ export function BroadcastConfirmDialog({
                     </div>
                     <div>
                         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Recipients</p>
-                        <p className="text-lg font-semibold text-[#D4AF37]">{subscriberCount.toLocaleString()} subscribers</p>
+                        <p className="text-lg font-semibold text-[#D4AF37]">
+                            {subscriberCount === 1 ? "1 subscriber" : `${subscriberCount.toLocaleString()} subscribers`}
+                        </p>
                     </div>
                 </div>
 

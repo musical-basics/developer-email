@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine } from "lucide-react"
+import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine, Trash2 } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -18,7 +18,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { createClient } from "@/lib/supabase/client"
-import { duplicateCampaign } from "@/app/actions/campaigns"
+import { duplicateCampaign, deleteCampaign } from "@/app/actions/campaigns"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -32,10 +32,12 @@ interface CampaignsTableProps {
     campaigns: Campaign[]
     loading: boolean
     onRefresh?: () => void
+    title?: string
 }
 
-export function CampaignsTable({ campaigns = [], loading, onRefresh }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns" }: CampaignsTableProps) {
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
+    const [deletingId, setDeletingId] = useState<string | null>(null)
     const [newName, setNewName] = useState("")
     const [renaming, setRenaming] = useState(false)
     const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
@@ -101,6 +103,34 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
             setDuplicatingId(null)
         }
     }
+    const handleDelete = async (campaignId: string) => {
+        setDeletingId(campaignId)
+        try {
+            const result = await deleteCampaign(campaignId)
+
+            if (result.error) {
+                throw new Error(result.error)
+            }
+
+            toast({
+                title: "Campaign deleted",
+                description: "The campaign has been permanently removed.",
+            })
+
+            if (onRefresh) onRefresh()
+            router.refresh()
+
+        } catch (error: any) {
+            console.error("Error deleting campaign:", error)
+            toast({
+                title: "Error deleting campaign",
+                description: error.message || "Failed to delete",
+                variant: "destructive",
+            })
+        } finally {
+            setDeletingId(null)
+        }
+    }
 
     if (loading) {
         return <div className="text-center py-10 text-muted-foreground">Loading campaigns...</div>
@@ -109,7 +139,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
     return (
         <div className="rounded-lg border border-border bg-card">
             <div className="border-b border-border px-6 py-4">
-                <h2 className="text-lg font-semibold text-card-foreground">Recent Campaigns</h2>
+                <h2 className="text-lg font-semibold text-card-foreground">{title}</h2>
             </div>
             <Table>
                 <TableHeader>
@@ -133,9 +163,14 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
                             <TableRow key={campaign.id} className="border-border">
                                 <TableCell className="font-medium text-card-foreground">
                                     <div className="flex items-center gap-2 group">
-                                        {campaign.name || "Untitled Campaign"}
+                                        <Link href={`/dashboard/${campaign.id}`} className="hover:underline">
+                                            {campaign.name || "Untitled Campaign"}
+                                        </Link>
                                         <button
-                                            onClick={() => handleEditClick(campaign)}
+                                            onClick={(e) => {
+                                                e.preventDefault()
+                                                handleEditClick(campaign)
+                                            }}
                                             className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                                             title="Rename"
                                         >
@@ -175,6 +210,17 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh }: Campaigns
                                         className="text-primary hover:text-primary/80 hover:bg-primary/10"
                                     >
                                         <Link href={`/dashboard/${campaign.id}`}>Manage</Link>
+                                    </Button>
+
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDelete(campaign.id)}
+                                        disabled={deletingId === campaign.id}
+                                        className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                                        title="Delete"
+                                    >
+                                        <Trash2 className="w-4 h-4" />
                                     </Button>
 
                                     <DropdownMenu>

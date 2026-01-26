@@ -181,3 +181,20 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
     revalidatePath("/campaigns")
     return { data }
 }
+
+export async function deleteCampaign(campaignId: string) {
+    const supabase = await createClient()
+
+    const { error } = await supabase
+        .from("campaigns")
+        .delete()
+        .eq("id", campaignId)
+
+    if (error) {
+        console.error("Error deleting campaign:", error)
+        return { error: error.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { success: true }
+}

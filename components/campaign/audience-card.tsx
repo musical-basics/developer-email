@@ -1,6 +1,6 @@
-import { Users, User } from "lucide-react"
+import { Users, User, Mail } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Campaign } from "@/lib/types"
+import { Campaign, Subscriber } from "@/lib/types"
 
 export interface Audience {
     total_subscribers: number
@@ -10,9 +10,10 @@ export interface Audience {
 interface AudienceCardProps {
     audience: Audience
     campaign?: Campaign
+    targetSubscriber?: Subscriber | null
 }
 
-export function AudienceCard({ audience, campaign }: AudienceCardProps) {
+export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceCardProps) {
     const lockedSubscriberId = campaign?.variable_values?.subscriber_id
 
     return (
@@ -29,9 +30,16 @@ export function AudienceCard({ audience, campaign }: AudienceCardProps) {
                         <User className="h-8 w-8 text-blue-400" />
                         <div>
                             <p className="font-bold text-lg text-blue-400">1 Subscriber</p>
-                            <p className="text-sm text-muted-foreground">
-                                Exclusive send to this individual.
-                            </p>
+                            {targetSubscriber ? (
+                                <div className="text-sm text-blue-300 mt-1">
+                                    <p className="font-medium">{targetSubscriber.first_name} {targetSubscriber.last_name}</p>
+                                    <p className="opacity-80">{targetSubscriber.email}</p>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-muted-foreground">
+                                    Exclusive send to this individual.
+                                </p>
+                            )}
                         </div>
                     </div>
                 ) : (

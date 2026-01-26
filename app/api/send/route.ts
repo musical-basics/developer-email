@@ -47,7 +47,7 @@ export async function POST(request: Request) {
                 to: email,
                 subject: `[TEST] ${campaign.subject_line}`,
                 html: htmlContent,
-                reply_to: fromEmail,
+                replyTo: fromEmail,
             });
 
             if (error) {
@@ -59,8 +59,45 @@ export async function POST(request: Request) {
         }
 
         else if (type === "broadcast") {
-            // ... (Keep your broadcast logic here if you want, or I can provide the updated version) ...
-            return NextResponse.json({ success: true, message: "Broadcast logic placeholder" });
+            // 1. Check for a "Subscriber Lock" (The feature you built in actions/campaigns.ts)
+            const lockedSubscriberId = campaign.variable_values?.subscriber_id;
+
+            let query = supabase.from("subscribers").select("*").eq("status", "active");
+
+            // 2. If locked, ONLY fetch that one subscriber. Otherwise fetch everyone.
+            if (lockedSubscriberId) {
+                query = query.eq("id", lockedSubscriberId);
+            }
+
+            const { data: recipients, error: subError } = await query;
+            if (subError || !recipients) throw subError;
+
+            // 3. Loop and Send (For small batches, a simple loop is fine. For >1000, use Resend Batch API)
+            const results = await Promise.all(recipients.map(async (sub) => {
+                // Personalize content
+                let personalHtml = htmlContent
+                    .replace(/{{first_name}}/g, sub.first_name || "")
+                    .replace(/{{email}}/g, sub.email);
+
+                return resend.emails.send({
+                    from: typeof fromName === 'string' && typeof fromEmail === 'string'
+                        ? `${fromName} <${fromEmail}>`
+                        : process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+                    to: sub.email,
+                    subject: campaign.subject_line,
+                    html: personalHtml,
+                    replyTo: fromEmail,
+                });
+            }));
+
+            // 4. Update Campaign Status
+            await supabase.from("campaigns").update({
+                status: "sent",
+                sent_at: new Date().toISOString(),
+                total_recipients: recipients.length
+            }).eq("id", campaignId);
+
+            return NextResponse.json({ success: true, count: recipients.length });
         }
 
         return NextResponse.json({ error: "Invalid Type" }, { status: 400 });

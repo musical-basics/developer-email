@@ -15,12 +15,15 @@ import { Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
+import { Subscriber } from "@/lib/types"
+
 interface CampaignLaunchChecksProps {
     campaign: Campaign
     audience: Audience
+    targetSubscriber?: Subscriber | null
 }
 
-export function CampaignLaunchChecks({ campaign, audience }: CampaignLaunchChecksProps) {
+export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: CampaignLaunchChecksProps) {
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
     const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
     // Default values since they are not in DB schema yet
@@ -108,7 +111,7 @@ export function CampaignLaunchChecks({ campaign, audience }: CampaignLaunchCheck
                 <div className="mt-6 grid gap-6 lg:grid-cols-5">
                     {/* Left Column - Controls */}
                     <div className="flex flex-col gap-6 lg:col-span-2">
-                        <AudienceCard audience={audience} campaign={campaign} />
+                        <AudienceCard audience={audience} campaign={campaign} targetSubscriber={targetSubscriber} />
                         <SenderIdentityCard
                             fromName={fromName}
                             fromEmail={fromEmail}

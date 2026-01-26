@@ -1,0 +1,11 @@
+# Add patterns to ignore here, one per line
+_legacy_v0_code/
+.next/
+node_modules/
+.git/
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+.DS_Store
+repomix-output.xml
+.vscode/

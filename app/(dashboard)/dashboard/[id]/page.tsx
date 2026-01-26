@@ -22,22 +22,43 @@ export default async function DashboardPage({ params }: DashboardPageProps) {
         notFound()
     }
 
+    // Check for single subscriber lock
+    let targetSubscriber = null
+    const lockedSubscriberId = campaign.variable_values?.subscriber_id
+
+    if (lockedSubscriberId) {
+        const { data: subscriber } = await supabase
+            .from("subscribers")
+            .select("*")
+            .eq("id", lockedSubscriberId)
+            .single()
+
+        targetSubscriber = subscriber
+    }
+
     // Fetch Subscriber Count
-    // In a real app we might want to filter by tags etc. For now we fetch all active.
-    const { count, error: countError } = await supabase
-        .from("subscribers")
-        .select("*", { count: 'exact', head: true })
-        .eq("status", "active")
+    // If locked, count is 1. Otherwise fetch total active.
+    let subscriberCount = 0
+    if (lockedSubscriberId) {
+        subscriberCount = 1
+    } else {
+        const { count, error: countError } = await supabase
+            .from("subscribers")
+            .select("*", { count: 'exact', head: true })
+            .eq("status", "active")
+        subscriberCount = count || 0
+    }
 
     const audience = {
-        total_subscribers: count || 0,
-        active_subscribers: count || 0
+        total_subscribers: subscriberCount,
+        active_subscribers: subscriberCount
     }
 
     return (
         <CampaignLaunchChecks
             campaign={campaign as Campaign}
             audience={audience}
+            targetSubscriber={targetSubscriber}
         />
     )
 }

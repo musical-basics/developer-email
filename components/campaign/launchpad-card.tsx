@@ -25,7 +25,9 @@ export function LaunchpadCard({ subscriberCount, onLaunch, isDisabled }: Launchp
                     <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
                     <p className="text-sm text-muted-foreground">
                         You are about to send this campaign to{" "}
-                        <span className="font-semibold text-foreground">{subscriberCount.toLocaleString()} subscribers</span>.
+                        <span className="font-semibold text-foreground">
+                            {subscriberCount === 1 ? "1 subscriber" : `${subscriberCount.toLocaleString()} subscribers`}
+                        </span>.
                         Please review everything before launching.
                     </p>
                 </div>
