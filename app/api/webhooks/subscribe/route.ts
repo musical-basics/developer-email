@@ -35,7 +35,7 @@ export async function OPTIONS(request: Request) {
 
 export async function POST(request: Request) {
     try {
-        const { email, first_name, last_name, tags } = await request.json();
+        const { email, first_name, last_name, tags, city, country, ip_address } = await request.json();
 
         if (!email) {
             return NextResponse.json(
@@ -65,7 +65,11 @@ export async function POST(request: Request) {
                 first_name,
                 last_name,
                 tags: mergedTags,
-                status: "active"
+                status: "active",
+                // 📍 NEW: Location Data
+                location_city: city,
+                location_country: country,
+                ip_address: ip_address
             }, { onConflict: "email" })
             .select()
             .single();
