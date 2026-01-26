@@ -80,22 +80,25 @@ export async function POST(request: Request) {
                     .replace(/{{email}}/g, "test@example.com");
             }
 
+            console.log("🚀 Attempting to send email...");
+            console.log("FROM:", `hello@email.dreamplaypianos.com`); // verify this matches exactly
+            console.log("TO:", email);
+
             const { data, error } = await resend.emails.send({
-                from: typeof fromName === 'string' && typeof fromEmail === 'string'
-                    ? `${fromName} <${fromEmail}>`
-                    : process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
-                to: email, // <--- Sends to YOUR test email
-                subject: `[TEST PREVIEW] ${campaign.subject_line}`,
-                html: finalHtml, // <--- Sends the rendered HTML with "John" instead of "{{first_name}}"
-                replyTo: fromEmail,
+                from: "DreamPlay <hello@email.dreamplaypianos.com>", // Ensure this matches your dashboard
+                to: email,
+                subject: campaign.subject_line,
+                html: finalHtml,
             });
 
             if (error) {
-                console.error("Resend Error:", error);
+                // 🚨 THIS IS THE MISSING PIECE
+                console.error("❌ RESEND API ERROR:", JSON.stringify(error, null, 2));
                 return NextResponse.json({ error: error.message }, { status: 500 });
             }
 
-            return NextResponse.json({ success: true, data });
+            console.log("✅ Email sent successfully!", data);
+            return NextResponse.json(data);
         }
 
         else if (type === "broadcast") {
