@@ -962,17 +962,27 @@ export default function AudienceManagerPage() {
                                                 duplicating && "opacity-50 pointer-events-none"
                                             )}
                                         >
-                                            <div className="flex items-center justify-between">
-                                                <h4 className="font-medium text-sm text-foreground truncate">{campaign.name}</h4>
-                                                <Badge variant="outline" className="text-xs">
-                                                    {campaign.status}
-                                                </Badge>
+                                            <div className="space-y-2">
+                                                <h4 className="font-medium text-sm text-foreground line-clamp-2 break-words">{campaign.name}</h4>
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    {campaign.subject_line && (
+                                                        <Badge variant="secondary" className="text-xs max-w-[200px] truncate font-normal">
+                                                            {campaign.subject_line}
+                                                        </Badge>
+                                                    )}
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "text-xs shrink-0",
+                                                            campaign.status === 'draft' && "bg-zinc-500/10 text-zinc-400 border-zinc-500/30",
+                                                            campaign.status === 'active' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
+                                                            campaign.status === 'completed' && "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                                        )}
+                                                    >
+                                                        {campaign.status}
+                                                    </Badge>
+                                                </div>
                                             </div>
-                                            {campaign.subject_line && (
-                                                <p className="text-xs text-muted-foreground mt-1 truncate">
-                                                    Subject: {campaign.subject_line}
-                                                </p>
-                                            )}
                                             <p className="text-[10px] text-muted-foreground mt-2">
                                                 Created: {formatDate(campaign.created_at)}
                                             </p>

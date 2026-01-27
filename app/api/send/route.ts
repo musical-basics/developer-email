@@ -120,11 +120,13 @@ export async function POST(request: Request) {
             // 3. Loop and Send (For small batches, a simple loop is fine. For >1000, use Resend Batch API)
             console.log(`🚀 Starting broadcast to ${recipients.length} subscribers...`);
 
-            const results = await Promise.all(recipients.map(async (sub) => {
-                // 1. Generate the "Tracking Param"
-                // const trackingParam = `?sid=${sub.id}&cid=${campaign.id}`;
+            let successCount = 0;
+            let failureCount = 0;
+            let firstErrorMessage = "";
 
-                // 2. Inject it into links
+            // Run the sending loop
+            await Promise.all(recipients.map(async (sub) => {
+                // Personalize
                 let personalHtml = htmlContent
                     .replace(/href="([^"]*)"/g, (match: string, url: string) => {
                         // Don't tag "mailto:" or anchors "#"
@@ -137,7 +139,7 @@ export async function POST(request: Request) {
                     .replace(/{{first_name}}/g, sub.first_name || "")
                     .replace(/{{email}}/g, sub.email);
 
-                const response = await resend.emails.send({
+                const { error } = await resend.emails.send({
                     from: typeof fromName === 'string' && typeof fromEmail === 'string'
                         ? `${fromName} <${fromEmail}>`
                         : process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
@@ -147,14 +149,13 @@ export async function POST(request: Request) {
                     replyTo: fromEmail,
                 });
 
-                // 🛑 LOGGING: This will show up in your Terminal
-                if (response.error) {
-                    console.error(`❌ FAILED sending to ${sub.email}:`, JSON.stringify(response.error, null, 2));
+                if (error) {
+                    console.error(`❌ Failed: ${sub.email}`, error);
+                    failureCount++;
+                    if (!firstErrorMessage) firstErrorMessage = error.message; // Capture the first reason
                 } else {
-                    console.log(`✅ SUCCESS sending to ${sub.email}:`, response.data);
+                    successCount++;
                 }
-
-                return response;
             }));
 
             // 4. Update Campaign Status
@@ -164,7 +165,18 @@ export async function POST(request: Request) {
                 total_recipients: recipients.length
             }).eq("id", campaignId);
 
-            return NextResponse.json({ success: true, count: recipients.length });
+            // ⚡️ NEW: Return the actual score card
+            if (failureCount > 0) {
+                return NextResponse.json({
+                    success: false,
+                    message: `Sent ${successCount}, Failed ${failureCount}. Reason: ${firstErrorMessage}`
+                }, { status: 500 }); // Return 500 so the UI knows it failed
+            }
+
+            return NextResponse.json({
+                success: true,
+                message: `Successfully sent to ${successCount} subscribers`
+            });
         }
 
         return NextResponse.json({ error: "Invalid Type" }, { status: 400 });
