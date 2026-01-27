@@ -183,7 +183,7 @@ export async function POST(request: Request) {
             await supabase.from("campaigns").update({
                 status: "completed",
                 sent_at: new Date().toISOString(),
-                total_recipients: recipients.length
+                total_audience_size: recipients.length
             }).eq("id", campaignId);
 
             // ⚡️ NEW: Return the actual score card
