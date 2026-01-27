@@ -976,8 +976,7 @@ export default function AudienceManagerPage() {
                                                             "text-xs shrink-0",
                                                             campaign.status === 'draft' && "bg-zinc-500/10 text-zinc-400 border-zinc-500/30",
                                                             campaign.status === 'active' && "bg-blue-500/10 text-blue-400 border-blue-500/30",
-                                                            campaign.status === 'sent' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/30",
-                                                            campaign.status === 'completed' && "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                                            campaign.status === 'completed' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                                                         )}
                                                     >
                                                         {campaign.status}

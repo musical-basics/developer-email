@@ -181,7 +181,7 @@ export async function POST(request: Request) {
 
             // 5. Update Campaign Status
             await supabase.from("campaigns").update({
-                status: "sent",
+                status: "completed",
                 sent_at: new Date().toISOString(),
                 total_recipients: recipients.length
             }).eq("id", campaignId);
