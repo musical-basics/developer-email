@@ -180,11 +180,16 @@ export async function POST(request: Request) {
             }
 
             // 5. Update Campaign Status
-            await supabase.from("campaigns").update({
+            const { error: updateError } = await supabase.from("campaigns").update({
                 status: "completed",
-                sent_at: new Date().toISOString(),
                 total_audience_size: recipients.length
             }).eq("id", campaignId);
+
+            if (updateError) {
+                console.error("❌ Failed to update campaign status:", updateError);
+            } else {
+                console.log(`✅ Campaign status updated to 'completed'`);
+            }
 
             // ⚡️ NEW: Return the actual score card
             if (failureCount > 0) {
