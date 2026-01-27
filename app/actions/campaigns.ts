@@ -175,7 +175,8 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
         .from("campaigns")
         .insert([
             {
-                name: `Copy of ${original.name} (for ${subscriberEmail})`,
+                // Clean up the name to avoid stacking "Copy of Copy of... (for ...)"
+                name: `${original.name.replace(/^(Copy of\s+)+/, "").replace(/\s+\(for\s+.*\)$/, "")} (for ${subscriberEmail})`,
                 status: "draft",
                 subject_line: original.subject_line,
                 html_content: original.html_content,
