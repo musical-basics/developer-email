@@ -61,7 +61,7 @@ export function SenderIdentityCard({
                             onChange={(e) => onFromEmailChange?.(e.target.value)}
                             readOnly={readOnly}
                             className="pl-10 border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-[#D4AF37]"
-                            placeholder="e.g., lionel@musicalbasics.com"
+                            placeholder="e.g., lionel@email.dreamplaypianos.com"
                         />
                     </div>
                 </div>
