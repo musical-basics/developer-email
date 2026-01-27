@@ -14,8 +14,13 @@ import Link from "next/link"
 interface ModularEmailEditorProps {
     html: string
     assets: Record<string, string>
+    subjectLine: string
+    fromName: string
+    fromEmail: string
     onHtmlChange: (html: string) => void
     onAssetsChange: (assets: Record<string, string>) => void
+    onSubjectChange: (value: string) => void
+    onSenderChange: (field: "name" | "email", value: string) => void
     onSave?: () => void
 }
 
@@ -101,7 +106,18 @@ const parseMonolithToBlocks = (fullHtml: string): Block[] => {
 }
 
 
-export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, onAssetsChange, onSave }: ModularEmailEditorProps) {
+export function ModularEmailEditor({
+    html: initialHtml,
+    assets,
+    subjectLine,
+    fromName,
+    fromEmail,
+    onHtmlChange,
+    onAssetsChange,
+    onSubjectChange,
+    onSenderChange,
+    onSave
+}: ModularEmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
 
@@ -174,11 +190,47 @@ export function ModularEmailEditor({ html: initialHtml, assets, onHtmlChange, on
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
             {/* 1. UNIFIED SIDEBAR (Assets + Blocks) */}
             <div className="flex-shrink-0 w-[300px] border-r border-border h-full flex flex-col bg-card">
-                <div className="p-4 border-b border-border bg-muted/20">
-                    <Link href="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <div className="p-4 border-b border-border bg-muted/20 space-y-4">
+                    <Link href="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2">
                         <ArrowLeft className="w-3 h-3" />
                         Back to Dashboard
                     </Link>
+
+                    {/* Campaign Settings */}
+                    <div className="space-y-3">
+                        <div className="space-y-1">
+                            <label className="text-[10px] uppercase font-semibold text-muted-foreground">Subject Line</label>
+                            <input
+                                type="text"
+                                value={subjectLine}
+                                onChange={(e) => onSubjectChange(e.target.value)}
+                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                placeholder="Enter subject line..."
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Name</label>
+                                <input
+                                    type="text"
+                                    value={fromName}
+                                    onChange={(e) => onSenderChange("name", e.target.value)}
+                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                    placeholder="Lionel Yu"
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Email</label>
+                                <input
+                                    type="text"
+                                    value={fromEmail}
+                                    onChange={(e) => onSenderChange("email", e.target.value)}
+                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                    placeholder="lionel@..."
+                                />
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 {/* Top Half: Blocks */}
                 <div className="flex-1 overflow-hidden border-b border-border">

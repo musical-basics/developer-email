@@ -28,8 +28,8 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
     const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop")
     // Default values since they are not in DB schema yet
-    const [fromName, setFromName] = useState("Lionel Yu")
-    const [fromEmail, setFromEmail] = useState("lionel@email.dreamplaypianos.com")
+    const [fromName, setFromName] = useState(campaign.variable_values?.from_name || "Lionel Yu")
+    const [fromEmail, setFromEmail] = useState(campaign.variable_values?.from_email || "lionel@email.dreamplaypianos.com")
     const [broadcastStatus, setBroadcastStatus] = useState<"idle" | "success" | "error">("idle")
     const [broadcastMessage, setBroadcastMessage] = useState("")
 

@@ -13,12 +13,28 @@ import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from "rea
 interface EmailEditorProps {
     html: string
     assets: Record<string, string>
+    subjectLine: string
+    fromName: string
+    fromEmail: string
     onHtmlChange: (html: string) => void
     onAssetsChange: (assets: Record<string, string>) => void
+    onSubjectChange: (value: string) => void
+    onSenderChange: (field: "name" | "email", value: string) => void
     onSave?: () => void
 }
 
-export function EmailEditor({ html, assets, onHtmlChange, onAssetsChange, onSave }: EmailEditorProps) {
+export function EmailEditor({
+    html,
+    assets,
+    subjectLine,
+    fromName,
+    fromEmail,
+    onHtmlChange,
+    onAssetsChange,
+    onSubjectChange,
+    onSenderChange,
+    onSave
+}: EmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
     const [isCopilotOpen, setIsCopilotOpen] = useState(true)
@@ -71,8 +87,46 @@ export function EmailEditor({ html, assets, onHtmlChange, onAssetsChange, onSave
             <PanelGroup direction="horizontal">
                 {/* Left Sidebar - Asset Loader */}
                 <Panel defaultSize={15} minSize={12} maxSize={25} className="bg-background border-r border-border">
-                    <div className="h-full overflow-y-auto">
-                        <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
+                    <div className="h-full flex flex-col">
+                        {/* Campaign Settings */}
+                        <div className="p-4 border-b border-border bg-muted/20 space-y-3">
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Subject Line</label>
+                                <input
+                                    type="text"
+                                    value={subjectLine}
+                                    onChange={(e) => onSubjectChange(e.target.value)}
+                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                    placeholder="Enter subject line..."
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                                <div className="space-y-1">
+                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Name</label>
+                                    <input
+                                        type="text"
+                                        value={fromName}
+                                        onChange={(e) => onSenderChange("name", e.target.value)}
+                                        className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                        placeholder="Lionel Yu"
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Email</label>
+                                    <input
+                                        type="text"
+                                        value={fromEmail}
+                                        onChange={(e) => onSenderChange("email", e.target.value)}
+                                        className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                        placeholder="lionel@..."
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto">
+                            <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
+                        </div>
                     </div>
                 </Panel>
 

@@ -27,6 +27,12 @@ function EditorPageContent() {
     const [assets, setAssets] = useState<Record<string, string>>(DEFAULT_ASSETS)
     const [name, setName] = useState("Untitled Campaign")
     const [status, setStatus] = useState("draft")
+
+    // NEW: Campaign Settings
+    const [subjectLine, setSubjectLine] = useState("")
+    const [fromName, setFromName] = useState("Lionel Yu")
+    const [fromEmail, setFromEmail] = useState("lionel@email.dreamplaypianos.com")
+
     const [loading, setLoading] = useState(!!id)
     const [saving, setSaving] = useState(false)
 
@@ -49,6 +55,11 @@ function EditorPageContent() {
                 setAssets(data.variable_values || DEFAULT_ASSETS)
                 setName(data.name || "Untitled Campaign")
                 setStatus(data.status || "draft")
+
+                // Load Settings
+                setSubjectLine(data.subject_line || "")
+                if (data.variable_values?.from_name) setFromName(data.variable_values.from_name)
+                if (data.variable_values?.from_email) setFromEmail(data.variable_values.from_email)
             }
             setLoading(false)
         }
@@ -60,8 +71,14 @@ function EditorPageContent() {
         setSaving(true)
         const campaignData = {
             name: campaignName,
+            subject_line: subjectLine,
             html_content: html,
-            variable_values: assets,
+            // Save sender info to variable_values (merged with assets)
+            variable_values: {
+                ...assets,
+                from_name: fromName,
+                from_email: fromEmail
+            },
             status: status,
         }
 
@@ -127,8 +144,16 @@ function EditorPageContent() {
             <EmailEditor
                 html={html}
                 assets={assets}
+                subjectLine={subjectLine}
+                fromName={fromName}
+                fromEmail={fromEmail}
                 onHtmlChange={setHtml}
                 onAssetsChange={setAssets}
+                onSubjectChange={setSubjectLine}
+                onSenderChange={(field, value) => {
+                    if (field === "name") setFromName(value)
+                    if (field === "email") setFromEmail(value)
+                }}
                 onSave={handleSaveClick}
             />
 
