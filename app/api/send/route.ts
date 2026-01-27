@@ -123,6 +123,7 @@ export async function POST(request: Request) {
             let successCount = 0;
             let failureCount = 0;
             let firstErrorMessage = "";
+            const sentRecords: { campaign_id: string; subscriber_id: string; sent_at: string; variant_sent: string | null }[] = [];
 
             // Run the sending loop
             await Promise.all(recipients.map(async (sub) => {
@@ -155,10 +156,30 @@ export async function POST(request: Request) {
                     if (!firstErrorMessage) firstErrorMessage = error.message; // Capture the first reason
                 } else {
                     successCount++;
+                    // Track successful send for sent_history
+                    sentRecords.push({
+                        campaign_id: campaignId,
+                        subscriber_id: sub.id,
+                        sent_at: new Date().toISOString(),
+                        variant_sent: campaign.subject_line || null
+                    });
                 }
             }));
 
-            // 4. Update Campaign Status
+            // 4. Insert sent_history records (batch insert for performance)
+            if (sentRecords.length > 0) {
+                const { error: historyError } = await supabase
+                    .from("sent_history")
+                    .insert(sentRecords);
+
+                if (historyError) {
+                    console.error("❌ Failed to insert sent_history:", historyError);
+                } else {
+                    console.log(`📊 Logged ${sentRecords.length} sends to sent_history`);
+                }
+            }
+
+            // 5. Update Campaign Status
             await supabase.from("campaigns").update({
                 status: "sent",
                 sent_at: new Date().toISOString(),
