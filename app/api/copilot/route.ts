@@ -2,16 +2,54 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-
+// Keep existing helper
 function cleanJson(text: string) {
     return text.replace(/```json/g, "").replace(/```/g, "").trim();
 }
 
+// Define COMPANY_CONTEXT if not present (placeholder)
+const COMPANY_CONTEXT = "";
+
+// Helper: Download image from URL and convert to Base64
+async function urlToBase64(url: string) {
+    try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to fetch image: ${response.statusText}`);
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64 = buffer.toString('base64');
+        const mediaType = response.headers.get('content-type') || 'image/jpeg';
+        return { base64, mediaType };
+    } catch (e) {
+        console.error("Image fetch failed", e);
+        return null;
+    }
+}
+
 export async function POST(req: Request) {
     try {
-        const { currentHtml, messages, model } = await req.json(); // 'messages' is the full array
+        const { currentHtml, messages, model } = await req.json();
+
+        // 1. Process History: Convert ALL image URLs to Base64
+        // We do this server-side so we don't hit the 4MB payload limit from the client.
+        // We only keep the last 3 messages' images to save tokens/money, but we keep ALL text.
+        const processedMessages = await Promise.all(messages.map(async (msg: any, index: number) => {
+            const isRecent = index >= messages.length - 3; // Only keep images from last 3 messages
+
+            let processedImages: any[] = [];
+
+            if (isRecent && msg.imageUrls && msg.imageUrls.length > 0) {
+                // Parallel download
+                const downloads = await Promise.all(msg.imageUrls.map((url: string) => urlToBase64(url)));
+                processedImages = downloads.filter(img => img !== null);
+            }
+
+            return {
+                role: msg.role,
+                content: msg.content,
+                images: processedImages // Now contains { base64, mediaType }
+            };
+        }));
 
         const systemInstruction = `
     You are an expert Email HTML Developer.
@@ -37,58 +75,52 @@ export async function POST(req: Request) {
     
     ### RESPONSE FORMAT:
     { "explanation": "string", "updatedHtml": "string" }
+
+    ${COMPANY_CONTEXT} 
     `;
 
         let rawResponse = "";
 
         // --- A. CLAUDE (Anthropic) ---
         if (model.includes("claude")) {
+            const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-            // Convert frontend messages to Anthropic format
-            const anthropicMessages = messages.map((msg: any) => {
-                // Map 'result' role to 'assistant'
+            const anthropicMessages = processedMessages.map((msg: any) => {
                 const role = msg.role === 'result' ? 'assistant' : 'user';
-
                 let content: any[] = [];
 
-                // Add Images (if any)
-                if (msg.images && msg.images.length > 0) {
-                    msg.images.forEach((img: string) => {
-                        const base64Data = img.split(",")[1];
-                        const mediaType = img.split(";")[0].split(":")[1];
+                // Add Images
+                if (msg.images) {
+                    msg.images.forEach((img: any) => {
                         content.push({
                             type: "image",
-                            source: { type: "base64", media_type: mediaType, data: base64Data }
+                            source: {
+                                type: "base64",
+                                media_type: img.mediaType,
+                                data: img.base64
+                            }
                         });
                     });
                 }
 
                 // Add Text
-                if (msg.content) {
-                    content.push({ type: "text", text: msg.content });
-                }
+                if (msg.content) content.push({ type: "text", text: msg.content });
 
                 return { role, content };
             });
 
-            // Append the "Current Context" to the VERY LAST user message
-            // We don't want to re-send the HTML 10 times in history, just the current state at the end.
-            const lastMsgIndex = anthropicMessages.length - 1;
-            const lastMsg = anthropicMessages[lastMsgIndex];
-
+            // Append Context to Last Message
+            const lastMsg = anthropicMessages[anthropicMessages.length - 1];
             if (lastMsg.role === 'user') {
-                lastMsg.content.push({
-                    type: "text",
-                    text: `\n\n### CURRENT HTML STATE:\n${currentHtml}`
-                });
+                lastMsg.content.push({ type: "text", text: `\n\n### CURRENT HTML:\n${currentHtml}` });
             }
 
             const msg = await anthropic.messages.create({
-                model: model,
+                model: "claude-3-5-sonnet-latest", // Use the latest model
                 max_tokens: 8192,
                 temperature: 0,
                 system: systemInstruction,
-                messages: anthropicMessages // Send the whole chain
+                messages: anthropicMessages
             });
 
             const textBlock = msg.content[0];
@@ -97,20 +129,24 @@ export async function POST(req: Request) {
 
         // --- B. GEMINI (Google) ---
         else {
+            const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
             const geminiModel = genAI.getGenerativeModel({
-                model: model,
+                model: "gemini-1.5-pro",
                 generationConfig: { responseMimeType: "application/json" }
             });
 
-            const geminiHistory = messages.map((msg: any) => {
+            const geminiHistory = processedMessages.map((msg: any) => {
                 const role = msg.role === 'result' ? 'model' : 'user';
                 const parts = [];
 
-                if (msg.images && msg.images.length > 0) {
-                    msg.images.forEach((img: string) => {
-                        const base64Data = img.split(",")[1];
-                        const mimeType = img.split(";")[0].split(":")[1];
-                        parts.push({ inlineData: { mimeType, data: base64Data } });
+                if (msg.images) {
+                    msg.images.forEach((img: any) => {
+                        parts.push({
+                            inlineData: {
+                                mimeType: img.mediaType,
+                                data: img.base64
+                            }
+                        });
                     });
                 }
 
@@ -118,29 +154,29 @@ export async function POST(req: Request) {
                 return { role, parts };
             });
 
-            // Attach Current HTML to the last message prompt
             const lastMsg = geminiHistory[geminiHistory.length - 1];
-            lastMsg.parts.push({ text: `\n\n### CURRENT HTML STATE:\n${currentHtml}` });
+            lastMsg.parts.push({ text: `\n\n### CURRENT HTML:\n${currentHtml}` });
 
-            // For Gemini, we use 'generateContent' with the whole history as 'contents'
-            // Note: We prepend system instruction inside the first turn or use systemInstruction config if available (Gemini 1.5 supports it in config, but keeping it simple here)
+            // Inject system instruction into first message
+            if (geminiHistory.length > 0) {
+                const firstPart = geminiHistory[0].parts[0];
+                if (firstPart.text) {
+                    firstPart.text = `${systemInstruction}\n\n${firstPart.text}`;
+                } else {
+                    geminiHistory[0].parts.unshift({ text: systemInstruction });
+                }
+            }
 
-            // We'll wrap the system instruction into the first user message for guaranteed adherence
-            geminiHistory[0].parts[0].text = `${systemInstruction}\n\n${geminiHistory[0].parts[0].text}`;
-
-            const result = await geminiModel.generateContent({
-                contents: geminiHistory
-            });
+            const result = await geminiModel.generateContent({ contents: geminiHistory });
             rawResponse = result.response.text();
         }
 
         // --- PARSE ---
         try {
-            const cleanedJson = cleanJson(rawResponse);
-            const data = JSON.parse(cleanedJson);
-            return NextResponse.json(data);
-        } catch (parseError) {
-            return NextResponse.json({ error: "AI returned invalid JSON." }, { status: 500 });
+            const cleaned = cleanJson(rawResponse);
+            return NextResponse.json(JSON.parse(cleaned));
+        } catch (e) {
+            return NextResponse.json({ updatedHtml: currentHtml, explanation: rawResponse });
         }
 
     } catch (error: any) {

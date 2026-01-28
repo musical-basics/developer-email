@@ -1,16 +1,18 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Sparkles, Send, X, Zap, Brain, Bot } from "lucide-react"
+import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase/client" // Ensure you have this client helper
 
 interface Message {
     role: "user" | "details" | "result"
     content: string
-    images?: string[]
+    // We now store URLs instead of base64 to save memory
+    imageUrls?: string[]
 }
 
 interface CopilotPaneProps {
@@ -19,83 +21,53 @@ interface CopilotPaneProps {
 }
 
 export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
-    const [selectedModel, setSelectedModel] = useState("claude-sonnet-4-20250514")
+    const [selectedModel, setSelectedModel] = useState("claude-3-5-sonnet-latest")
 
+    // We keep a "real" history with full context for the API
     const [messages, setMessages] = useState<Message[]>([
-        { role: "result", content: "Hi! I can see. Paste a screenshot (Ctrl+V) and tell me what to fix." },
+        { role: "result", content: "I'm ready. Upload screenshots or reference images and I'll adapt the code." },
     ])
+
     const [input, setInput] = useState("")
-    const [pendingImages, setPendingImages] = useState<string[]>([])
+    const [isUploading, setIsUploading] = useState(false)
+    const [pendingAttachments, setPendingAttachments] = useState<string[]>([]) // URLs
     const [isLoading, setIsLoading] = useState(false)
-
-    // RESTORED: Progress State
-    const [progress, setProgress] = useState(0)
-
     const scrollRef = useRef<HTMLDivElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const supabase = createClient()
 
-    // Auto-scroll
+    // Auto-scroll to bottom
     useEffect(() => {
         if (scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
-    }, [messages, pendingImages, isLoading])
+    }, [messages, isLoading, pendingAttachments])
 
-    // RESTORED: Zeno's Paradox Progress Bar
-    useEffect(() => {
-        if (!isLoading) {
-            setProgress(0)
-            return
+    const uploadFile = async (file: File) => {
+        setIsUploading(true)
+        try {
+            // 1. Unique path: chat-uploads/{timestamp}-{filename}
+            const path = `chat-uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`
+
+            // 2. Direct upload to Supabase Storage (Bypasses Vercel Limit)
+            const { data, error } = await supabase.storage
+                .from('chat-assets')
+                .upload(path, file)
+
+            if (error) throw error
+
+            // 3. Get Public URL
+            const { data: publicUrlData } = supabase.storage
+                .from('chat-assets')
+                .getPublicUrl(path)
+
+            setPendingAttachments(prev => [...prev, publicUrlData.publicUrl])
+        } catch (error) {
+            console.error("Upload failed:", error)
+            setMessages(prev => [...prev, { role: 'result', content: `❌ Failed to upload image: ${file.name}` }])
+        } finally {
+            setIsUploading(false)
         }
-
-        // Start at 10%
-        setProgress(10)
-
-        const interval = setInterval(() => {
-            setProgress((prev) => {
-                // If we hit 90%, we stall there until the real data comes back
-                if (prev >= 90) return prev
-
-                // The closer we get to 90%, the slower we move
-                const remaining = 90 - prev
-                return prev + (remaining * 0.05) // 5% of remaining distance
-            })
-        }, 500) // Update every half second
-
-        return () => clearInterval(interval)
-    }, [isLoading])
-
-
-    // Helper to compress images client-side
-    const compressImage = (base64: string): Promise<string> => {
-        return new Promise((resolve) => {
-            const img = new Image()
-            img.src = base64
-            img.onload = () => {
-                const canvas = document.createElement("canvas")
-                let width = img.width
-                let height = img.height
-
-                // Resize if too large (max 1024px dimension)
-                const MAX_DIM = 1024
-                if (width > MAX_DIM || height > MAX_DIM) {
-                    if (width > height) {
-                        height = (height / width) * MAX_DIM
-                        width = MAX_DIM
-                    } else {
-                        width = (width / height) * MAX_DIM
-                        height = MAX_DIM
-                    }
-                }
-
-                canvas.width = width
-                canvas.height = height
-                const ctx = canvas.getContext("2d")
-                ctx?.drawImage(img, 0, 0, width, height)
-
-                // Compress as JPEG
-                resolve(canvas.toDataURL("image/jpeg", 0.8))
-            }
-        })
     }
 
     const handlePaste = (e: React.ClipboardEvent) => {
@@ -103,202 +75,191 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
         for (let i = 0; i < items.length; i++) {
             if (items[i].type.indexOf("image") !== -1) {
                 e.preventDefault()
-                const blob = items[i].getAsFile()
-                const reader = new FileReader()
-                reader.onload = async (event) => {
-                    const base64 = event.target?.result as string
-                    // Compress before setting state
-                    const compressed = await compressImage(base64)
-                    setPendingImages(prev => [...prev, compressed])
-                }
-                if (blob) reader.readAsDataURL(blob)
+                const file = items[i].getAsFile()
+                if (file) uploadFile(file)
             }
         }
     }
 
-    const removeImage = (index: number) => {
-        setPendingImages(prev => prev.filter((_, i) => i !== index))
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            Array.from(e.target.files).forEach(file => uploadFile(file))
+        }
     }
 
-    // ⚡️ UPDATED: Send full history with OPTIMIZATION
     const handleSendMessage = async () => {
-        if ((!input.trim() && pendingImages.length === 0) || isLoading) return
+        if ((!input.trim() && pendingAttachments.length === 0) || isLoading || isUploading) return
 
         const userMessage = input.trim()
-        const imagesToSend = [...pendingImages]
+        const attachments = [...pendingAttachments]
 
+        // Clear input immediately
         setInput("")
-        setPendingImages([])
+        setPendingAttachments([])
 
-        // 1. Update UI with the FULL rich history (so YOU can see old images)
+        // 1. Add to UI state
         const newMessage: Message = {
             role: "user",
             content: userMessage,
-            images: imagesToSend
+            imageUrls: attachments
         }
-        const newUiHistory = [...messages, newMessage]
-        setMessages(newUiHistory)
 
+        // Append to local history
+        const newHistory = [...messages, newMessage]
+        setMessages(newHistory)
         setIsLoading(true)
 
         try {
-            // 2. ⚡️ OPTIMIZE FOR SERVER ⚡️
-            // We create a "Lightweight" history to send to the AI.
-            // Rule: Keep ALL text, but ONLY keep images from the VERY LAST message.
-            const apiHistory = newUiHistory.map((msg, index) => {
-                const isLastMessage = index === newUiHistory.length - 1
-                return {
-                    role: msg.role,
-                    content: msg.content,
-                    // If it's not the last message, delete the images to save data
-                    images: isLastMessage ? msg.images : []
-                }
-            })
-
+            // 2. Send to API (Now lightweight because we only send URLs!)
             const response = await fetch("/api/copilot", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     currentHtml: html,
-                    messages: apiHistory, // <--- Send the lightweight version
+                    messages: newHistory, // We can safely send the whole history now!
                     model: selectedModel
                 }),
             })
 
-            if (!response.ok) throw new Error("Failed to get response")
-
             const data = await response.json()
-            setProgress(100)
 
-            if (data.updatedHtml) onHtmlChange(data.updatedHtml)
+            if (!response.ok) throw new Error(data.error || "Failed to generate code")
 
-            setMessages((prev) => [
+            if (data.updatedHtml) {
+                onHtmlChange(data.updatedHtml)
+            }
+
+            setMessages(prev => [
                 ...prev,
-                { role: "result", content: data.explanation || "Updated." },
+                { role: "result", content: data.explanation || "Done." }
             ])
-        } catch (error) {
-            console.error("API Error:", error)
-            setMessages((prev) => [
+
+        } catch (error: any) {
+            console.error("Copilot Error:", error)
+            setMessages(prev => [
                 ...prev,
-                { role: "result", content: "Something went wrong. The image might be too large or the server is busy. Please try again with a smaller message." },
+                { role: "result", content: `Error: ${error.message}` }
             ])
         } finally {
-            setTimeout(() => setIsLoading(false), 500)
-        }
-    }
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault()
-            handleSendMessage()
+            setIsLoading(false)
         }
     }
 
     return (
-        <div className="flex flex-col h-full border-l border-border bg-card">
+        <div className="flex flex-col h-full border-l border-border bg-card text-card-foreground">
             {/* Header */}
-            <div className="h-14 border-b border-border flex items-center px-4 gap-2 justify-between shrink-0">
+            <div className="h-14 border-b border-border flex items-center px-4 gap-2 justify-between shrink-0 bg-background/50 backdrop-blur">
                 <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-purple-400" />
                     <h2 className="text-sm font-semibold">Copilot Vision</h2>
                 </div>
                 <Select value={selectedModel} onValueChange={setSelectedModel}>
-                    <SelectTrigger className="w-[160px] h-8 text-xs">
-                        <SelectValue placeholder="Select Model" />
+                    <SelectTrigger className="w-[140px] h-8 text-xs bg-muted/50 border-transparent hover:border-border">
+                        <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="claude-sonnet-4-20250514">
-                            <div className="flex items-center gap-2">
-                                <Bot className="w-3 h-3 text-orange-500" />
-                                <span>Claude Sonnet 4</span>
-                            </div>
-                        </SelectItem>
-                        <SelectItem value="gemini-2.5-pro">
-                            <div className="flex items-center gap-2">
-                                <Brain className="w-3 h-3 text-blue-500" />
-                                <span>Gemini 2.5 Pro</span>
-                            </div>
-                        </SelectItem>
-                        <SelectItem value="gemini-2.5-flash">
-                            <div className="flex items-center gap-2">
-                                <Zap className="w-3 h-3 text-yellow-500" />
-                                <span>Gemini 2.5 Flash</span>
-                            </div>
-                        </SelectItem>
+                        <SelectItem value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet</SelectItem>
+                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                     </SelectContent>
                 </Select>
             </div>
 
-            {/* Chat History */}
-            <div className="flex-1 overflow-y-auto p-4" ref={scrollRef}>
-                <div className="space-y-4">
-                    {messages.map((msg, index) => (
-                        <div key={index} className={cn("flex flex-col gap-2 max-w-[90%]", msg.role === "user" ? "ml-auto" : "mr-auto")}>
-                            {msg.images && msg.images.length > 0 && (
-                                <div className="flex flex-wrap gap-2 justify-end">
-                                    {msg.images.map((img, i) => (
-                                        <img key={i} src={img} alt="User upload" className="w-24 h-auto rounded-md border border-white/20" />
-                                    ))}
-                                </div>
-                            )}
-                            {msg.content && (
-                                <div className={cn(
-                                    "p-3 rounded-lg text-sm",
-                                    msg.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted text-foreground"
-                                )}>
-                                    {msg.content}
-                                </div>
-                            )}
-                        </div>
-                    ))}
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-6" ref={scrollRef}>
+                {messages.map((msg, index) => (
+                    <div key={index} className={cn("flex flex-col gap-2 max-w-[90%]", msg.role === "user" ? "ml-auto items-end" : "mr-auto items-start")}>
+                        {/* Render Images */}
+                        {msg.imageUrls && msg.imageUrls.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mb-1 justify-end">
+                                {msg.imageUrls.map((url, i) => (
+                                    <div key={i} className="relative group overflow-hidden rounded-lg border border-border">
+                                        <img src={url} alt="attachment" className="h-24 w-auto object-cover" />
+                                    </div>
+                                ))}
+                            </div>
+                        )}
 
-                    {/* RESTORED: Progress Bar UI */}
-                    {isLoading && (
-                        <div className="bg-muted p-3 rounded-lg mr-auto w-[200px] space-y-2">
-                            <div className="flex justify-between text-xs text-muted-foreground">
-                                <span>Thinking...</span>
-                                <span>{Math.round(progress)}%</span>
+                        {/* Render Text */}
+                        {msg.content && (
+                            <div className={cn(
+                                "p-3 rounded-2xl text-sm whitespace-pre-wrap leading-relaxed",
+                                msg.role === "user"
+                                    ? "bg-primary text-primary-foreground rounded-br-sm"
+                                    : "bg-muted text-foreground rounded-bl-sm"
+                            )}>
+                                {msg.content}
                             </div>
-                            <div className="h-2 w-full bg-black/20 rounded-full overflow-hidden">
-                                <div
-                                    className="h-full bg-purple-500 transition-all duration-300 ease-out"
-                                    style={{ width: `${progress}%` }}
-                                />
-                            </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                ))}
+                {isLoading && (
+                    <div className="mr-auto flex items-center gap-2 text-muted-foreground text-sm p-2">
+                        <Brain className="w-4 h-4 animate-pulse" />
+                        Thinking...
+                    </div>
+                )}
             </div>
 
             {/* Input Area */}
-            <div className="p-4 border-t border-border mt-auto shrink-0 space-y-3 bg-card">
-                {pendingImages.length > 0 && (
-                    <div className="flex gap-2 overflow-x-auto pb-2">
-                        {pendingImages.map((img, i) => (
-                            <div key={i} className="relative group">
-                                <img src={img} className="h-16 w-auto rounded border border-white/10" />
+            <div className="p-4 border-t border-border mt-auto shrink-0 bg-background/50 backdrop-blur">
+                {/* Pending Uploads */}
+                {(pendingAttachments.length > 0 || isUploading) && (
+                    <div className="flex gap-2 overflow-x-auto pb-3">
+                        {pendingAttachments.map((url, i) => (
+                            <div key={i} className="relative group shrink-0">
+                                <img src={url} className="h-14 w-14 rounded-md object-cover border border-border" />
                                 <button
-                                    onClick={() => removeImage(i)}
-                                    className="absolute -top-1 -right-1 bg-red-500 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={() => setPendingAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                    className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
                                 >
-                                    <X className="w-3 h-3 text-white" />
+                                    <X className="w-3 h-3" />
                                 </button>
                             </div>
                         ))}
+                        {isUploading && (
+                            <div className="h-14 w-14 rounded-md border border-dashed border-muted-foreground/50 flex items-center justify-center bg-muted/20">
+                                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                            </div>
+                        )}
                     </div>
                 )}
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-end">
+                    <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        className="hidden"
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                    />
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="shrink-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploading || isLoading}
+                    >
+                        <Paperclip className="w-5 h-5" />
+                    </Button>
+
                     <Input
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
+                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
                         onPaste={handlePaste}
-                        placeholder="Paste image (Ctrl+V) or type..."
-                        className="flex-1"
+                        placeholder="Type a message..."
+                        className="flex-1 min-h-[40px]"
                         disabled={isLoading}
+                        autoFocus
                     />
-                    <Button size="icon" onClick={handleSendMessage} disabled={isLoading || (!input.trim() && pendingImages.length === 0)}>
+
+                    <Button
+                        size="icon"
+                        onClick={handleSendMessage}
+                        disabled={isLoading || (!input.trim() && pendingAttachments.length === 0)}
+                        className={cn(isLoading && "opacity-50")}
+                    >
                         <Send className="w-4 h-4" />
                     </Button>
                 </div>

@@ -32,7 +32,10 @@
     "useGitignore": true,
     "useDotIgnore": true,
     "useDefaultPatterns": true,
-    "customPatterns": []
+    "customPatterns": [
+      "_legacy_v0_code/**",
+      "**/*.local"
+    ]
   },
   "security": {
     "enableSecurityCheck": true
