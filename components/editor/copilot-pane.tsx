@@ -20,8 +20,23 @@ interface CopilotPaneProps {
     onHtmlChange: (html: string) => void
 }
 
+import { getAnthropicModels } from "@/app/actions/ai-models"
+
 export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
     const [selectedModel, setSelectedModel] = useState("claude-3-5-sonnet-20240620")
+    const [availableModels, setAvailableModels] = useState<string[]>([])
+
+    useEffect(() => {
+        getAnthropicModels().then(models => {
+            if (models.length > 0) {
+                setAvailableModels(models)
+                // If current selection isn't in list, switch to the first available one (usually the newest)
+                if (!models.includes(selectedModel) && !selectedModel.includes("gemini")) {
+                    setSelectedModel(models[0])
+                }
+            }
+        })
+    }, [])
 
     // We keep a "real" history with full context for the API
     const [messages, setMessages] = useState<Message[]>([
@@ -154,13 +169,20 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                     <h2 className="text-sm font-semibold">Copilot Vision</h2>
                 </div>
                 <Select value={selectedModel} onValueChange={setSelectedModel}>
-                    <SelectTrigger className="w-[140px] h-8 text-xs bg-muted/50 border-transparent hover:border-border">
+                    <SelectTrigger className="w-[180px] h-8 text-xs bg-muted/50 border-transparent hover:border-border">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="claude-3-5-sonnet-20240620">Claude 3.5 Sonnet</SelectItem>
-                        <SelectItem value="claude-3-opus-20240229">Claude 3 Opus</SelectItem>
-                        <SelectItem value="claude-3-haiku-20240307">Claude 3 Haiku</SelectItem>
+                        {/* Dynamic Anthropic Models */}
+                        {availableModels.map(model => (
+                            <SelectItem key={model} value={model}>{model}</SelectItem>
+                        ))}
+
+                        {/* Fallback hardcoded if fetch failed */}
+                        {availableModels.length === 0 && (
+                            <SelectItem value="claude-3-5-sonnet-20240620">Claude 3.5 Sonnet (Legacy)</SelectItem>
+                        )}
+
                         <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                     </SelectContent>
                 </Select>
