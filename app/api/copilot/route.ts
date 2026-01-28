@@ -1,14 +1,18 @@
+import { createClient } from "@supabase/supabase-js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+
+// Initialize Admin Client (Service Key) to bypass RLS if needed
+const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_KEY!
+);
 
 // Keep existing helper
 function cleanJson(text: string) {
     return text.replace(/```json/g, "").replace(/```/g, "").trim();
 }
-
-// Define COMPANY_CONTEXT if not present (placeholder)
-const COMPANY_CONTEXT = "";
 
 // Helper: Download image from URL and convert to Base64
 async function urlToBase64(url: string) {
@@ -30,7 +34,17 @@ export async function POST(req: Request) {
     try {
         const { currentHtml, messages, model } = await req.json();
 
-        // 1. Process History: Convert ALL image URLs to Base64
+        // 1. FETCH CONTEXT FROM DB ⚡️
+        const { data: setting } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'company_context')
+            .single();
+
+        // Fallback if DB is empty
+        const dynamicContext = setting?.value || "Product: DreamPlay One. Feature: Narrow Keys.";
+
+        // 2. Process History: Convert ALL image URLs to Base64
         // We do this server-side so we don't hit the 4MB payload limit from the client.
         // We only keep the last 3 messages' images to save tokens/money, but we keep ALL text.
         const processedMessages = await Promise.all(messages.map(async (msg: any, index: number) => {
@@ -63,7 +77,7 @@ export async function POST(req: Request) {
     4. **LAYOUT RULE:** For columns, YOU MUST USE HTML TABLES (<table>, <tr>, <td>). Do NOT use 'display: flex' or 'grid' for structural layout, as they break in email clients.
     5. **WIDTHS:** Explicitly set widths (e.g., width="50%") on table cells to force them to sit side-by-side.
     6. **BLOCK COMMENTS:** The input HTML may contain <!-- BLOCK: Name --> comments. PRESERVE THESE. They are used to split the email into drag-and-drop sections.
-    7. **IMAGES:** Never use text placeholders like "[Piano Image]". Always use a mustache variable (e.g., {{piano_image}}, {{hero_bg}}) or a real placeholder URL (e.g., https://via.placeholder.com/600).
+    7. **IMAGES:** Never use text placeholders like "[Piano Image]". Always use a mustache variable (e.g., {{piano_image}}, {{hero_bg}}) or a real placeholder URL (url).
     
     ### EDITING BEHAVIOR:
     1. **GLOBAL CONTEXT:** You see the full email, but you should try to identify which "Block" the user wants to change.
@@ -76,7 +90,8 @@ export async function POST(req: Request) {
     ### RESPONSE FORMAT:
     { "explanation": "string", "updatedHtml": "string" }
 
-    ${COMPANY_CONTEXT} 
+    ### COMPANY KNOWLEDGE BASE (DYNAMIC):
+    ${dynamicContext}
     `;
 
         let rawResponse = "";
