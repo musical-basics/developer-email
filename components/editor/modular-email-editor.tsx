@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, useEffect } from "react"
 import { AssetLoader } from "./asset-loader"
+import { HistorySheet } from "./history-sheet"
 import { CodePane } from "./code-pane"
 import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
@@ -320,6 +321,12 @@ export function ModularEmailEditor({
                     <h2 className="text-sm font-semibold">Preview</h2>
 
                     <div className="flex items-center gap-2">
+                        {/* History */}
+                        <HistorySheet
+                            campaignId={campaignId}
+                            onRestore={(html) => handleCopilotUpdate(html, "Restored from History")}
+                        />
+
                         {/* Undo/Redo */}
                         <div className="flex bg-muted p-1 rounded-lg">
                             <button
