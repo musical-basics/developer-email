@@ -65,6 +65,39 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
     }, [isLoading])
 
 
+    // Helper to compress images client-side
+    const compressImage = (base64: string): Promise<string> => {
+        return new Promise((resolve) => {
+            const img = new Image()
+            img.src = base64
+            img.onload = () => {
+                const canvas = document.createElement("canvas")
+                let width = img.width
+                let height = img.height
+
+                // Resize if too large (max 1024px dimension)
+                const MAX_DIM = 1024
+                if (width > MAX_DIM || height > MAX_DIM) {
+                    if (width > height) {
+                        height = (height / width) * MAX_DIM
+                        width = MAX_DIM
+                    } else {
+                        width = (width / height) * MAX_DIM
+                        height = MAX_DIM
+                    }
+                }
+
+                canvas.width = width
+                canvas.height = height
+                const ctx = canvas.getContext("2d")
+                ctx?.drawImage(img, 0, 0, width, height)
+
+                // Compress as JPEG
+                resolve(canvas.toDataURL("image/jpeg", 0.8))
+            }
+        })
+    }
+
     const handlePaste = (e: React.ClipboardEvent) => {
         const items = e.clipboardData.items
         for (let i = 0; i < items.length; i++) {
@@ -72,9 +105,11 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                 e.preventDefault()
                 const blob = items[i].getAsFile()
                 const reader = new FileReader()
-                reader.onload = (event) => {
+                reader.onload = async (event) => {
                     const base64 = event.target?.result as string
-                    setPendingImages(prev => [...prev, base64])
+                    // Compress before setting state
+                    const compressed = await compressImage(base64)
+                    setPendingImages(prev => [...prev, compressed])
                 }
                 if (blob) reader.readAsDataURL(blob)
             }
@@ -145,7 +180,7 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
             console.error("API Error:", error)
             setMessages((prev) => [
                 ...prev,
-                { role: "result", content: "I ran out of memory. Please refresh to clear history." },
+                { role: "result", content: "Something went wrong. The image might be too large or the server is busy. Please try again with a smaller message." },
             ])
         } finally {
             setTimeout(() => setIsLoading(false), 500)
