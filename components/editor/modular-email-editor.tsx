@@ -7,7 +7,9 @@ import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
 import { BlockManager, Block } from "./block-manager"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, ArrowLeft } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, ArrowLeft, Undo, Redo } from "lucide-react"
+import { saveVersion } from "@/app/actions/versions"
+import { useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 
@@ -126,6 +128,20 @@ export function ModularEmailEditor({
 
     const [activeBlockId, setActiveBlockId] = useState<string>(blocks[1]?.id || blocks[0].id)
 
+    // HISTORY & VERSIONING
+    const searchParams = useSearchParams()
+    const campaignId = searchParams.get("id")
+    const [history, setHistory] = useState<string[]>([])
+    const [historyIndex, setHistoryIndex] = useState(-1)
+
+    // Init history with initial state
+    useEffect(() => {
+        if (history.length === 0 && initialHtml) {
+            setHistory([initialHtml])
+            setHistoryIndex(0)
+        }
+    }, [])
+
     // Reconstruct full HTML from blocks + Enforce Block Comments
     const fullHtml = useMemo(() => {
         return blocks.map(b => {
@@ -184,6 +200,47 @@ export function ModularEmailEditor({
         await Promise.resolve(onSave())
         setSaveStatus('success')
         setTimeout(() => setSaveStatus('idle'), 2000)
+    }
+
+    const handleCopilotUpdate = async (newHtml: string, prompt: string) => {
+        // A. Save Version (Fire & Forget)
+        if (campaignId) {
+            saveVersion(campaignId, newHtml, prompt).catch(console.error)
+        }
+
+        // B. Update History
+        const newHistory = history.slice(0, historyIndex + 1)
+        newHistory.push(newHtml)
+        setHistory(newHistory)
+        setHistoryIndex(newHistory.length - 1)
+
+        // C. Apply Logic
+        if (newHtml.includes("<body") || newHtml.includes("<!DOCTYPE") || newHtml.includes("Global Styles")) {
+            const newBlocks = parseMonolithToBlocks(newHtml)
+            setBlocks(newBlocks)
+            // Try to keep the active block if it still exists, otherwise default
+            if (!newBlocks.some(b => b.id === activeBlockId)) {
+                setActiveBlockId(newBlocks[1]?.id || newBlocks[0].id)
+            }
+        } else {
+            handleBlockContentChange(newHtml)
+        }
+    }
+
+    const handleUndo = () => {
+        if (historyIndex > 0) {
+            const prevHtml = history[historyIndex - 1]
+            setHistoryIndex(historyIndex - 1)
+            setBlocks(parseMonolithToBlocks(prevHtml))
+        }
+    }
+
+    const handleRedo = () => {
+        if (historyIndex < history.length - 1) {
+            const nextHtml = history[historyIndex + 1]
+            setHistoryIndex(historyIndex + 1)
+            setBlocks(parseMonolithToBlocks(nextHtml))
+        }
     }
 
     return (
@@ -261,10 +318,34 @@ export function ModularEmailEditor({
             <div className="flex-[4] flex flex-col min-w-[500px] h-full overflow-hidden">
                 <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card flex-shrink-0">
                     <h2 className="text-sm font-semibold">Preview</h2>
-                    <div className="flex bg-muted p-1 rounded-lg">
-                        <button onClick={() => setViewMode('desktop')} className={cn("p-1.5 rounded-md", viewMode === 'desktop' && "bg-background shadow-sm")}><Monitor className="w-4 h-4" /></button>
-                        <button onClick={() => setViewMode('mobile')} className={cn("p-1.5 rounded-md", viewMode === 'mobile' && "bg-background shadow-sm")}><Smartphone className="w-4 h-4" /></button>
+
+                    <div className="flex items-center gap-2">
+                        {/* Undo/Redo */}
+                        <div className="flex bg-muted p-1 rounded-lg">
+                            <button
+                                onClick={handleUndo}
+                                disabled={historyIndex <= 0}
+                                className="p-1.5 rounded-md hover:bg-background disabled:opacity-30 transition-colors"
+                                title="Undo"
+                            >
+                                <Undo className="w-4 h-4" />
+                            </button>
+                            <button
+                                onClick={handleRedo}
+                                disabled={historyIndex >= history.length - 1}
+                                className="p-1.5 rounded-md hover:bg-background disabled:opacity-30 transition-colors"
+                                title="Redo"
+                            >
+                                <Redo className="w-4 h-4" />
+                            </button>
+                        </div>
+
+                        <div className="flex bg-muted p-1 rounded-lg">
+                            <button onClick={() => setViewMode('desktop')} className={cn("p-1.5 rounded-md", viewMode === 'desktop' && "bg-background shadow-sm")}><Monitor className="w-4 h-4" /></button>
+                            <button onClick={() => setViewMode('mobile')} className={cn("p-1.5 rounded-md", viewMode === 'mobile' && "bg-background shadow-sm")}><Smartphone className="w-4 h-4" /></button>
+                        </div>
                     </div>
+
                     {onSave && (
                         <button type="button" onClick={handleSaveClick} disabled={saveStatus === 'saving'} className={cn("px-4 py-2 rounded-md text-sm font-medium flex items-center gap-2", saveStatus === 'success' ? "bg-green-600 text-white" : "bg-primary text-primary-foreground")}>
                             {saveStatus === 'saving' && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -284,26 +365,7 @@ export function ModularEmailEditor({
             <div className="w-[350px] flex-shrink-0 border-l border-border bg-card h-full overflow-hidden">
                 <CopilotPane
                     html={fullHtml}
-                    onHtmlChange={(newHtml) => {
-                        // If Copilot returns full HTML, parse it back into blocks
-                        // NOTE: This assumes Copilot respects the Block structure or we just re-split it
-                        // Ideally we teach Copilot to return partial HTML, but for now we accept full HTML
-                        // and re-parse it to keep state in sync.
-
-                        // Check if it's a "global" update (full HTML) or a "snippet"
-                        if (newHtml.includes("<body") || newHtml.includes("Global Styles")) {
-                            // It looks like a full file
-                            const newBlocks = parseMonolithToBlocks(newHtml)
-                            setBlocks(newBlocks)
-                            // Try to keep the active block if it still exists, otherwise default
-                            if (!newBlocks.some(b => b.id === activeBlockId)) {
-                                setActiveBlockId(newBlocks[1]?.id || newBlocks[0].id)
-                            }
-                        } else {
-                            // It might be just a snippet for the active block
-                            handleBlockContentChange(newHtml)
-                        }
-                    }}
+                    onHtmlChange={handleCopilotUpdate}
                 />
             </div>
         </div>

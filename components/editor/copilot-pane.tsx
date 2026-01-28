@@ -17,7 +17,7 @@ interface Message {
 
 interface CopilotPaneProps {
     html: string
-    onHtmlChange: (html: string) => void
+    onHtmlChange: (html: string, prompt: string) => void
 }
 
 import { getAnthropicModels } from "@/app/actions/ai-models"
@@ -141,7 +141,7 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
             if (!response.ok) throw new Error(data.error || "Failed to generate code")
 
             if (data.updatedHtml) {
-                onHtmlChange(data.updatedHtml)
+                onHtmlChange(data.updatedHtml, userMessage)
             }
 
             setMessages(prev => [
