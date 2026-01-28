@@ -86,7 +86,7 @@ export async function POST(req: Request) {
             const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
             const anthropicMessages = processedMessages.map((msg: any) => {
-                const role = msg.role === 'result' ? 'assistant' : 'user';
+                const role = (msg.role === 'result' ? 'assistant' : 'user') as "assistant" | "user";
                 let content: any[] = [];
 
                 // Add Images
@@ -116,7 +116,7 @@ export async function POST(req: Request) {
             }
 
             const msg = await anthropic.messages.create({
-                model: "claude-3-5-sonnet-latest", // Use the latest model
+                model: model, // Use the model passed from frontend
                 max_tokens: 8192,
                 temperature: 0,
                 system: systemInstruction,

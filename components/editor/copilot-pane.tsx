@@ -21,7 +21,7 @@ interface CopilotPaneProps {
 }
 
 export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
-    const [selectedModel, setSelectedModel] = useState("claude-3-5-sonnet-latest")
+    const [selectedModel, setSelectedModel] = useState("claude-3-5-sonnet-20241022")
 
     // We keep a "real" history with full context for the API
     const [messages, setMessages] = useState<Message[]>([
@@ -158,7 +158,7 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="claude-3-5-sonnet-latest">Claude 3.5 Sonnet</SelectItem>
+                        <SelectItem value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</SelectItem>
                         <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
                     </SelectContent>
                 </Select>
