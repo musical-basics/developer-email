@@ -2,13 +2,14 @@ import type React from "react"
 import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
+import { WebsiteTracker } from "@/components/website-tracker"
 import "./globals.css"
 
-const geistSans = Geist({ 
+const geistSans = Geist({
   subsets: ["latin"],
   variable: "--font-sans"
 })
-const geistMono = Geist_Mono({ 
+const geistMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono"
 })
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+        <WebsiteTracker />
         {children}
         <Analytics />
       </body>

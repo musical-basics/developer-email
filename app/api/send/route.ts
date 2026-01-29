@@ -128,17 +128,38 @@ export async function POST(request: Request) {
             // Run the sending loop
             await Promise.all(recipients.map(async (sub) => {
                 // Personalize
-                let personalHtml = htmlContent
-                    .replace(/href="([^"]*)"/g, (match: string, url: string) => {
-                        // Don't tag "mailto:" or anchors "#"
-                        if (url.startsWith("http")) {
-                            const separator = url.includes("?") ? "&" : "?";
-                            return `href="${url}${separator}sid=${sub.id}&cid=${campaign.id}"`;
+                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com"
+
+                // Helper to wrap links for tracking
+                const wrapLinks = (html: string, campaignId: string, subscriberId: string) => {
+                    return html.replace(/href=(["'])([^"']+)\1/g, (match, quote, url) => {
+                        // Don't wrap mailto, tel, or anchors
+                        if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) {
+                            return match
                         }
-                        return match;
+
+                        // Encode the target URL
+                        const encodedUrl = encodeURIComponent(url)
+                        const trackingUrl = `${baseUrl}/api/track/click?u=${encodedUrl}&c=${campaignId}&s=${subscriberId}`
+
+                        return `href=${quote}${trackingUrl}${quote}`
                     })
+                }
+
+                let personalHtml = htmlContent
                     .replace(/{{first_name}}/g, sub.first_name || "")
-                    .replace(/{{email}}/g, sub.email);
+                    .replace(/{{email}}/g, sub.email)
+
+                // 2. Wrap Links for Click Tracking
+                personalHtml = wrapLinks(personalHtml, campaignId, sub.id)
+
+                // 3. Inject Open Tracking Pixel at the bottom
+                const trackingPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${sub.id}" width="1" height="1" style="display:none;" alt="" />`
+                if (personalHtml.includes("</body>")) {
+                    personalHtml = personalHtml.replace("</body>", `${trackingPixel}</body>`)
+                } else {
+                    personalHtml += trackingPixel
+                }
 
                 const { error } = await resend.emails.send({
                     from: typeof fromName === 'string' && typeof fromEmail === 'string'
