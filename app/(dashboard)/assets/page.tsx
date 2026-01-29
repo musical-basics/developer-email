@@ -5,6 +5,7 @@ import { Upload, ImageIcon, Loader2, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { deleteAsset } from "@/app/actions/assets"
 
 interface Asset {
     id: string
@@ -127,10 +128,10 @@ export default function AssetsPage() {
         if (!confirm(`Delete "${asset.name}"? This cannot be undone.`)) return
 
         setDeleting(asset.id)
-        const { error } = await supabase.storage.from("email-assets").remove([asset.name])
+        const result = await deleteAsset(asset.name)
 
-        if (error) {
-            console.error("Error deleting asset:", error)
+        if (!result.success) {
+            console.error("Error deleting asset:", result.error)
         } else {
             await fetchAssets()
         }

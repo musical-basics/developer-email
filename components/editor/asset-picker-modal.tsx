@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect } from "react"
 import { X, Upload, ImageIcon, Loader2, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
+import { deleteAsset } from "@/app/actions/assets"
 
 interface Asset {
     id: string
@@ -175,10 +176,10 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
         if (!confirm(`Delete "${asset.name}"? This cannot be undone.`)) return
 
         setDeleting(asset.id)
-        const { error } = await supabase.storage.from("email-assets").remove([asset.name])
+        const result = await deleteAsset(asset.name)
 
-        if (error) {
-            console.error("Error deleting asset:", error)
+        if (!result.success) {
+            console.error("Error deleting asset:", result.error)
         } else {
             // Clear selection if deleted asset was selected
             if (selectedAsset?.id === asset.id) {
