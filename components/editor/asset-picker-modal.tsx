@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useCallback, useEffect } from "react"
-import { X, Upload, ImageIcon, Loader2 } from "lucide-react"
+import { X, Upload, ImageIcon, Loader2, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
@@ -24,6 +24,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     const [uploading, setUploading] = useState(false)
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
     const [isDragOver, setIsDragOver] = useState(false)
+    const [deleting, setDeleting] = useState<string | null>(null)
     const supabase = createClient()
 
     const fetchAssets = useCallback(async () => {
@@ -169,6 +170,25 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
         }
     }
 
+    const handleDelete = async (e: React.MouseEvent, asset: Asset) => {
+        e.stopPropagation() // Prevent selecting the asset
+        if (!confirm(`Delete "${asset.name}"? This cannot be undone.`)) return
+
+        setDeleting(asset.id)
+        const { error } = await supabase.storage.from("email-assets").remove([asset.name])
+
+        if (error) {
+            console.error("Error deleting asset:", error)
+        } else {
+            // Clear selection if deleted asset was selected
+            if (selectedAsset?.id === asset.id) {
+                setSelectedAsset(null)
+            }
+            await fetchAssets()
+        }
+        setDeleting(null)
+    }
+
     if (!isOpen) return null
 
     return (
@@ -255,6 +275,19 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
                                             <p className="text-xs text-neutral-300 truncate">{asset.name}</p>
                                         </div>
+                                        {/* Delete Button */}
+                                        <button
+                                            onClick={(e) => handleDelete(e, asset)}
+                                            disabled={deleting === asset.id}
+                                            className="absolute top-2 left-2 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                                            title="Delete asset"
+                                        >
+                                            {deleting === asset.id ? (
+                                                <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                            ) : (
+                                                <Trash2 className="w-3 h-3 text-white" />
+                                            )}
+                                        </button>
                                         {selectedAsset?.id === asset.id && (
                                             <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
                                                 <svg
