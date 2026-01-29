@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useEffect } from "react"
 import { AssetLoader } from "./asset-loader"
 import { HistorySheet } from "./history-sheet"
+import { CampaignPicker } from "./campaign-picker"
 import { CodePane } from "./code-pane"
 import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
@@ -329,6 +330,9 @@ export function ModularEmailEditor({
                             campaignId={campaignId}
                             onRestore={(html) => handleCopilotUpdate(html, "Restored from History")}
                         />
+
+                        {/* Open Campaign */}
+                        <CampaignPicker currentId={campaignId} editorType="modular" />
 
                         {/* Undo/Redo */}
                         <div className="flex bg-muted p-1 rounded-lg">

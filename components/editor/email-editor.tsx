@@ -5,10 +5,12 @@ import { AssetLoader } from "./asset-loader"
 import { CodePane } from "./code-pane"
 import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
+import { CampaignPicker } from "./campaign-picker"
 import { renderTemplate } from "@/lib/render-template"
 import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from "react-resizable-panels"
 
 interface EmailEditorProps {
@@ -40,6 +42,8 @@ export function EmailEditor({
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
     const [isCopilotOpen, setIsCopilotOpen] = useState(true)
     const copilotRef = useRef<ImperativePanelHandle>(null)
+    const searchParams = useSearchParams()
+    const currentId = searchParams.get("id")
 
     const extractedVariables = useMemo(() => {
         const regex = /\{\{(\w+)\}\}/g
@@ -180,6 +184,9 @@ export function EmailEditor({
                                         <Smartphone className="w-4 h-4" />
                                     </button>
                                 </div>
+
+                                {/* Open Campaign */}
+                                <CampaignPicker currentId={currentId} editorType="classic" />
 
                                 {/* Save Button */}
                                 {onSave && (
