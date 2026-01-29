@@ -9,6 +9,12 @@ export interface Campaign {
     html_content: string | null
     variable_values: Record<string, any> | null
     status: CampaignStatus
+
+    // Analytics
+    total_recipients: number
+    total_opens: number
+    total_clicks: number
+    average_read_time: number
 }
 
 export interface Subscriber {

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine, Trash2 } from "lucide-react"
+import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, MoreHorizontal, ArrowRight } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -26,6 +26,14 @@ const statusStyles: Record<string, string> = {
     active: "bg-green-500/20 text-green-400 border-green-500/30",
     completed: "bg-blue-500/20 text-blue-400 border-blue-500/30",
     draft: "bg-muted text-muted-foreground border-border",
+}
+
+const formatDuration = (seconds: number) => {
+    if (!seconds) return "—"
+    if (seconds < 60) return `${seconds}s`
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}m ${s}s`
 }
 
 interface CampaignsTableProps {
@@ -133,125 +141,164 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     }
 
     if (loading) {
-        return <div className="text-center py-10 text-muted-foreground">Loading campaigns...</div>
+        return <div className="text-center py-10 text-muted-foreground opacity-50">Loading metrics...</div>
     }
 
     return (
         <div className="rounded-lg border border-border bg-card">
-            <div className="border-b border-border px-6 py-4">
+            <div className="border-b border-border px-6 py-4 flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-card-foreground">{title}</h2>
             </div>
             <Table>
                 <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
-                        <TableHead className="text-muted-foreground w-[30%]">Campaign Name</TableHead>
-                        <TableHead className="text-muted-foreground">Status</TableHead>
-                        <TableHead className="text-muted-foreground">Created</TableHead>
-                        <TableHead className="text-muted-foreground">Last Modified</TableHead>
-                        <TableHead className="text-right text-muted-foreground">Actions</TableHead>
+                        <TableHead className="text-muted-foreground w-[300px]">Campaign</TableHead>
+                        <TableHead className="text-center w-[100px]">Status</TableHead>
+                        {/* New Metrics Columns */}
+                        <TableHead className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                Open Rate
+                            </div>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                                <MousePointer2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                Click Rate
+                            </div>
+                        </TableHead>
+                        <TableHead className="text-right">
+                            <div className="flex items-center justify-end gap-1">
+                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                Avg Time
+                            </div>
+                        </TableHead>
+                        <TableHead className="text-right w-[50px]"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
                     ) : (
-                        campaigns.map((campaign) => (
-                            <TableRow key={campaign.id} className="border-border">
-                                <TableCell className="font-medium text-card-foreground">
-                                    <div className="flex items-center gap-2 group">
-                                        <Link href={`/dashboard/${campaign.id}`} className="hover:underline">
-                                            {campaign.name || "Untitled Campaign"}
-                                        </Link>
-                                        <button
-                                            onClick={(e) => {
-                                                e.preventDefault()
-                                                handleEditClick(campaign)
-                                            }}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                                            title="Rename"
-                                        >
-                                            <Pencil className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                </TableCell>
-                                <TableCell>
-                                    <Badge variant="outline" className={statusStyles[campaign.status] || statusStyles.draft}>
-                                        {campaign.status}
-                                    </Badge>
-                                </TableCell>
-                                <TableCell className="text-muted-foreground">
-                                    {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true })}
-                                </TableCell>
-                                <TableCell className="text-muted-foreground">
-                                    {campaign.updated_at
-                                        ? formatDistanceToNow(new Date(campaign.updated_at), { addSuffix: true })
-                                        : "-"
-                                    }
-                                </TableCell>
-                                <TableCell className="text-right space-x-2">
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleDuplicate(campaign.id)}
-                                        disabled={duplicatingId === campaign.id}
-                                        className="text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                        title="Duplicate"
-                                    >
-                                        <Copy className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                        asChild
-                                        variant="ghost"
-                                        size="sm"
-                                        className="text-primary hover:text-primary/80 hover:bg-primary/10"
-                                    >
-                                        <Link href={`/dashboard/${campaign.id}`}>Manage</Link>
-                                    </Button>
+                        campaigns.map((campaign) => {
+                            const recipients = campaign.total_recipients || 0
+                            const openRate = recipients > 0 ? Math.round((campaign.total_opens / recipients) * 100) : 0
+                            const clickRate = recipients > 0 ? Math.round((campaign.total_clicks / recipients) * 100) : 0
 
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => handleDelete(campaign.id)}
-                                        disabled={deletingId === campaign.id}
-                                        className="text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                                        title="Delete"
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
+                            return (
+                                <TableRow key={campaign.id} className="border-border">
+                                    {/* Name & Metadata */}
+                                    <TableCell>
+                                        <div className="flex flex-col group">
+                                            <div className="flex items-center gap-2">
+                                                <Link href={`/dashboard/${campaign.id}`} className="font-medium text-foreground hover:underline">
+                                                    {campaign.name || "Untitled Campaign"}
+                                                </Link>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.preventDefault()
+                                                        handleEditClick(campaign)
+                                                    }}
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                                                    title="Rename"
+                                                >
+                                                    <Pencil className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                            <span className="text-xs text-muted-foreground">
+                                                Created {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true })}
+                                            </span>
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                        <Badge variant="outline" className={`
+                                            capitalize border-opacity-50
+                                            ${campaign.status === 'completed' ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : ''}
+                                            ${campaign.status === 'draft' ? 'text-zinc-400 border-zinc-500/50 bg-zinc-500/10' : ''}
+                                        `}>
+                                            {campaign.status}
+                                        </Badge>
+                                    </TableCell>
 
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
+                                    {/* METRICS */}
+                                    <TableCell className="text-right font-mono">
+                                        {recipients > 0 ? (
+                                            <span className={openRate > 20 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
+                                                {openRate}%
+                                            </span>
+                                        ) : "—"}
+                                    </TableCell>
+
+                                    <TableCell className="text-right font-mono">
+                                        {recipients > 0 ? (
+                                            <span className={clickRate > 2 ? "text-blue-400 font-bold" : "text-muted-foreground"}>
+                                                {clickRate}%
+                                            </span>
+                                        ) : "—"}
+                                    </TableCell>
+
+                                    <TableCell className="text-right font-mono text-amber-400">
+                                        {formatDuration(campaign.average_read_time)}
+                                    </TableCell>
+
+                                    {/* Actions */}
+                                    <TableCell className="text-right">
+                                        <div className="flex items-center justify-end gap-2">
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="text-muted-foreground hover:text-foreground hover:bg-secondary/50 gap-1"
+                                                onClick={() => handleDuplicate(campaign.id)}
+                                                disabled={duplicatingId === campaign.id}
+                                                className="text-muted-foreground hover:text-foreground hover:bg-secondary/50 hidden md:flex"
+                                                title="Duplicate"
                                             >
-                                                Edit
-                                                <ChevronDown className="w-3 h-3 opacity-50" />
+                                                <Copy className="w-4 h-4" />
                                             </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem asChild>
-                                                <Link href={`/editor?id=${campaign.id}`} className="cursor-pointer flex items-center gap-2">
-                                                    <PenLine className="w-4 h-4 text-muted-foreground" />
-                                                    <span>Classic Editor</span>
-                                                </Link>
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem asChild>
-                                                <Link href={`/modular-editor?id=${campaign.id}`} className="cursor-pointer flex items-center gap-2">
-                                                    <LayoutTemplate className="w-4 h-4 text-muted-foreground" />
-                                                    <span>Modular Editor</span>
-                                                </Link>
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
-                                </TableCell>
-                            </TableRow>
-                        ))
+
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={`/dashboard/${campaign.id}`} className="flex items-center gap-2">
+                                                            <ArrowRight className="h-3 w-3" />
+                                                            <span>Manage</span>
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={`/editor?id=${campaign.id}`} className="flex items-center gap-2">
+                                                            <PenLine className="h-3 w-3 text-muted-foreground" />
+                                                            <span>Classic Editor</span>
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem asChild>
+                                                        <Link href={`/modular-editor?id=${campaign.id}`} className="flex items-center gap-2">
+                                                            <LayoutTemplate className="h-3 w-3 text-muted-foreground" />
+                                                            <span>Modular Editor</span>
+                                                        </Link>
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() => handleDelete(campaign.id)}
+                                                        disabled={deletingId === campaign.id}
+                                                        className="text-red-500 focus:text-red-600 focus:bg-red-500/10 cursor-pointer"
+                                                    >
+                                                        <Trash2 className="h-3 w-3 mr-2" />
+                                                        <span>Delete</span>
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            )
+                        })
                     )}
                 </TableBody>
             </Table>

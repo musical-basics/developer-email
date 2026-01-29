@@ -37,7 +37,7 @@ export async function getCampaigns() {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, created_at, updated_at")
+        .select("id, name, status, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time")
         .order("created_at", { ascending: false })
 
     if (error) {
