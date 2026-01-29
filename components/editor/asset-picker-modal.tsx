@@ -37,7 +37,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
             const loadedAssets: Asset[] = data.map((file) => ({
                 id: file.id,
                 name: file.name,
-                url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${file.name}`,
+                url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${encodeURIComponent(file.name)}`,
             }))
             setAssets(loadedAssets)
         }
@@ -50,17 +50,87 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
         }
     }, [isOpen, fetchAssets])
 
+    // Helper: Compress Image using Canvas
+    const compressImage = async (file: File): Promise<File> => {
+        return new Promise((resolve, reject) => {
+            const img = new Image()
+            const reader = new FileReader()
+
+            reader.onload = (e) => {
+                img.src = e.target?.result as string
+            }
+            reader.onerror = reject
+
+            img.onload = () => {
+                const canvas = document.createElement("canvas")
+                const ctx = canvas.getContext("2d")
+                if (!ctx) return reject(new Error("Canvas context failed"))
+
+                // Max dimensions
+                const MAX_WIDTH = 1200
+                const MAX_HEIGHT = 1200
+                let width = img.width
+                let height = img.height
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width
+                        width = MAX_WIDTH
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height
+                        height = MAX_HEIGHT
+                    }
+                }
+
+                canvas.width = width
+                canvas.height = height
+                ctx.drawImage(img, 0, 0, width, height)
+
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) return reject(new Error("Compression failed"))
+                        // Create new file with same name but likely smaller size
+                        const compressedFile = new File([blob], file.name, {
+                            type: "image/jpeg",
+                            lastModified: Date.now(),
+                        })
+                        resolve(compressedFile)
+                    },
+                    "image/jpeg",
+                    0.8, // 80% Quality
+                )
+            }
+
+            reader.readAsDataURL(file)
+        })
+    }
+
     const handleFileUpload = async (file: File) => {
         console.log("Starting upload...", { name: file.name, type: file.type, size: file.size })
         setUploading(true)
-        const fileName = `${Date.now()}-${file.name}`
-        const { data, error } = await supabase.storage.from("email-assets").upload(fileName, file)
 
-        if (error) {
-            console.error("Error uploading file:", error)
-        } else {
-            console.log("Upload successful:", data)
-            await fetchAssets()
+        try {
+            // Compress if image
+            let fileToUpload = file
+            if (file.type.startsWith("image/")) {
+                console.log("Compressing image...")
+                fileToUpload = await compressImage(file)
+                console.log("Compressed size:", fileToUpload.size)
+            }
+
+            const fileName = `${Date.now()}-${fileToUpload.name}`
+            const { data, error } = await supabase.storage.from("email-assets").upload(fileName, fileToUpload)
+
+            if (error) {
+                console.error("Error uploading file:", error)
+            } else {
+                console.log("Upload successful:", data)
+                await fetchAssets()
+            }
+        } catch (e) {
+            console.error("Upload process failed:", e)
         }
         setUploading(false)
     }

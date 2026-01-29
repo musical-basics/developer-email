@@ -6,8 +6,9 @@ import { CodePane } from "./code-pane"
 import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
+import Link from "next/link"
 import { Panel, PanelGroup, PanelResizeHandle, ImperativePanelHandle } from "react-resizable-panels"
 
 interface EmailEditorProps {
@@ -88,6 +89,14 @@ export function EmailEditor({
                 {/* Left Sidebar - Asset Loader */}
                 <Panel defaultSize={15} minSize={12} maxSize={25} className="bg-background border-r border-border">
                     <div className="h-full flex flex-col">
+                        {/* Header Link */}
+                        <div className="p-3 border-b border-border">
+                            <Link href="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                                <ArrowLeft className="w-3 h-3" />
+                                Back to Dashboard
+                            </Link>
+                        </div>
+
                         {/* Campaign Settings */}
                         <div className="p-4 border-b border-border bg-muted/20 space-y-3">
                             <div className="space-y-1">
@@ -125,7 +134,7 @@ export function EmailEditor({
                         </div>
 
                         <div className="flex-1 overflow-y-auto">
-                            <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} />
+                            <AssetLoader variables={extractedVariables} assets={assets} onUpdateAsset={updateAsset} showBackButton={false} />
                         </div>
                     </div>
                 </Panel>
