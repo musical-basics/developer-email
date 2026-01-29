@@ -248,12 +248,15 @@ export function ModularEmailEditor({
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
             {/* 1. UNIFIED SIDEBAR (Assets + Blocks) */}
             <div className="flex-shrink-0 w-[300px] border-r border-border h-full flex flex-col bg-card">
-                <div className="p-4 border-b border-border bg-muted/20 space-y-4">
-                    <Link href="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2">
+                {/* Header Link */}
+                <div className="p-3 border-b border-border">
+                    <Link href="/" className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
                         <ArrowLeft className="w-3 h-3" />
                         Back to Dashboard
                     </Link>
+                </div>
 
+                <div className="p-4 border-b border-border bg-muted/20 space-y-4">
                     {/* Campaign Settings */}
                     <div className="space-y-3">
                         <div className="space-y-1">
