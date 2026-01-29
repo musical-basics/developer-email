@@ -163,6 +163,8 @@ function ModularEditorPageContent() {
                     if (field === "name") setFromName(value)
                     if (field === "email") setFromEmail(value)
                 }}
+                campaignName={name}
+                onNameChange={setName}
                 onSave={handleSaveClick}
             />
 

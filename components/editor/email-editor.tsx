@@ -23,6 +23,8 @@ interface EmailEditorProps {
     onAssetsChange: (assets: Record<string, string>) => void
     onSubjectChange: (value: string) => void
     onSenderChange: (field: "name" | "email", value: string) => void
+    campaignName: string
+    onNameChange: (name: string) => void
     onSave?: () => void
 }
 
@@ -36,6 +38,8 @@ export function EmailEditor({
     onAssetsChange,
     onSubjectChange,
     onSenderChange,
+    campaignName,
+    onNameChange,
     onSave
 }: EmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
@@ -183,6 +187,17 @@ export function EmailEditor({
                                     >
                                         <Smartphone className="w-4 h-4" />
                                     </button>
+                                </div>
+
+                                {/* Campaign Name Editing */}
+                                <div className="flex items-center gap-2 border-l border-border pl-2 mr-2">
+                                    <input
+                                        type="text"
+                                        value={campaignName}
+                                        onChange={(e) => onNameChange(e.target.value)}
+                                        className="bg-transparent border-none text-sm font-medium focus:outline-none focus:ring-1 focus:ring-primary/30 rounded px-2 w-[180px] text-foreground placeholder:text-muted-foreground"
+                                        placeholder="Campaign Name"
+                                    />
                                 </div>
 
                                 {/* Open Campaign */}
