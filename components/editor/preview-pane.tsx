@@ -17,7 +17,20 @@ export function PreviewPane({ html, viewMode = 'desktop' }: PreviewPaneProps) {
             const doc = iframeRef.current.contentDocument
             if (doc) {
                 doc.open()
-                doc.write(html)
+
+                // ⚡️ INJECT FOOTER FOR PREVIEW ACCURACY
+                const unsubscribeFooter = `
+                    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
+                    <p style="margin: 0;">
+                        No longer want to receive these emails? 
+                        <a href="#" style="color: #6b7280; text-decoration: underline;">Unsubscribe here</a>.
+                    </p>
+                    </div>
+                `
+                // Only add if not already present (prevent dups if re-injected by parent)
+                const fullHtml = html.includes("Unsubscribe here") ? html : html + unsubscribeFooter
+
+                doc.write(fullHtml)
                 doc.close()
 
                 // ⚡️ MAGIC FIX: Calculate the real height of the email content

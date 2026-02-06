@@ -80,6 +80,17 @@ export async function POST(request: Request) {
                     .replace(/{{email}}/g, "test@example.com");
             }
 
+            // ⚡️ INJECT FOOTER FOR TEST EMAILS
+            const unsubscribeFooter = `
+<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
+  <p style="margin: 0;">
+    No longer want to receive these emails? 
+    <a href="#" style="color: #6b7280; text-decoration: underline;">Unsubscribe here</a>.
+  </p>
+</div>
+`;
+            finalHtml += unsubscribeFooter;
+
             console.log("🚀 Sending Test Email...");
             console.log("FROM:", `DreamPlay <hello@email.dreamplaypianos.com>`);
             console.log("TO:", email);
