@@ -4,6 +4,7 @@ import { Monitor, Smartphone, Mail } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Campaign } from "@/lib/types"
+import { renderTemplate } from "@/lib/render-template"
 
 interface EmailPreviewCardProps {
     campaign: Campaign
@@ -13,10 +14,8 @@ interface EmailPreviewCardProps {
 
 export function EmailPreviewCard({ campaign, previewMode, onPreviewModeChange }: EmailPreviewCardProps) {
     // Replace Mustache variables with actual values for preview
-    const renderedHtml = Object.entries(campaign.variable_values || {}).reduce(
-        (html, [key, value]) => html.replace(new RegExp(`{{${key}}}`, "g"), value),
-        campaign.html_content || "",
-    )
+    // Replace Mustache variables with actual values for preview
+    const renderedHtml = renderTemplate(campaign.html_content || "", campaign.variable_values || {})
 
     return (
         <Card className="h-full border-border bg-card">

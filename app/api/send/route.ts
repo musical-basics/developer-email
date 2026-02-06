@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
+import { renderTemplate } from "@/lib/render-template";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -29,14 +30,12 @@ export async function POST(request: Request) {
         }
 
         // 2. The Compiler: Replace {{variables}}
-        let htmlContent = campaign.html_content || "";
-        const variables = campaign.variable_values || {};
+        // Use the shared renderTemplate logic to ensure "Fit" styles and other transformations are applied correctly.
+        const globalHtmlContent = renderTemplate(campaign.html_content || "", campaign.variable_values || {});
+        let htmlContent = globalHtmlContent;
 
-        // Replace standard variables
-        Object.keys(variables).forEach((key) => {
-            const regex = new RegExp(`{{${key}}}`, "g");
-            htmlContent = htmlContent.replace(regex, variables[key]);
-        });
+        // Note: usage of 'htmlContent' below assumes it has global variables replaced.
+        // We removed the manual forEach loop.
 
         // 3. Send Logic
         if (type === "test") {
