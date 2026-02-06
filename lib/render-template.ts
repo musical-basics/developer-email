@@ -7,35 +7,7 @@
 export function renderTemplate(html: string, assets: Record<string, string>): string {
     let result = html
 
-    // 1. Standard Replacement
-    for (const [key, value] of Object.entries(assets)) {
-        // Skip _fit variables for direct replacement loop (handled below or naturally)
-        if (key.endsWith("_fit")) continue
-
-        const pattern = new RegExp(`\\{\\{${key}\\}\\}`, "g")
-        result = result.replace(pattern, value || "")
-
-        // 2. Magic: If this key has a corresponding _fit variable, try to inject it
-        const fitValue = assets[`${key}_fit`]
-        if (fitValue) {
-            // Logic: Find <img> tags that used this variable in 'src' and try to patch 'style'
-            // We do this by looking for the REPLACED url.
-            // Wait, searching for the URL is risky if multiple images share it.
-            // Better: We should have done this BEFORE replacing the variable? 
-            // OR: We can use a regex that looks for the pattern before replacement.
-            // Let's restart the logic for this key.
-
-            // Re-read: We can't do it after replacement easily.
-            // So, let's look for the pattern `{{key}}` in the ORIGINAL html (or current result before replace).
-            // Actually, we can do a smart replace where we look for `<img ... src="{{key}}" ... style="...">`
-            // But HTML attributes are unordered.
-            // This is hard with regex. 
-
-            // Alternative:
-            // Since we just replaced `{{key}}` with `value` (the URL).
-            // That doesn't help with style.
-        }
-    }
+    // 1. (Removed premature replacement)
 
     // NEW APPROACH: Two-Pass
     // Pass 1: Handle "Fit" injection for Image Variables
