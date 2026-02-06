@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client" // Ensure you have this client helper
+
 
 interface Message {
     role: "user" | "details" | "result"
@@ -49,7 +49,6 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
     const [isLoading, setIsLoading] = useState(false)
     const scrollRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
-    const supabase = createClient()
 
     // Auto-scroll to bottom
     useEffect(() => {
@@ -61,25 +60,25 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
     const uploadFile = async (file: File) => {
         setIsUploading(true)
         try {
-            // 1. Unique path: chat-uploads/{timestamp}-{filename}
-            const path = `chat-uploads/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '')}`
+            // 2. Use Server-Side Upload (Bypasses RLS)
+            const formData = new FormData()
+            formData.append('file', file)
 
-            // 2. Direct upload to Supabase Storage (Bypasses Vercel Limit)
-            const { data, error } = await supabase.storage
-                .from('chat-assets')
-                .upload(path, file)
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
 
-            if (error) throw error
+            const data = await response.json()
 
-            // 3. Get Public URL
-            const { data: publicUrlData } = supabase.storage
-                .from('chat-assets')
-                .getPublicUrl(path)
+            if (!response.ok) {
+                throw new Error(data.error || "Upload failed")
+            }
 
-            setPendingAttachments(prev => [...prev, publicUrlData.publicUrl])
-        } catch (error) {
+            setPendingAttachments(prev => [...prev, data.url])
+        } catch (error: any) {
             console.error("Upload failed:", error)
-            setMessages(prev => [...prev, { role: 'result', content: `❌ Failed to upload image: ${file.name}` }])
+            setMessages(prev => [...prev, { role: 'result', content: `❌ Failed to upload image: ${file.name} (${error.message})` }])
         } finally {
             setIsUploading(false)
         }
