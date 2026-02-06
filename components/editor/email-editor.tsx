@@ -7,7 +7,7 @@ import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
 import { CampaignPicker } from "./campaign-picker"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
@@ -222,7 +222,19 @@ export function EmailEditor({
                                         {saveStatus === 'idle' && "Save Campaign"}
                                         {saveStatus === 'saving' && "Saving..."}
                                         {saveStatus === 'success' && "Saved!"}
+                                        {saveStatus === 'success' && "Saved!"}
                                     </button>
+                                )}
+
+                                {/* Manage Campaign Button */}
+                                {currentId && (
+                                    <Link
+                                        href={`/campaigns/${currentId}`}
+                                        className="px-4 py-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-muted transition-all flex items-center gap-2"
+                                    >
+                                        <Rocket className="w-4 h-4" />
+                                        Manage
+                                    </Link>
                                 )}
 
                                 {/* Copilot Toggle */}
