@@ -126,6 +126,7 @@ components/
     copilot-pane.tsx
     email-editor.tsx
     history-sheet.tsx
+    image-cropper.tsx
     modular-email-editor.tsx
     preview-pane.tsx
   ui/
@@ -2623,6 +2624,190 @@ export function HistorySheet({ campaignId, onRestore }: HistorySheetProps) {
                 </div>
             </SheetContent>
         </Sheet>
+    )
+}
+</file>
+
+<file path="components/editor/image-cropper.tsx">
+"use client"
+
+import React, { useState, useRef, useEffect } from 'react'
+import ReactCrop, { type Crop, type PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop'
+import 'react-image-crop/dist/ReactCrop.css'
+import { Button } from "@/components/ui/button"
+import { Loader2, Check, X, RotateCcw } from "lucide-react"
+
+// --- HELPER: CENTER ASPECT CROP ---
+function centerAspectCrop(mediaWidth: number, mediaHeight: number, aspect: number) {
+    return centerCrop(
+        makeAspectCrop(
+            {
+                unit: '%',
+                width: 90,
+            },
+            aspect,
+            mediaWidth,
+            mediaHeight,
+        ),
+        mediaWidth,
+        mediaHeight,
+    )
+}
+
+interface ImageCropperProps {
+    src: string
+    onCropComplete: (croppedBlob: Blob) => void
+    onCancel: () => void
+    initialAspect?: number // Optional: lock aspect ratio if needed (e.g., 16/9)
+}
+
+export function ImageCropper({ src, onCropComplete, onCancel, initialAspect }: ImageCropperProps) {
+    const [crop, setCrop] = useState<Crop>()
+    const [completedCrop, setCompletedCrop] = useState<PixelCrop>()
+    const [aspect, setAspect] = useState<number | undefined>(initialAspect)
+    const imgRef = useRef<HTMLImageElement>(null)
+    const [isProcessing, setIsProcessing] = useState(false)
+
+    const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        const { width, height } = e.currentTarget
+
+        // Default to whole image if no aspect
+        if (aspect) {
+            setCrop(centerAspectCrop(width, height, aspect))
+        } else {
+            setCrop({
+                unit: '%',
+                width: 100,
+                height: 100,
+                x: 0,
+                y: 0
+            })
+        }
+    }
+
+    const getCroppedImg = async (image: HTMLImageElement, crop: PixelCrop): Promise<Blob> => {
+        const canvas = document.createElement('canvas')
+        const scaleX = image.naturalWidth / image.width
+        const scaleY = image.naturalHeight / image.height
+
+        canvas.width = crop.width * scaleX
+        canvas.height = crop.height * scaleY
+
+        const ctx = canvas.getContext('2d')
+
+        if (!ctx) {
+            throw new Error('No 2d context')
+        }
+
+        // Quality improvement
+        ctx.imageSmoothingQuality = 'high'
+
+        ctx.drawImage(
+            image,
+            crop.x * scaleX,
+            crop.y * scaleY,
+            crop.width * scaleX,
+            crop.height * scaleY,
+            0,
+            0,
+            crop.width * scaleX,
+            crop.height * scaleY,
+        )
+
+        return new Promise((resolve, reject) => {
+            canvas.toBlob(
+                (blob) => {
+                    if (!blob) {
+                        reject(new Error('Canvas is empty'))
+                        return
+                    }
+                    resolve(blob)
+                },
+                'image/jpeg',
+                0.9 // High quality
+            )
+        })
+    }
+
+    const handleSave = async () => {
+        if (!completedCrop || !imgRef.current) return
+
+        setIsProcessing(true)
+        try {
+            // If crop covers the whole image (approx), just use original? 
+            // Actually, better to always re-process to ensure consistent behavior, 
+            // unless user explicitly hit "Skip". 
+            // But here we are in "Crop" mode, so we crop.
+
+            const blob = await getCroppedImg(imgRef.current, completedCrop)
+            onCropComplete(blob)
+        } catch (e) {
+            console.error(e)
+            setIsProcessing(false)
+        }
+    }
+
+    return (
+        <div className="flex flex-col h-full bg-black/90 text-white rounded-lg overflow-hidden">
+            <div className="flex-1 flex items-center justify-center p-8 overflow-auto min-h-[300px]">
+                <ReactCrop
+                    crop={crop}
+                    onChange={(_, percentCrop) => setCrop(percentCrop)}
+                    onComplete={(c) => setCompletedCrop(c)}
+                    aspect={aspect}
+                    className="max-h-[60vh]"
+                >
+                    <img
+                        ref={imgRef}
+                        alt="Crop me"
+                        src={src}
+                        onLoad={onImageLoad}
+                        style={{ maxHeight: '60vh', objectFit: 'contain' }}
+                        crossOrigin="anonymous" // Important for CORS if assets are external
+                    />
+                </ReactCrop>
+            </div>
+
+            <div className="p-4 border-t border-white/10 flex items-center justify-between bg-zinc-900">
+                <div className="flex gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAspect(undefined)}
+                        className={!aspect ? "bg-white/10" : ""}
+                    >
+                        Free
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAspect(1)}
+                        className={aspect === 1 ? "bg-white/10" : ""}
+                    >
+                        Square
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setAspect(16 / 9)}
+                        className={aspect === 16 / 9 ? "bg-white/10" : ""}
+                    >
+                        16:9
+                    </Button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={onCancel} disabled={isProcessing}>
+                        <X className="w-4 h-4 mr-2" />
+                        Cancel
+                    </Button>
+                    <Button onClick={handleSave} disabled={isProcessing || !completedCrop?.width}>
+                        {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
+                        Save Crop
+                    </Button>
+                </div>
+            </div>
+        </div>
     )
 }
 </file>
@@ -9713,26 +9898,6 @@ export async function createClient() {
 }
 </file>
 
-<file path="lib/render-template.ts">
-/**
- * Renders a template by replacing all {{key}} placeholders with actual values from the assets object.
- * @param html - The raw HTML template string containing {{variable}} placeholders
- * @param assets - An object mapping variable names to their replacement values
- * @returns The processed HTML string with all placeholders replaced
- */
-export function renderTemplate(html: string, assets: Record<string, string>): string {
-    let result = html
-
-    // Loop through all asset keys and replace {{key}} with the actual value
-    for (const [key, value] of Object.entries(assets)) {
-        const pattern = new RegExp(`\\{\\{${key}\\}\\}`, "g")
-        result = result.replace(pattern, value || "")
-    }
-
-    return result
-}
-</file>
-
 <file path="lib/utils.ts">
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -11822,6 +11987,95 @@ export function AppSidebar() {
 }
 </file>
 
+<file path="lib/render-template.ts">
+/**
+ * Renders a template by replacing all {{key}} placeholders with actual values from the assets object.
+ * @param html - The raw HTML template string containing {{variable}} placeholders
+ * @param assets - An object mapping variable names to their replacement values
+ * @returns The processed HTML string with all placeholders replaced
+ */
+export function renderTemplate(html: string, assets: Record<string, string>): string {
+    let result = html
+
+    // 1. (Removed premature replacement)
+
+    // NEW APPROACH: Two-Pass
+    // Pass 1: Handle "Fit" injection for Image Variables
+    for (const [key, value] of Object.entries(assets)) {
+        const fitKey = `${key}_fit`
+        const fitValue = assets[fitKey]
+
+        if (fitValue) {
+            // Look for <img ... src="{{key}}" ... >
+            // We want to inject/replace object-fit in the style attribute.
+            // Regex explanation:
+            // <img[^>]*       Start of img tag
+            // src=["']\{\{key\}\}["']  src attribute with variable
+            // [^>]*           Other attributes
+            // >               End of tag
+
+            // This is too complex to reliably parse/replace in one go due to attribute order.
+            // However, we can handle the common case: `style="..."` exists.
+
+            // Strategy: Find strings that look like `<img ... src="{{key}}"` 
+            // and then look for `style="` nearby?
+
+            // Actually, let's keep it simple.
+            // If the user hasn't put `{{key_fit}}` in their style, we try to force it.
+            // BUT, if we just blindly modify `renderTemplate`, we might break things.
+
+            // Let's try a safer regex that targets the specific structure user has?
+            // User: `style="width: 100%; height: 300px; object-fit: cover;"`
+            // We can look for `object-fit: \w+` inside a style attribute that is inside a tag with `src="{{key}}"`.
+
+            // We will match the whole IMG tag containing the src variable.
+            const imgTagRegex = new RegExp(`(<img[^>]*src=["']\\{\\{${key}\\}\\}["'][^>]*>)`, 'gi')
+
+            result = result.replace(imgTagRegex, (match) => {
+                // 'match' is the full <img> tag (assuming no > inside attributes, which is standard HTML)
+
+                // Check if style exists
+                if (match.match(/style=["'][^"']*["']/i)) {
+                    // Update existing style
+                    return match.replace(/(style=["'][^"']*)object-fit:\s*[\w-]+;?([^"']*["'])/i, `$1object-fit: ${fitValue};$2`)
+                        .replace(/(style=["'])(?!.*object-fit)([^"']*["'])/i, `$1object-fit: ${fitValue}; $2`)
+                    // The second replace is for when object-fit is NOT present but style IS.
+                    // However, the first replace might have already handled it. 
+                    // Let's be careful.
+
+                    // Actually, simpler: Parse the style attribute value.
+                    return match.replace(/style=(["'])(.*?)\1/i, (styleMatch, quote, styleContent) => {
+                        let newStyle = styleContent
+                        if (newStyle.includes('object-fit:')) {
+                            newStyle = newStyle.replace(/object-fit:\s*[\w-]+/i, `object-fit: ${fitValue}`)
+                        } else {
+                            newStyle = `${newStyle}; object-fit: ${fitValue}`
+                        }
+                        return `style=${quote}${newStyle}${quote}`
+                    })
+                } else {
+                    // No style attribute, add one
+                    // Insert before the closing /> or >
+                    if (match.endsWith('/>')) {
+                        return match.slice(0, -2) + ` style="object-fit: ${fitValue};" />`
+                    } else {
+                        return match.slice(0, -1) + ` style="object-fit: ${fitValue};">`
+                    }
+                }
+            })
+        }
+    }
+
+    // Pass 2: Standard Replacement (Existing Logic)
+    for (const [key, value] of Object.entries(assets)) {
+        const pattern = new RegExp(`\\{\\{${key}\\}\\}`, "g")
+        result = result.replace(pattern, value || "")
+    }
+
+    return result
+}
+</file>
+
 <file path="app/api/webhooks/subscribe/route.ts">
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -12332,6 +12586,7 @@ import { X, Upload, ImageIcon, Loader2, Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { deleteAsset } from "@/app/actions/assets"
+import { ImageCropper } from "./image-cropper" // Import the cropper
 
 interface Asset {
     id: string
@@ -12350,6 +12605,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     const [loading, setLoading] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null)
+    const [croppingAsset, setCroppingAsset] = useState<Asset | null>(null) // State for cropping
     const [isDragOver, setIsDragOver] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
     const supabase = createClient()
@@ -12492,7 +12748,38 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
 
     const handleSelect = () => {
         if (selectedAsset) {
-            onSelect(selectedAsset.url)
+            // instead of closing immediately, go to crop mode
+            setCroppingAsset(selectedAsset)
+        }
+    }
+
+    const handleCropComplete = async (blob: Blob) => {
+        if (!croppingAsset) return
+        setUploading(true)
+
+        try {
+            const fileName = `cropped-${Date.now()}-${croppingAsset.name}`
+            const file = new File([blob], fileName, { type: "image/jpeg" })
+
+            const { data, error } = await supabase.storage.from("email-assets").upload(fileName, file)
+
+            if (error) {
+                console.error("Error uploading cropped asset:", error)
+            } else {
+                const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${encodeURIComponent(fileName)}`
+                onSelect(publicUrl)
+                onClose()
+            }
+        } catch (e) {
+            console.error("Crop upload failed:", e)
+        }
+        setUploading(false)
+        setCroppingAsset(null)
+    }
+
+    const handleSkipCrop = () => {
+        if (croppingAsset) {
+            onSelect(croppingAsset.url)
             onClose()
         }
     }
@@ -12520,10 +12807,12 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-            <div className="w-full max-w-2xl mx-4 rounded-lg bg-[#111111] border border-neutral-800 shadow-2xl">
+            <div className="w-full max-w-2xl mx-4 rounded-lg bg-[#111111] border border-neutral-800 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800">
-                    <h3 className="text-lg font-medium text-neutral-100">Select Image Asset</h3>
+                <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-800 flex-shrink-0">
+                    <h3 className="text-lg font-medium text-neutral-100">
+                        {croppingAsset ? "Adjust Image" : "Select Image Asset"}
+                    </h3>
                     <button
                         onClick={onClose}
                         className="p-1.5 rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-colors"
@@ -12533,131 +12822,145 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                 </div>
 
                 {/* Main Content */}
-                <div className="p-6 space-y-6">
-                    {/* Upload Zone */}
-                    <div
-                        onDragOver={handleDragOver}
-                        onDragLeave={handleDragLeave}
-                        onDrop={handleDrop}
-                        onClick={() => document.getElementById("file-upload")?.click()}
-                        className={cn(
-                            "flex flex-col items-center justify-center gap-3 py-10 rounded-lg border-2 border-dashed transition-colors cursor-pointer relative",
-                            isDragOver
-                                ? "border-amber-500 bg-amber-500/5"
-                                : "border-neutral-700 hover:border-amber-500 hover:bg-amber-500/5",
-                        )}
-                    >
-                        <input
-                            id="file-upload"
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handleFileSelect}
-                        />
-                        {uploading ? (
-                            <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
-                        ) : (
-                            <Upload className={cn("w-10 h-10", isDragOver ? "text-amber-500" : "text-neutral-500")} />
-                        )}
-                        <p className="text-sm text-neutral-400">
-                            {uploading ? (
-                                "Uploading..."
-                            ) : (
-                                <>
-                                    Drag & drop or <span className="text-amber-500 font-medium">click to upload</span>
-                                </>
-                            )}
-                        </p>
-                    </div>
+                <div className="flex-1 overflow-hidden flex flex-col">
+                    {croppingAsset ? (
+                        <div className="flex-1 p-6 overflow-hidden">
+                            <ImageCropper
+                                src={croppingAsset.url}
+                                onCropComplete={handleCropComplete}
+                                onCancel={() => setCroppingAsset(null)}
+                            />
+                        </div>
+                    ) : (
+                        <div className="p-6 space-y-6 overflow-y-auto">
+                            {/* Upload Zone */}
+                            <div
+                                onDragOver={handleDragOver}
+                                onDragLeave={handleDragLeave}
+                                onDrop={handleDrop}
+                                onClick={() => document.getElementById("file-upload")?.click()}
+                                className={cn(
+                                    "flex flex-col items-center justify-center gap-3 py-10 rounded-lg border-2 border-dashed transition-colors cursor-pointer relative",
+                                    isDragOver
+                                        ? "border-amber-500 bg-amber-500/5"
+                                        : "border-neutral-700 hover:border-amber-500 hover:bg-amber-500/5",
+                                )}
+                            >
+                                <input
+                                    id="file-upload"
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={handleFileSelect}
+                                />
+                                {uploading ? (
+                                    <Loader2 className="w-10 h-10 text-amber-500 animate-spin" />
+                                ) : (
+                                    <Upload className={cn("w-10 h-10", isDragOver ? "text-amber-500" : "text-neutral-500")} />
+                                )}
+                                <p className="text-sm text-neutral-400">
+                                    {uploading ? (
+                                        "Uploading..."
+                                    ) : (
+                                        <>
+                                            Drag & drop or <span className="text-amber-500 font-medium">click to upload</span>
+                                        </>
+                                    )}
+                                </p>
+                            </div>
 
-                    {/* Asset Grid */}
-                    <div className="max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent">
-                        {loading ? (
-                            <div className="flex justify-center py-12">
-                                <Loader2 className="w-8 h-8 text-neutral-500 animate-spin" />
-                            </div>
-                        ) : assets.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center py-16 text-center">
-                                <ImageIcon className="w-12 h-12 text-neutral-600 mb-3" />
-                                <p className="text-neutral-500">No assets found. Upload one to get started.</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                                {assets.map((asset) => (
-                                    <button
-                                        key={asset.id}
-                                        onClick={() => setSelectedAsset(asset)}
-                                        className={cn(
-                                            "group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 transition-all",
-                                            selectedAsset?.id === asset.id
-                                                ? "border-amber-500 ring-2 ring-amber-500/30"
-                                                : "border-transparent hover:border-neutral-600",
-                                        )}
-                                    >
-                                        <img
-                                            src={asset.url || "/placeholder.svg"}
-                                            alt={asset.name}
-                                            className="w-full h-full object-cover"
-                                        />
-                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
-                                            <p className="text-xs text-neutral-300 truncate">{asset.name}</p>
-                                        </div>
-                                        {/* Delete Button */}
-                                        <button
-                                            onClick={(e) => handleDelete(e, asset)}
-                                            disabled={deleting === asset.id}
-                                            className="absolute top-2 left-2 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                                            title="Delete asset"
-                                        >
-                                            {deleting === asset.id ? (
-                                                <Loader2 className="w-3 h-3 text-white animate-spin" />
-                                            ) : (
-                                                <Trash2 className="w-3 h-3 text-white" />
-                                            )}
-                                        </button>
-                                        {selectedAsset?.id === asset.id && (
-                                            <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
-                                                <svg
-                                                    className="w-3 h-3 text-black"
-                                                    fill="none"
-                                                    viewBox="0 0 24 24"
-                                                    stroke="currentColor"
+                            {/* Asset Grid */}
+                            <div className="max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent">
+                                {loading ? (
+                                    <div className="flex justify-center py-12">
+                                        <Loader2 className="w-8 h-8 text-neutral-500 animate-spin" />
+                                    </div>
+                                ) : assets.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                                        <ImageIcon className="w-12 h-12 text-neutral-600 mb-3" />
+                                        <p className="text-neutral-500">No assets found. Upload one to get started.</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                        {assets.map((asset) => (
+                                            <button
+                                                key={asset.id}
+                                                onClick={() => setSelectedAsset(asset)}
+                                                className={cn(
+                                                    "group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 transition-all",
+                                                    selectedAsset?.id === asset.id
+                                                        ? "border-amber-500 ring-2 ring-amber-500/30"
+                                                        : "border-transparent hover:border-neutral-600",
+                                                )}
+                                            >
+                                                <img
+                                                    src={asset.url || "/placeholder.svg"}
+                                                    alt={asset.name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
+                                                    <p className="text-xs text-neutral-300 truncate">{asset.name}</p>
+                                                </div>
+                                                {/* Delete Button */}
+                                                <button
+                                                    onClick={(e) => handleDelete(e, asset)}
+                                                    disabled={deleting === asset.id}
+                                                    className="absolute top-2 left-2 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                                                    title="Delete asset"
                                                 >
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            </div>
-                                        )}
-                                    </button>
-                                ))}
+                                                    {deleting === asset.id ? (
+                                                        <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                                    ) : (
+                                                        <Trash2 className="w-3 h-3 text-white" />
+                                                    )}
+                                                </button>
+                                                {selectedAsset?.id === asset.id && (
+                                                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+                                                        <svg
+                                                            className="w-3 h-3 text-black"
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                        >
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    </div>
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
 
-                {/* Footer */}
-                <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-800">
-                    <p className="text-sm text-neutral-500">Showing {assets.length} assets</p>
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-2 text-sm font-medium text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 rounded-md transition-colors"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleSelect}
-                            disabled={!selectedAsset}
-                            className={cn(
-                                "px-4 py-2 text-sm font-medium rounded-md transition-colors",
-                                selectedAsset
-                                    ? "bg-amber-500 text-black hover:bg-amber-400"
-                                    : "bg-neutral-700 text-neutral-500 cursor-not-allowed",
-                            )}
-                        >
-                            Select Asset
-                        </button>
+                {/* Footer - Only show if NOT cropping (cropping has its own buttons) */}
+                {!croppingAsset && (
+                    <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-800 flex-shrink-0">
+                        <p className="text-sm text-neutral-500">Showing {assets.length} assets</p>
+                        <div className="flex items-center gap-3">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 text-sm font-medium text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 rounded-md transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSelect}
+                                disabled={!selectedAsset}
+                                className={cn(
+                                    "px-4 py-2 text-sm font-medium rounded-md transition-colors",
+                                    selectedAsset
+                                        ? "bg-amber-500 text-black hover:bg-amber-400"
+                                        : "bg-neutral-700 text-neutral-500 cursor-not-allowed",
+                                )}
+                            >
+                                Select & Adjust
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     )
@@ -12724,6 +13027,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     "react-dom": "19.2.0",
     "react-hook-form": "^7.60.0",
     "react-resizable-panels": "^2.1.7",
+    "react-image-crop": "^11.0.7",
     "recharts": "2.15.4",
     "resend": "^6.6.0",
     "sonner": "^1.7.4",
@@ -12850,16 +13154,16 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
                                         <SelectItem value="scale-down">Scale Down</SelectItem>
                                     </SelectContent>
                                 </Select>
-                            ) : (
-                                <div className="flex gap-2">
-                                    <Input
-                                        id={variable}
-                                        value={assets[variable] || ""}
-                                        onChange={(e) => onUpdateAsset(variable, e.target.value)}
-                                        placeholder={`Enter ${variable}`}
-                                        className="flex-1 text-sm bg-muted border-border font-mono"
-                                    />
-                                    {isImageVariable(variable) && (
+                            ) : isImageVariable(variable) ? (
+                                <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id={variable}
+                                            value={assets[variable] || ""}
+                                            onChange={(e) => onUpdateAsset(variable, e.target.value)}
+                                            placeholder={`Enter ${variable}`}
+                                            className="flex-1 text-sm bg-muted border-border font-mono"
+                                        />
                                         <Button
                                             variant="outline"
                                             size="icon"
@@ -12869,21 +13173,53 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
                                         >
                                             <Upload className="w-4 h-4" />
                                         </Button>
+                                    </div>
+
+                                    {/* Implicit Fit Control */}
+                                    <div className="flex gap-2 items-center">
+                                        <Label className="text-xs text-muted-foreground w-12">Fit:</Label>
+                                        <Select
+                                            value={assets[`${variable}_fit`] || "cover"}
+                                            onValueChange={(value) => onUpdateAsset(`${variable}_fit`, value)}
+                                        >
+                                            <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Fit" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="cover">Cover</SelectItem>
+                                                <SelectItem value="contain">Contain</SelectItem>
+                                                <SelectItem value="fill">Fill</SelectItem>
+                                                <SelectItem value="scale-down">Scale Down</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {assets[variable] && (
+                                        <div className="rounded border border-border overflow-hidden bg-muted/50 flex items-center justify-center p-2">
+                                            <img
+                                                src={assets[variable]}
+                                                alt={variable}
+                                                className="max-w-full max-h-32 object-contain"
+                                                style={{
+                                                    objectFit: (assets[`${variable}_fit`] as any) || "cover",
+                                                    width: '100%',
+                                                    height: '100px'
+                                                }}
+                                                onError={(e) => {
+                                                    e.currentTarget.style.display = "none"
+                                                }}
+                                            />
+                                        </div>
                                     )}
                                 </div>
-                            )}
-                            {isImageVariable(variable) && assets[variable] && (
-                                <div className="mt-2 rounded border border-border overflow-hidden">
-                                    <img
-                                        src={assets[variable] || "/placeholder.svg"}
-                                        alt={variable}
-                                        className="w-full h-20 object-fit-cover bg-muted"
-                                        style={{ objectFit: (assets[`${variable}_fit`] as any) || "cover" }}
-                                        onError={(e) => {
-                                            e.currentTarget.style.display = "none"
-                                        }}
-                                    />
-                                </div>
+                            ) : (
+                                <Input
+                                    id={variable}
+                                    value={assets[variable] || ""}
+                                    onChange={(e) => onUpdateAsset(variable, e.target.value)}
+                                    placeholder={`Enter ${variable}`}
+                                    className="flex-1 text-sm bg-muted border-border font-mono"
+                                />
                             )}
                         </div>
                     ))

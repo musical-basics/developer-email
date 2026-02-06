@@ -113,6 +113,8 @@ export async function POST(request: Request) {
             if (lockedSubscriberId) {
                 query = query.eq("id", lockedSubscriberId);
             }
+            // ⚡️ FINAL GUARDRAIL: Never send to unsubscribed users (redundant with .eq('status', 'active') but explicitly safe)
+            query = query.neq('status', 'unsubscribed');
 
             const { data: recipients, error: subError } = await query;
             if (subError || !recipients) throw subError;
@@ -120,15 +122,31 @@ export async function POST(request: Request) {
             // 3. Loop and Send (For small batches, a simple loop is fine. For >1000, use Resend Batch API)
             console.log(`🚀 Starting broadcast to ${recipients.length} subscribers...`);
 
+            // ⚡️ GLOBAL FOOTER
+            const unsubscribeFooter = `
+<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
+  <p style="margin: 0;">
+    No longer want to receive these emails? 
+    <a href="{{unsubscribe_url}}" style="color: #6b7280; text-decoration: underline;">Unsubscribe here</a>.
+  </p>
+</div>
+`;
+
             let successCount = 0;
             let failureCount = 0;
             let firstErrorMessage = "";
             const sentRecords: { campaign_id: string; subscriber_id: string; sent_at: string; variant_sent: string | null }[] = [];
 
+            // Append footer ONCE to the base template
+            const htmlWithFooter = htmlContent + unsubscribeFooter;
+
             // Run the sending loop
             await Promise.all(recipients.map(async (sub) => {
                 // Personalize
                 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com"
+
+                // Generate Unsubscribe Link
+                const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${campaignId}`;
 
                 // Helper to wrap links for tracking
                 const wrapLinks = (html: string, campaignId: string, subscriberId: string) => {
@@ -146,9 +164,28 @@ export async function POST(request: Request) {
                     })
                 }
 
-                let personalHtml = htmlContent
-                    .replace(/{{first_name}}/g, sub.first_name || "")
+                // Render with variables including unsubscribe_url
+                // Note: We used to replace {{variables}} manually above, but for broadcast we might need per-user replacement again?
+                // Actually, the code above `htmlContent.replace` (line 36) replaced GLOBAL variables.
+                // We need to support per-user variables like {{first_name}} AND {{unsubscribe_url}}.
+                // The existing code did manual replacement for first_name/email.
+                // WE SHOULD USE `renderTemplate` if available, but it's not imported here? 
+                // Wait, checking top of file... no import.
+                // But lines 72-80 do manual replacement.
+                // And line 38 does simple replace.
+
+                // Refactoring to unify replacement:
+                let personalHtml = htmlWithFooter;
+
+                // 1. Replace Standard Variables (Already done in `htmlContent` for globals, but just in case)
+                // (Assuming `htmlContent` has globals replaced)
+
+                // 2. Replace Personal Variables
+                personalHtml = personalHtml
+                    .replace(/{{first_name}}/g, sub.first_name || "there")
+                    .replace(/{{last_name}}/g, sub.last_name || "")
                     .replace(/{{email}}/g, sub.email)
+                    .replace(/{{unsubscribe_url}}/g, unsubscribeUrl); // Inject URL
 
                 // 2. Wrap Links for Click Tracking
                 personalHtml = wrapLinks(personalHtml, campaignId, sub.id)
