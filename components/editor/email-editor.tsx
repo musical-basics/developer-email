@@ -229,7 +229,7 @@ export function EmailEditor({
                                 {/* Manage Campaign Button */}
                                 {currentId && (
                                     <Link
-                                        href={`/campaigns/${currentId}`}
+                                        href={`/dashboard/${currentId}`}
                                         className="px-4 py-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-muted transition-all flex items-center gap-2"
                                     >
                                         <Rocket className="w-4 h-4" />
