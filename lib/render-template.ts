@@ -56,20 +56,31 @@ export function renderTemplate(html: string, assets: Record<string, string>): st
                     // Actually, simpler: Parse the style attribute value.
                     return match.replace(/style=(["'])(.*?)\1/i, (styleMatch, quote, styleContent) => {
                         let newStyle = styleContent
+                        // 1. Handle object-fit
                         if (newStyle.includes('object-fit:')) {
                             newStyle = newStyle.replace(/object-fit:\s*[\w-]+/i, `object-fit: ${fitValue}`)
                         } else {
                             newStyle = `${newStyle}; object-fit: ${fitValue}`
                         }
+
+                        // 2. Handle dimensions for robustness (Email clients often strip classes)
+                        // This ensures the image doesn't overflow its container
+                        if (!newStyle.includes('max-width:')) {
+                            newStyle = `${newStyle}; max-width: 100%`
+                        }
+                        if (!newStyle.includes('height:')) {
+                            newStyle = `${newStyle}; height: auto` // Prevent stretching if width is constrained
+                        }
+
                         return `style=${quote}${newStyle}${quote}`
                     })
                 } else {
                     // No style attribute, add one
                     // Insert before the closing /> or >
                     if (match.endsWith('/>')) {
-                        return match.slice(0, -2) + ` style="object-fit: ${fitValue};" />`
+                        return match.slice(0, -2) + ` style="object-fit: ${fitValue}; max-width: 100%; height: auto;" />`
                     } else {
-                        return match.slice(0, -1) + ` style="object-fit: ${fitValue};">`
+                        return match.slice(0, -1) + ` style="object-fit: ${fitValue}; max-width: 100%; height: auto;">`
                     }
                 }
             })
