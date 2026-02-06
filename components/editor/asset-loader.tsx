@@ -102,16 +102,16 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
                                         <SelectItem value="scale-down">Scale Down</SelectItem>
                                     </SelectContent>
                                 </Select>
-                            ) : (
-                                <div className="flex gap-2">
-                                    <Input
-                                        id={variable}
-                                        value={assets[variable] || ""}
-                                        onChange={(e) => onUpdateAsset(variable, e.target.value)}
-                                        placeholder={`Enter ${variable}`}
-                                        className="flex-1 text-sm bg-muted border-border font-mono"
-                                    />
-                                    {isImageVariable(variable) && (
+                            ) : isImageVariable(variable) ? (
+                                <div className="space-y-2">
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id={variable}
+                                            value={assets[variable] || ""}
+                                            onChange={(e) => onUpdateAsset(variable, e.target.value)}
+                                            placeholder={`Enter ${variable}`}
+                                            className="flex-1 text-sm bg-muted border-border font-mono"
+                                        />
                                         <Button
                                             variant="outline"
                                             size="icon"
@@ -121,21 +121,53 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
                                         >
                                             <Upload className="w-4 h-4" />
                                         </Button>
+                                    </div>
+
+                                    {/* Implicit Fit Control */}
+                                    <div className="flex gap-2 items-center">
+                                        <Label className="text-xs text-muted-foreground w-12">Fit:</Label>
+                                        <Select
+                                            value={assets[`${variable}_fit`] || "cover"}
+                                            onValueChange={(value) => onUpdateAsset(`${variable}_fit`, value)}
+                                        >
+                                            <SelectTrigger className="h-8 text-xs">
+                                                <SelectValue placeholder="Fit" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="cover">Cover</SelectItem>
+                                                <SelectItem value="contain">Contain</SelectItem>
+                                                <SelectItem value="fill">Fill</SelectItem>
+                                                <SelectItem value="scale-down">Scale Down</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {assets[variable] && (
+                                        <div className="rounded border border-border overflow-hidden bg-muted/50 flex items-center justify-center p-2">
+                                            <img
+                                                src={assets[variable]}
+                                                alt={variable}
+                                                className="max-w-full max-h-32 object-contain"
+                                                style={{
+                                                    objectFit: (assets[`${variable}_fit`] as any) || "cover",
+                                                    width: '100%',
+                                                    height: '100px'
+                                                }}
+                                                onError={(e) => {
+                                                    e.currentTarget.style.display = "none"
+                                                }}
+                                            />
+                                        </div>
                                     )}
                                 </div>
-                            )}
-                            {isImageVariable(variable) && assets[variable] && (
-                                <div className="mt-2 rounded border border-border overflow-hidden">
-                                    <img
-                                        src={assets[variable] || "/placeholder.svg"}
-                                        alt={variable}
-                                        className="w-full h-20 object-fit-cover bg-muted"
-                                        style={{ objectFit: (assets[`${variable}_fit`] as any) || "cover" }}
-                                        onError={(e) => {
-                                            e.currentTarget.style.display = "none"
-                                        }}
-                                    />
-                                </div>
+                            ) : (
+                                <Input
+                                    id={variable}
+                                    value={assets[variable] || ""}
+                                    onChange={(e) => onUpdateAsset(variable, e.target.value)}
+                                    placeholder={`Enter ${variable}`}
+                                    className="flex-1 text-sm bg-muted border-border font-mono"
+                                />
                             )}
                         </div>
                     ))
