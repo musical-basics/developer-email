@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, MoreHorizontal, ArrowRight } from "lucide-react"
+import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, MoreHorizontal, ArrowRight, ExternalLink } from "lucide-react"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -272,6 +272,14 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                             <span>Manage</span>
                                                         </Link>
                                                     </DropdownMenuItem>
+                                                    {campaign.resend_email_id && (
+                                                        <DropdownMenuItem asChild>
+                                                            <a href={`https://resend.com/emails/${campaign.resend_email_id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                                                                <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                                                                <span>Show Email</span>
+                                                            </a>
+                                                        </DropdownMenuItem>
+                                                    )}
                                                     <DropdownMenuItem asChild>
                                                         <Link href={`/editor?id=${campaign.id}`} className="flex items-center gap-2">
                                                             <PenLine className="h-3 w-3 text-muted-foreground" />

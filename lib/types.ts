@@ -15,6 +15,7 @@ export interface Campaign {
     total_opens: number
     total_clicks: number
     average_read_time: number
+    resend_email_id?: string | null
 }
 
 export interface Subscriber {

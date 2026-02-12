@@ -131,6 +131,7 @@ export async function POST(request: Request) {
 
             let successCount = 0;
             let failureCount = 0;
+            let firstResendEmailId: string | null = null;
             const sentRecords: any[] = [];
 
             // Send to each recipient
@@ -162,7 +163,7 @@ export async function POST(request: Request) {
                     }
 
                     // Send Email
-                    const { error } = await resend.emails.send({
+                    const { data: sendData, error } = await resend.emails.send({
                         from: process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>",
                         to: sub.email,
                         subject: campaign.subject_line,
@@ -178,6 +179,10 @@ export async function POST(request: Request) {
                         failureCount++;
                     } else {
                         successCount++;
+                        // Capture the first Resend email ID for the "Show Email" link
+                        if (!firstResendEmailId && sendData?.id) {
+                            firstResendEmailId = sendData.id;
+                        }
                         sentRecords.push({
                             campaign_id: campaignId,
                             subscriber_id: sub.id,
@@ -198,10 +203,14 @@ export async function POST(request: Request) {
             }
 
             // Update campaign status
-            await supabaseAdmin.from("campaigns").update({
+            const updateData: any = {
                 status: "completed",
                 total_recipients: recipients.length
-            }).eq("id", campaignId);
+            };
+            if (firstResendEmailId) {
+                updateData.resend_email_id = firstResendEmailId;
+            }
+            await supabaseAdmin.from("campaigns").update(updateData).eq("id", campaignId);
 
             const message = `Broadcast complete: ${successCount} sent, ${failureCount} failed out of ${recipients.length} recipients.`;
             console.log(`✅ ${message}`);
