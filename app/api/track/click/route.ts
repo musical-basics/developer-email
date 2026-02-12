@@ -15,20 +15,35 @@ export async function GET(request: Request) {
     if (!url) return new NextResponse("Missing URL", { status: 400 });
 
     if (campaignId && subscriberId) {
-        // Log the click event (await to ensure execution)
-        const { error: logError } = await supabase.from("subscriber_events").insert({
+        // Check if this subscriber already clicked in this campaign
+        const { data: existing } = await supabase
+            .from("subscriber_events")
+            .select("id")
+            .eq("type", "click")
+            .eq("campaign_id", campaignId)
+            .eq("subscriber_id", subscriberId)
+            .limit(1)
+            .maybeSingle();
+
+        // Always log the raw event
+        await supabase.from("subscriber_events").insert({
             type: "click",
             campaign_id: campaignId,
             subscriber_id: subscriberId,
             url: url
         });
 
-        if (logError) console.error("Failed to log click:", logError);
-
-        // Increment campaign click count
-        const { error: rpcError } = await supabase.rpc('increment_clicks', { row_id: campaignId });
-
-        if (rpcError) console.error("Failed to increment clicks:", rpcError);
+        // Only increment the campaign counter for FIRST click per subscriber
+        if (!existing) {
+            const { error: rpcError } = await supabase.rpc('increment_clicks', { row_id: campaignId });
+            if (rpcError) {
+                // Fallback: manual increment
+                const { data: campaign } = await supabase.from('campaigns').select('total_clicks').eq('id', campaignId).single();
+                if (campaign) {
+                    await supabase.from('campaigns').update({ total_clicks: (campaign.total_clicks || 0) + 1 }).eq('id', campaignId);
+                }
+            }
+        }
     }
 
     // Prepare the destination URL

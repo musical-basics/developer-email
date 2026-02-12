@@ -12,28 +12,33 @@ export async function GET(request: Request) {
     const subscriberId = searchParams.get("s");
 
     if (campaignId && subscriberId) {
-        // Log the open event (await to ensure execution)
-        const { error: logError } = await supabase.from("subscriber_events").insert({
+        // Check if this subscriber already opened this campaign
+        const { data: existing } = await supabase
+            .from("subscriber_events")
+            .select("id")
+            .eq("type", "open")
+            .eq("campaign_id", campaignId)
+            .eq("subscriber_id", subscriberId)
+            .limit(1)
+            .maybeSingle();
+
+        // Always log the raw event
+        await supabase.from("subscriber_events").insert({
             type: "open",
             campaign_id: campaignId,
             subscriber_id: subscriberId,
         });
 
-        if (logError) console.error("Failed to log open:", logError);
-
-        // Increment campaign open count
-        const { error: rpcError } = await supabase.rpc('increment_opens', { row_id: campaignId });
-
-        if (rpcError) {
-            console.error("Failed to increment opens:", rpcError);
-            // Failover: Try manual increment (racey but better than nothing)
-            // Only do this if RPC failed (likely due to missing function)
-            /* 
-            const { data: campaign } = await supabase.from('campaigns').select('total_opens').eq('id', campaignId).single();
-            if (campaign) {
-                await supabase.from('campaigns').update({ total_opens: (campaign.total_opens || 0) + 1 }).eq('id', campaignId);
+        // Only increment the campaign counter for FIRST open per subscriber
+        if (!existing) {
+            const { error: rpcError } = await supabase.rpc('increment_opens', { row_id: campaignId });
+            if (rpcError) {
+                // Fallback: manual increment
+                const { data: campaign } = await supabase.from('campaigns').select('total_opens').eq('id', campaignId).single();
+                if (campaign) {
+                    await supabase.from('campaigns').update({ total_opens: (campaign.total_opens || 0) + 1 }).eq('id', campaignId);
+                }
             }
-            */
         }
     }
 
