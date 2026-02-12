@@ -78,6 +78,7 @@ export async function POST(req: Request) {
     1. **LAYOUT:** Use HTML <table>, <tr>, <td> for structure. No Flexbox/Grid.
     2. **WIDTHS:** Explicitly set width="100%" or specific pixels.
     3. **VARIABLES:** Preserve {{mustache_vars}}.
+    4. **IMAGE VARIABLES:** When adding images with {{mustache}} variables, the variable name MUST end with one of these suffixes: _src, _bg, _logo, _icon, _img — or contain the word "image" or "url". For example: {{hero_src}}, {{product_bg}}, {{banner_img}}. This ensures the Asset Loader recognizes them as images and shows the upload button.
     
     ### RESPONSE FORMAT:
     { "explanation": "brief summary of changes", "updatedHtml": "<html>...</html>" }
