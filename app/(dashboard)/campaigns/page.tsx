@@ -1,4 +1,4 @@
-import { CampaignsTable } from "@/components/campaigns-table"
+import { CampaignsTabs } from "@/components/campaigns/campaigns-tabs"
 import { CreateCampaignDialog } from "@/components/campaigns/create-campaign-dialog"
 import { getCampaigns } from "@/app/actions/campaigns"
 
@@ -19,21 +19,7 @@ export default async function CampaignsPage() {
                 <CreateCampaignDialog />
             </div>
 
-            <div className="space-y-8">
-                {/* Drafts Section */}
-                <CampaignsTable
-                    title="Drafts"
-                    campaigns={campaigns.filter(c => c.status === 'draft')}
-                    loading={false}
-                />
-
-                {/* Sent Section */}
-                <CampaignsTable
-                    title="Sent Campaigns"
-                    campaigns={campaigns.filter(c => ['sent', 'completed', 'active'].includes(c.status))}
-                    loading={false}
-                />
-            </div>
+            <CampaignsTabs campaigns={campaigns} />
         </div>
     )
 }
