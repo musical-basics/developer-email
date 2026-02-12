@@ -2,12 +2,13 @@ import { createClient } from "@/lib/supabase/server"
 import { SubscriberHistoryTimeline } from "@/components/audience/subscriber-history-timeline"
 import { notFound } from "next/navigation"
 
-export default async function SubscriberProfilePage({ params }: { params: { id: string } }) {
+export default async function SubscriberProfilePage({ params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params
     const supabase = await createClient()
     const { data: subscriber } = await supabase
         .from("subscribers")
         .select("*")
-        .eq("id", params.id)
+        .eq("id", id)
         .single()
 
     if (!subscriber) notFound()

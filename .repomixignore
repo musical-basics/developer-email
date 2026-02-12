@@ -9,3 +9,35 @@ yarn.lock
 .DS_Store
 repomix-output.xml
 .vscode/
+
+# Data files
+all_campaigns.json
+campaign_record.json
+campaign_updated.json
+recent_files.json
+
+# Scripts
+scripts/
+
+# Assets & Build
+public/
+dist/
+build/
+out/
+coverage/
+
+# Tests
+test/
+tests/
+spec/
+__tests__/
+__mocks__/
+
+# Misc
+*.log
+*.tmp
+*.bak
+*.swp
+*.csv
+*.tsv
+*.sql
