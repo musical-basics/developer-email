@@ -29,7 +29,7 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
     const isImageVariable = (variable: string) => {
         const lower = variable.toLowerCase()
         if (lower.endsWith("_fit")) return false
-        return lower.includes("image") || lower.includes("url") || lower.endsWith("_src")
+        return lower.includes("image") || lower.includes("url") || lower.endsWith("_src") || lower.endsWith("_bg") || lower.endsWith("_logo") || lower.endsWith("_icon") || lower.endsWith("_img")
     }
 
     const isTextAreaVariable = (variable: string) => {
