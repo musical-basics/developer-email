@@ -12,34 +12,12 @@ export async function GET(request: Request) {
     const subscriberId = searchParams.get("s");
 
     if (campaignId && subscriberId) {
-        // Check if this subscriber already opened this campaign
-        const { data: existing } = await supabase
-            .from("subscriber_events")
-            .select("id")
-            .eq("type", "open")
-            .eq("campaign_id", campaignId)
-            .eq("subscriber_id", subscriberId)
-            .limit(1)
-            .maybeSingle();
-
-        // Always log the raw event
+        // Just log the event — rates are computed from unique events at read time
         await supabase.from("subscriber_events").insert({
             type: "open",
             campaign_id: campaignId,
             subscriber_id: subscriberId,
         });
-
-        // Only increment the campaign counter for FIRST open per subscriber
-        if (!existing) {
-            const { error: rpcError } = await supabase.rpc('increment_opens', { row_id: campaignId });
-            if (rpcError) {
-                // Fallback: manual increment
-                const { data: campaign } = await supabase.from('campaigns').select('total_opens').eq('id', campaignId).single();
-                if (campaign) {
-                    await supabase.from('campaigns').update({ total_opens: (campaign.total_opens || 0) + 1 }).eq('id', campaignId);
-                }
-            }
-        }
     }
 
     // Return a 1x1 transparent GIF

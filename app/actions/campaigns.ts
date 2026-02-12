@@ -35,7 +35,9 @@ export async function createCampaign(prevState: any, formData: FormData) {
 
 export async function getCampaigns() {
     const supabase = await createClient()
-    const { data, error } = await supabase
+
+    // Fetch campaigns
+    const { data: campaigns, error } = await supabase
         .from("campaigns")
         .select("id, name, status, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time")
         .order("created_at", { ascending: false })
@@ -45,8 +47,49 @@ export async function getCampaigns() {
         return []
     }
 
-    return data || []
+    if (!campaigns || campaigns.length === 0) return []
+
+    // Get unique open counts per campaign from subscriber_events
+    const completedIds = campaigns.filter(c => c.status === "completed").map(c => c.id)
+
+    if (completedIds.length === 0) return campaigns
+
+    // Fetch all open events for completed campaigns
+    const { data: openEvents } = await supabase
+        .from("subscriber_events")
+        .select("campaign_id, subscriber_id")
+        .eq("type", "open")
+        .in("campaign_id", completedIds)
+
+    // Fetch all click events for completed campaigns
+    const { data: clickEvents } = await supabase
+        .from("subscriber_events")
+        .select("campaign_id, subscriber_id")
+        .eq("type", "click")
+        .in("campaign_id", completedIds)
+
+    // Count unique subscribers per campaign
+    const uniqueOpens: Record<string, Set<string>> = {}
+    const uniqueClicks: Record<string, Set<string>> = {}
+
+    openEvents?.forEach(e => {
+        if (!uniqueOpens[e.campaign_id]) uniqueOpens[e.campaign_id] = new Set()
+        uniqueOpens[e.campaign_id].add(e.subscriber_id)
+    })
+
+    clickEvents?.forEach(e => {
+        if (!uniqueClicks[e.campaign_id]) uniqueClicks[e.campaign_id] = new Set()
+        uniqueClicks[e.campaign_id].add(e.subscriber_id)
+    })
+
+    // Override the stored counters with computed unique counts
+    return campaigns.map(c => ({
+        ...c,
+        total_opens: uniqueOpens[c.id]?.size ?? c.total_opens ?? 0,
+        total_clicks: uniqueClicks[c.id]?.size ?? c.total_clicks ?? 0,
+    }))
 }
+
 
 export async function getCampaignList() {
     const supabase = await createClient()
