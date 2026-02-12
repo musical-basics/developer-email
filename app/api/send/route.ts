@@ -2,7 +2,6 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
-import { inngest } from "@/inngest/client";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -17,7 +16,7 @@ export async function POST(request: Request) {
         const body = await request.json();
         const { campaignId, type, email, fromName, fromEmail } = body;
 
-        // 2. Fetch Campaign
+        // Fetch Campaign
         const { data: campaign, error: campaignError } = await supabaseAdmin
             .from("campaigns")
             .select("*")
@@ -29,7 +28,7 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
         }
 
-        // 3. Render Global Template
+        // Render Global Template
         const globalHtmlContent = renderTemplate(campaign.html_content || "", campaign.variable_values || {});
         let htmlContent = globalHtmlContent;
 
@@ -98,17 +97,115 @@ export async function POST(request: Request) {
         }
 
         else if (type === "broadcast") {
-            // Task 2: Trigger Inngest
-            console.log(`🚀 Queuing broadcast for campaign ${campaignId}`);
+            console.log(`🚀 Starting broadcast for campaign ${campaignId}`);
 
-            await inngest.send({
-                name: "campaign.send",
-                data: { campaignId }
-            });
+            // Fetch recipients
+            const lockedSubscriberId = campaign.variable_values?.subscriber_id;
+            let query = supabaseAdmin.from("subscribers").select("*").eq("status", "active");
+            if (lockedSubscriberId) {
+                query = query.eq("id", lockedSubscriberId);
+            }
+
+            const { data: recipients, error: recipientError } = await query;
+
+            if (recipientError || !recipients || recipients.length === 0) {
+                return NextResponse.json({ error: "No active subscribers found" }, { status: 400 });
+            }
+
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
+
+            // Unsubscribe Footer Template
+            const unsubscribeFooter = `
+<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
+  <p style="margin: 0;">
+    No longer want to receive these emails? 
+    <a href="{{unsubscribe_url}}" style="color: #6b7280; text-decoration: underline;">Unsubscribe here</a>.
+  </p>
+</div>
+`;
+            const htmlWithFooter = htmlContent + unsubscribeFooter;
+
+            let successCount = 0;
+            let failureCount = 0;
+            const sentRecords: any[] = [];
+
+            // Send to each recipient
+            await Promise.all(recipients.map(async (sub) => {
+                try {
+                    const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${campaignId}`;
+
+                    // Personalize content
+                    let personalHtml = htmlWithFooter
+                        .replace(/{{first_name}}/g, sub.first_name || "there")
+                        .replace(/{{last_name}}/g, sub.last_name || "")
+                        .replace(/{{email}}/g, sub.email)
+                        .replace(/{{unsubscribe_url}}/g, unsubscribeUrl);
+
+                    // Wrap links for click tracking
+                    personalHtml = personalHtml.replace(/href=(["'])([^"']+)\1/g, (match, quote, url) => {
+                        if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) return match;
+                        const encodedUrl = encodeURIComponent(url);
+                        const trackingUrl = `${baseUrl}/api/track/click?u=${encodedUrl}&c=${campaignId}&s=${sub.id}`;
+                        return `href=${quote}${trackingUrl}${quote}`;
+                    });
+
+                    // Inject Open Tracking Pixel
+                    const trackingPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${sub.id}" width="1" height="1" style="display:none;" alt="" />`;
+                    if (personalHtml.includes("</body>")) {
+                        personalHtml = personalHtml.replace("</body>", `${trackingPixel}</body>`);
+                    } else {
+                        personalHtml += trackingPixel;
+                    }
+
+                    // Send Email
+                    const { error } = await resend.emails.send({
+                        from: process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>",
+                        to: sub.email,
+                        subject: campaign.subject_line,
+                        html: personalHtml,
+                        headers: {
+                            "List-Unsubscribe": `<${unsubscribeUrl}>`,
+                            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+                        }
+                    });
+
+                    if (error) {
+                        console.error(`Failed to send to ${sub.email}:`, error);
+                        failureCount++;
+                    } else {
+                        successCount++;
+                        sentRecords.push({
+                            campaign_id: campaignId,
+                            subscriber_id: sub.id,
+                            sent_at: new Date().toISOString(),
+                            variant_sent: campaign.subject_line || null
+                        });
+                    }
+                } catch (e) {
+                    console.error(`Unexpected error for ${sub.email}:`, e);
+                    failureCount++;
+                }
+            }));
+
+            // Insert history
+            if (sentRecords.length > 0) {
+                const { error: historyError } = await supabaseAdmin.from("sent_history").insert(sentRecords);
+                if (historyError) console.error("Failed to insert history:", historyError);
+            }
+
+            // Update campaign status
+            await supabaseAdmin.from("campaigns").update({
+                status: "completed",
+                total_recipients: recipients.length
+            }).eq("id", campaignId);
+
+            const message = `Broadcast complete: ${successCount} sent, ${failureCount} failed out of ${recipients.length} recipients.`;
+            console.log(`✅ ${message}`);
 
             return NextResponse.json({
                 success: true,
-                message: "Campaign queued successfully"
+                message,
+                stats: { sent: successCount, failed: failureCount, total: recipients.length }
             });
         }
 
