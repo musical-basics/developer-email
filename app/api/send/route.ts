@@ -28,8 +28,12 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
         }
 
-        // Render Global Template
-        const globalHtmlContent = renderTemplate(campaign.html_content || "", campaign.variable_values || {});
+        // Render Global Template (exclude per-subscriber variables so they survive to per-recipient pass)
+        const subscriberVars = ["first_name", "last_name", "email", "unsubscribe_url"];
+        const globalAssets = Object.fromEntries(
+            Object.entries(campaign.variable_values || {}).filter(([key]) => !subscriberVars.includes(key))
+        ) as Record<string, string>;
+        const globalHtmlContent = renderTemplate(campaign.html_content || "", globalAssets);
         let htmlContent = globalHtmlContent;
 
         if (type === "test") {
