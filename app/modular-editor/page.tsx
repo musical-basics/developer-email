@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { saveCampaignBackup } from "@/app/actions/campaigns"
 
 const DEFAULT_HTML = `<!DOCTYPE html>
 <html>
@@ -123,6 +124,18 @@ function ModularEditorPageContent() {
                 title: "Campaign saved",
                 description: "Your changes have been saved successfully.",
             })
+
+            // Save backup for version history
+            const savedId = id || newId
+            if (savedId) {
+                await saveCampaignBackup(
+                    savedId,
+                    html,
+                    { ...assets, from_name: fromName, from_email: fromEmail },
+                    subjectLine
+                )
+            }
+
             if (!id && newId) {
                 router.replace(`/modular-editor?id=${newId}`)
             }
@@ -166,6 +179,15 @@ function ModularEditorPageContent() {
                 campaignName={name}
                 onNameChange={setName}
                 onSave={handleSaveClick}
+                campaignId={id}
+                onRestore={(backup) => {
+                    setHtml(backup.html_content || DEFAULT_HTML)
+                    setAssets(backup.variable_values || DEFAULT_ASSETS)
+                    setSubjectLine(backup.subject_line || "")
+                    if (backup.variable_values?.from_name) setFromName(backup.variable_values.from_name)
+                    if (backup.variable_values?.from_email) setFromEmail(backup.variable_values.from_email)
+                    toast({ title: "Version restored", description: "Campaign reverted to saved version." })
+                }}
             />
 
             <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>

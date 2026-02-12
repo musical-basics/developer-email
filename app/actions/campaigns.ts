@@ -257,3 +257,104 @@ export async function deleteCampaign(campaignId: string) {
     revalidatePath("/campaigns")
     return { success: true }
 }
+
+// ─── Version History ────────────────────────────────────────────────
+
+export async function saveCampaignBackup(
+    campaignId: string,
+    htmlContent: string,
+    variableValues: Record<string, any>,
+    subjectLine: string
+) {
+    const supabase = await createClient()
+
+    // Insert new backup
+    const { error: insertError } = await supabase
+        .from("campaign_backups")
+        .insert({
+            campaign_id: campaignId,
+            html_content: htmlContent,
+            variable_values: variableValues,
+            subject_line: subjectLine,
+        })
+
+    if (insertError) {
+        console.error("Error saving backup:", insertError)
+        return { error: insertError.message }
+    }
+
+    // Keep only the newest 5 backups — delete the rest
+    const { data: backups } = await supabase
+        .from("campaign_backups")
+        .select("id")
+        .eq("campaign_id", campaignId)
+        .order("saved_at", { ascending: false })
+
+    if (backups && backups.length > 5) {
+        const idsToDelete = backups.slice(5).map((b) => b.id)
+        await supabase
+            .from("campaign_backups")
+            .delete()
+            .in("id", idsToDelete)
+    }
+
+    return { success: true }
+}
+
+export async function getCampaignBackups(campaignId: string) {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from("campaign_backups")
+        .select("id, saved_at, subject_line")
+        .eq("campaign_id", campaignId)
+        .order("saved_at", { ascending: false })
+        .limit(5)
+
+    if (error) {
+        console.error("Error fetching backups:", error)
+        return []
+    }
+
+    return data || []
+}
+
+export async function restoreCampaignBackup(campaignId: string, backupId: string) {
+    const supabase = await createClient()
+
+    // Fetch backup
+    const { data: backup, error: fetchError } = await supabase
+        .from("campaign_backups")
+        .select("html_content, variable_values, subject_line")
+        .eq("id", backupId)
+        .single()
+
+    if (fetchError || !backup) {
+        console.error("Error fetching backup:", fetchError)
+        return { error: "Backup not found" }
+    }
+
+    // Restore into campaign
+    const { error: updateError } = await supabase
+        .from("campaigns")
+        .update({
+            html_content: backup.html_content,
+            variable_values: backup.variable_values,
+            subject_line: backup.subject_line,
+        })
+        .eq("id", campaignId)
+
+    if (updateError) {
+        console.error("Error restoring backup:", updateError)
+        return { error: updateError.message }
+    }
+
+    return {
+        success: true,
+        data: {
+            html_content: backup.html_content,
+            variable_values: backup.variable_values,
+            subject_line: backup.subject_line,
+        }
+    }
+}

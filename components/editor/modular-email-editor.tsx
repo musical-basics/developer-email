@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { AssetLoader } from "./asset-loader"
 import { HistorySheet } from "./history-sheet"
 import { CampaignPicker } from "./campaign-picker"
@@ -9,11 +9,13 @@ import { PreviewPane } from "./preview-pane"
 import { CopilotPane } from "./copilot-pane"
 import { BlockManager, Block } from "./block-manager"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, ArrowLeft, Undo, Redo } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, ArrowLeft, Undo, Redo, History } from "lucide-react"
 import { saveVersion } from "@/app/actions/versions"
+import { getCampaignBackups } from "@/app/actions/campaigns"
 import { useSearchParams } from "next/navigation"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { formatDistanceToNow } from "date-fns"
 
 interface ModularEmailEditorProps {
     html: string
@@ -28,6 +30,8 @@ interface ModularEmailEditorProps {
     campaignName: string
     onNameChange: (name: string) => void
     onSave?: () => void
+    campaignId?: string | null
+    onRestore?: (backup: { html_content: string; variable_values: Record<string, any>; subject_line: string }) => void
 }
 
 // --- HELPER: SMART SPLITTER ---
@@ -124,7 +128,9 @@ export function ModularEmailEditor({
     onSenderChange,
     campaignName,
     onNameChange,
-    onSave
+    onSave,
+    campaignId: campaignIdProp,
+    onRestore
 }: ModularEmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
@@ -136,7 +142,7 @@ export function ModularEmailEditor({
 
     // HISTORY & VERSIONING
     const searchParams = useSearchParams()
-    const campaignId = searchParams.get("id")
+    const campaignId = campaignIdProp || searchParams.get("id")
     const [history, setHistory] = useState<string[]>([])
     const [historyIndex, setHistoryIndex] = useState(-1)
 
@@ -200,10 +206,37 @@ export function ModularEmailEditor({
 
     const previewHtml = useMemo(() => renderTemplate(fullHtml, assets), [fullHtml, assets])
 
+    // Campaign backup version history
+    const [backups, setBackups] = useState<{ id: string; saved_at: string; subject_line: string }[]>([])
+    const [historyDropdownOpen, setHistoryDropdownOpen] = useState(false)
+    const [restoringId, setRestoringId] = useState<string | null>(null)
+    const historyDropdownRef = useRef<HTMLDivElement>(null)
+
+    const fetchBackups = useCallback(async () => {
+        if (!campaignId) return
+        const data = await getCampaignBackups(campaignId)
+        setBackups(data)
+    }, [campaignId])
+
+    useEffect(() => {
+        fetchBackups()
+    }, [fetchBackups])
+
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (historyDropdownRef.current && !historyDropdownRef.current.contains(e.target as Node)) {
+                setHistoryDropdownOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
+
     const handleSaveClick = async () => {
         if (!onSave) return
         setSaveStatus('saving')
         await Promise.resolve(onSave())
+        await fetchBackups()
         setSaveStatus('success')
         setTimeout(() => setSaveStatus('idle'), 2000)
     }
@@ -381,6 +414,62 @@ export function ModularEmailEditor({
                             {saveStatus === 'success' && <Check className="w-4 h-4" />}
                             {saveStatus === 'idle' && "Save"}
                         </button>
+                    )}
+
+                    {/* Version History Dropdown */}
+                    {campaignId && backups.length > 0 && (
+                        <div className="relative" ref={historyDropdownRef}>
+                            <button
+                                type="button"
+                                onClick={() => setHistoryDropdownOpen(!historyDropdownOpen)}
+                                className="p-2 rounded-md text-sm font-medium border border-border bg-background hover:bg-muted transition-all flex items-center gap-1.5"
+                                title="Version History"
+                            >
+                                <History className="w-4 h-4" />
+                                <span className="text-xs text-muted-foreground">{backups.length}</span>
+                            </button>
+                            {historyDropdownOpen && (
+                                <div className="absolute top-full right-0 mt-1 w-64 bg-card border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+                                    <div className="px-3 py-2 border-b border-border">
+                                        <p className="text-xs font-semibold text-muted-foreground uppercase">
+                                            Saved Versions
+                                        </p>
+                                    </div>
+                                    <div className="max-h-60 overflow-y-auto">
+                                        {backups.map((backup) => (
+                                            <button
+                                                key={backup.id}
+                                                onClick={async () => {
+                                                    if (!onRestore || !campaignId) return
+                                                    setRestoringId(backup.id)
+                                                    const { restoreCampaignBackup } = await import("@/app/actions/campaigns")
+                                                    const result = await restoreCampaignBackup(campaignId, backup.id)
+                                                    if (result.success && result.data) {
+                                                        onRestore(result.data)
+                                                    }
+                                                    setRestoringId(null)
+                                                    setHistoryDropdownOpen(false)
+                                                }}
+                                                disabled={restoringId === backup.id}
+                                                className="w-full text-left px-3 py-2.5 hover:bg-muted/50 transition-colors flex items-center justify-between gap-2 border-b border-border/50 last:border-0"
+                                            >
+                                                <div className="flex flex-col min-w-0">
+                                                    <span className="text-xs font-medium text-foreground truncate">
+                                                        {backup.subject_line || "No subject"}
+                                                    </span>
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {formatDistanceToNow(new Date(backup.saved_at), { addSuffix: true })}
+                                                    </span>
+                                                </div>
+                                                {restoringId === backup.id && (
+                                                    <Loader2 className="w-3 h-3 animate-spin text-muted-foreground flex-shrink-0" />
+                                                )}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     )}
                 </div>
                 <div className="flex-1 overflow-y-auto bg-[#0f0f10] p-8">
