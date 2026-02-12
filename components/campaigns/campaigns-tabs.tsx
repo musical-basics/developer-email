@@ -21,8 +21,8 @@ export function CampaignsTabs({ campaigns }: CampaignsTabsProps) {
                 <button
                     onClick={() => setActiveTab("drafts")}
                     className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "drafts"
-                            ? "text-foreground"
-                            : "text-muted-foreground hover:text-foreground"
+                        ? "text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
                         }`}
                 >
                     Drafts
@@ -36,8 +36,8 @@ export function CampaignsTabs({ campaigns }: CampaignsTabsProps) {
                 <button
                     onClick={() => setActiveTab("completed")}
                     className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "completed"
-                            ? "text-foreground"
-                            : "text-muted-foreground hover:text-foreground"
+                        ? "text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
                         }`}
                 >
                     Completed
@@ -56,6 +56,7 @@ export function CampaignsTabs({ campaigns }: CampaignsTabsProps) {
                     title="Drafts"
                     campaigns={drafts}
                     loading={false}
+                    showAnalytics={false}
                 />
             ) : (
                 <CampaignsTable

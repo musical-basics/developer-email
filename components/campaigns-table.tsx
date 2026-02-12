@@ -41,9 +41,10 @@ interface CampaignsTableProps {
     loading: boolean
     onRefresh?: () => void
     title?: string
+    showAnalytics?: boolean
 }
 
-export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns" }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true }: CampaignsTableProps) {
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [newName, setNewName] = useState("")
@@ -155,31 +156,35 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                         <TableHead className="text-muted-foreground w-[300px]">Campaign</TableHead>
                         <TableHead className="text-center w-[100px]">Status</TableHead>
                         {/* New Metrics Columns */}
-                        <TableHead className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                                <Eye className="h-3.5 w-3.5 text-muted-foreground" />
-                                Open Rate
-                            </div>
-                        </TableHead>
-                        <TableHead className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                                <MousePointer2 className="h-3.5 w-3.5 text-muted-foreground" />
-                                Click Rate
-                            </div>
-                        </TableHead>
-                        <TableHead className="text-right">
-                            <div className="flex items-center justify-end gap-1">
-                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                Avg Time
-                            </div>
-                        </TableHead>
+                        {showAnalytics && (
+                            <>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <Eye className="h-3.5 w-3.5 text-muted-foreground" />
+                                        Open Rate
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <MousePointer2 className="h-3.5 w-3.5 text-muted-foreground" />
+                                        Click Rate
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                        Avg Time
+                                    </div>
+                                </TableHead>
+                            </>
+                        )}
                         <TableHead className="text-right w-[50px]"></TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={showAnalytics ? 6 : 3} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
@@ -225,25 +230,29 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                     </TableCell>
 
                                     {/* METRICS */}
-                                    <TableCell className="text-right font-mono">
-                                        {recipients > 0 ? (
-                                            <span className={openRate > 20 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
-                                                {openRate}%
-                                            </span>
-                                        ) : "—"}
-                                    </TableCell>
+                                    {showAnalytics && (
+                                        <>
+                                            <TableCell className="text-right font-mono">
+                                                {recipients > 0 ? (
+                                                    <span className={openRate > 20 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
+                                                        {openRate}%
+                                                    </span>
+                                                ) : "—"}
+                                            </TableCell>
 
-                                    <TableCell className="text-right font-mono">
-                                        {recipients > 0 ? (
-                                            <span className={clickRate > 2 ? "text-blue-400 font-bold" : "text-muted-foreground"}>
-                                                {clickRate}%
-                                            </span>
-                                        ) : "—"}
-                                    </TableCell>
+                                            <TableCell className="text-right font-mono">
+                                                {recipients > 0 ? (
+                                                    <span className={clickRate > 2 ? "text-blue-400 font-bold" : "text-muted-foreground"}>
+                                                        {clickRate}%
+                                                    </span>
+                                                ) : "—"}
+                                            </TableCell>
 
-                                    <TableCell className="text-right font-mono text-amber-400">
-                                        {formatDuration(campaign.average_read_time)}
-                                    </TableCell>
+                                            <TableCell className="text-right font-mono text-amber-400">
+                                                {formatDuration(campaign.average_read_time)}
+                                            </TableCell>
+                                        </>
+                                    )}
 
                                     {/* Actions */}
                                     <TableCell className="text-right">
