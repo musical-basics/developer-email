@@ -14,8 +14,20 @@ interface EmailPreviewCardProps {
 
 export function EmailPreviewCard({ campaign, previewMode, onPreviewModeChange }: EmailPreviewCardProps) {
     // Replace Mustache variables with actual values for preview
-    // Replace Mustache variables with actual values for preview
-    const renderedHtml = renderTemplate(campaign.html_content || "", campaign.variable_values || {})
+    const baseRendered = renderTemplate(campaign.html_content || "", campaign.variable_values || {})
+
+    // Append unsubscribe footer (matches what recipients actually receive)
+    const unsubscribeFooter = `
+<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
+  <p style="margin: 0;">
+    No longer want to receive these emails? 
+    <a href="#" style="color: #6b7280; text-decoration: underline;">Unsubscribe here</a>.
+  </p>
+</div>
+`;
+    const renderedHtml = baseRendered.includes("</body>")
+        ? baseRendered.replace("</body>", `${unsubscribeFooter}</body>`)
+        : baseRendered + unsubscribeFooter
 
     return (
         <Card className="h-full border-border bg-card">
