@@ -83,7 +83,7 @@ export async function duplicateCampaign(campaignId: string) {
         .from("campaigns")
         .insert([
             {
-                name: `Copy of ${original.name}`,
+                name: original.name,
                 status: "draft",
                 subject_line: original.subject_line,
                 html_content: original.html_content,

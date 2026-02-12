@@ -15,18 +15,20 @@ export async function GET(request: Request) {
     if (!url) return new NextResponse("Missing URL", { status: 400 });
 
     if (campaignId && subscriberId) {
-        // Log the click event (fire and forget)
-        supabase.from("subscriber_events").insert({
+        // Log the click event (await to ensure execution)
+        const { error: logError } = await supabase.from("subscriber_events").insert({
             type: "click",
             campaign_id: campaignId,
             subscriber_id: subscriberId,
             url: url
-        }).then(({ error }) => {
-            if (error) console.error("Failed to log click:", error);
         });
 
-        // Increment campaign click count (if the RPC exists)
-        supabase.rpc('increment_clicks', { row_id: campaignId });
+        if (logError) console.error("Failed to log click:", logError);
+
+        // Increment campaign click count
+        const { error: rpcError } = await supabase.rpc('increment_clicks', { row_id: campaignId });
+
+        if (rpcError) console.error("Failed to increment clicks:", rpcError);
     }
 
     // Prepare the destination URL

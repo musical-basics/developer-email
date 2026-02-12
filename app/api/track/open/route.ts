@@ -12,17 +12,29 @@ export async function GET(request: Request) {
     const subscriberId = searchParams.get("s");
 
     if (campaignId && subscriberId) {
-        // Log the open event (fire and forget)
-        supabase.from("subscriber_events").insert({
+        // Log the open event (await to ensure execution)
+        const { error: logError } = await supabase.from("subscriber_events").insert({
             type: "open",
             campaign_id: campaignId,
             subscriber_id: subscriberId,
-        }).then(({ error }) => {
-            if (error) console.error("Failed to log open:", error);
         });
 
-        // Increment campaign open count (if the RPC exists)
-        supabase.rpc('increment_opens', { row_id: campaignId });
+        if (logError) console.error("Failed to log open:", logError);
+
+        // Increment campaign open count
+        const { error: rpcError } = await supabase.rpc('increment_opens', { row_id: campaignId });
+
+        if (rpcError) {
+            console.error("Failed to increment opens:", rpcError);
+            // Failover: Try manual increment (racey but better than nothing)
+            // Only do this if RPC failed (likely due to missing function)
+            /* 
+            const { data: campaign } = await supabase.from('campaigns').select('total_opens').eq('id', campaignId).single();
+            if (campaign) {
+                await supabase.from('campaigns').update({ total_opens: (campaign.total_opens || 0) + 1 }).eq('id', campaignId);
+            }
+            */
+        }
     }
 
     // Return a 1x1 transparent GIF

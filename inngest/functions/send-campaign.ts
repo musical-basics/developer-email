@@ -147,7 +147,7 @@ export const sendCampaign = inngest.createFunction(
             // Update campaign status
             await supabase.from("campaigns").update({
                 status: "completed",
-                total_audience_size: recipients.length
+                total_recipients: recipients.length
             }).eq("id", campaignId);
 
             return { success: true };
