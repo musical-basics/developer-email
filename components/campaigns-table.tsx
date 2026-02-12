@@ -10,13 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, ChevronDown, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, MoreHorizontal, ArrowRight, ExternalLink } from "lucide-react"
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink } from "lucide-react"
+
 import { createClient } from "@/lib/supabase/client"
 import { duplicateCampaign, deleteCampaign } from "@/app/actions/campaigns"
 import { useToast } from "@/hooks/use-toast"
@@ -256,61 +251,78 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
 
                                     {/* Actions */}
                                     <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-2">
+                                        <div className="flex items-center justify-end gap-1">
                                             <Button
                                                 variant="ghost"
-                                                size="sm"
+                                                size="icon"
+                                                asChild
+                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                                title="Manage"
+                                            >
+                                                <Link href={`/dashboard/${campaign.id}`}>
+                                                    <ArrowRight className="w-4 h-4" />
+                                                </Link>
+                                            </Button>
+
+                                            {campaign.resend_email_id && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    asChild
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                                    title="Show Email"
+                                                >
+                                                    <a href={`https://resend.com/emails/${campaign.resend_email_id}`} target="_blank" rel="noopener noreferrer">
+                                                        <ExternalLink className="w-4 h-4" />
+                                                    </a>
+                                                </Button>
+                                            )}
+
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                asChild
+                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                                title="Classic Editor"
+                                            >
+                                                <Link href={`/editor?id=${campaign.id}`}>
+                                                    <PenLine className="w-4 h-4" />
+                                                </Link>
+                                            </Button>
+
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                asChild
+                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                                title="Modular Editor"
+                                            >
+                                                <Link href={`/modular-editor?id=${campaign.id}`}>
+                                                    <LayoutTemplate className="w-4 h-4" />
+                                                </Link>
+                                            </Button>
+
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
                                                 onClick={() => handleDuplicate(campaign.id)}
                                                 disabled={duplicatingId === campaign.id}
-                                                className="text-muted-foreground hover:text-foreground hover:bg-secondary/50 hidden md:flex"
+                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                                                 title="Duplicate"
                                             >
                                                 <Copy className="w-4 h-4" />
                                             </Button>
 
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8">
-                                                        <MoreHorizontal className="h-4 w-4" />
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuItem asChild>
-                                                        <Link href={`/dashboard/${campaign.id}`} className="flex items-center gap-2">
-                                                            <ArrowRight className="h-3 w-3" />
-                                                            <span>Manage</span>
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    {campaign.resend_email_id && (
-                                                        <DropdownMenuItem asChild>
-                                                            <a href={`https://resend.com/emails/${campaign.resend_email_id}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
-                                                                <ExternalLink className="h-3 w-3 text-muted-foreground" />
-                                                                <span>Show Email</span>
-                                                            </a>
-                                                        </DropdownMenuItem>
-                                                    )}
-                                                    <DropdownMenuItem asChild>
-                                                        <Link href={`/editor?id=${campaign.id}`} className="flex items-center gap-2">
-                                                            <PenLine className="h-3 w-3 text-muted-foreground" />
-                                                            <span>Classic Editor</span>
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem asChild>
-                                                        <Link href={`/modular-editor?id=${campaign.id}`} className="flex items-center gap-2">
-                                                            <LayoutTemplate className="h-3 w-3 text-muted-foreground" />
-                                                            <span>Modular Editor</span>
-                                                        </Link>
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem
-                                                        onClick={() => handleDelete(campaign.id)}
-                                                        disabled={deletingId === campaign.id}
-                                                        className="text-red-500 focus:text-red-600 focus:bg-red-500/10 cursor-pointer"
-                                                    >
-                                                        <Trash2 className="h-3 w-3 mr-2" />
-                                                        <span>Delete</span>
-                                                    </DropdownMenuItem>
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleDelete(campaign.id)}
+                                                disabled={deletingId === campaign.id}
+                                                className="h-8 w-8 text-red-500/70 hover:text-red-500 hover:bg-red-500/10"
+                                                title="Delete"
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
                                         </div>
                                     </TableCell>
                                 </TableRow>
