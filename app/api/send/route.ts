@@ -64,7 +64,7 @@ export async function POST(request: Request) {
             let finalHtml = htmlContent;
             if (simulationSubscriber) {
                 finalHtml = finalHtml
-                    .replace(/{{first_name}}/g, simulationSubscriber.first_name || "There")
+                    .replace(/{{first_name}}/g, simulationSubscriber.first_name || "Musical Family")
                     .replace(/{{last_name}}/g, simulationSubscriber.last_name || "")
                     .replace(/{{email}}/g, simulationSubscriber.email);
             } else {
@@ -140,7 +140,7 @@ export async function POST(request: Request) {
 
                     // Personalize content
                     let personalHtml = htmlWithFooter
-                        .replace(/{{first_name}}/g, sub.first_name || "there")
+                        .replace(/{{first_name}}/g, sub.first_name || "Musical Family")
                         .replace(/{{last_name}}/g, sub.last_name || "")
                         .replace(/{{email}}/g, sub.email)
                         .replace(/{{unsubscribe_url}}/g, unsubscribeUrl);
