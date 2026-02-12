@@ -1,4 +1,3 @@
-import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
@@ -14,14 +13,6 @@ const supabaseAdmin = createClient(
 );
 
 export async function POST(request: Request) {
-    // 1. Secure the API (Task 3)
-    const supabaseAuth = await createServerClient();
-    const { data: { user }, error: authError } = await supabaseAuth.auth.getUser();
-
-    if (authError || !user) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     try {
         const body = await request.json();
         const { campaignId, type, email, fromName, fromEmail } = body;
