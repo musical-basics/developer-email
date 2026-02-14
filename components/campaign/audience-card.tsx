@@ -4,7 +4,6 @@ import { useState } from "react"
 import { Users, User, Pencil, Loader2, Check } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Campaign, Subscriber } from "@/lib/types"
-import { createClient } from "@/lib/supabase/client"
 import { useToast } from "@/hooks/use-toast"
 
 export interface Audience {
@@ -31,22 +30,28 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
     const handleSave = async () => {
         if (!lockedSubscriberId) return
         setSaving(true)
-        const supabase = createClient()
 
-        const { error } = await supabase
-            .from("subscribers")
-            .update({
-                first_name: firstName,
-                last_name: lastName,
-                email: email,
+        try {
+            const res = await fetch("/api/update-subscriber", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    subscriberId: lockedSubscriberId,
+                    firstName,
+                    lastName,
+                    email,
+                }),
             })
-            .eq("id", lockedSubscriberId)
+            const result = await res.json()
 
-        if (error) {
-            toast({ title: "Error updating subscriber", description: error.message, variant: "destructive" })
-        } else {
-            toast({ title: "Subscriber updated", description: "Destination info saved." })
-            setEditing(false)
+            if (result.error) {
+                toast({ title: "Error updating subscriber", description: result.error, variant: "destructive" })
+            } else {
+                toast({ title: "Subscriber updated", description: "Destination info saved." })
+                setEditing(false)
+            }
+        } catch (err) {
+            toast({ title: "Error", description: "Failed to update subscriber.", variant: "destructive" })
         }
         setSaving(false)
     }
