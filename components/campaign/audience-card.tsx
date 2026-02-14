@@ -1,6 +1,11 @@
-import { Users, User, Mail } from "lucide-react"
+"use client"
+
+import { useState } from "react"
+import { Users, User, Pencil, Loader2, Check } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Campaign, Subscriber } from "@/lib/types"
+import { createClient } from "@/lib/supabase/client"
+import { useToast } from "@/hooks/use-toast"
 
 export interface Audience {
     total_subscribers: number
@@ -15,6 +20,36 @@ interface AudienceCardProps {
 
 export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceCardProps) {
     const lockedSubscriberId = campaign?.variable_values?.subscriber_id
+    const { toast } = useToast()
+
+    const [editing, setEditing] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [firstName, setFirstName] = useState(targetSubscriber?.first_name || "")
+    const [lastName, setLastName] = useState(targetSubscriber?.last_name || "")
+    const [email, setEmail] = useState(targetSubscriber?.email || "")
+
+    const handleSave = async () => {
+        if (!lockedSubscriberId) return
+        setSaving(true)
+        const supabase = createClient()
+
+        const { error } = await supabase
+            .from("subscribers")
+            .update({
+                first_name: firstName,
+                last_name: lastName,
+                email: email,
+            })
+            .eq("id", lockedSubscriberId)
+
+        if (error) {
+            toast({ title: "Error updating subscriber", description: error.message, variant: "destructive" })
+        } else {
+            toast({ title: "Subscriber updated", description: "Destination info saved." })
+            setEditing(false)
+        }
+        setSaving(false)
+    }
 
     return (
         <Card className="border-border bg-card">
@@ -26,19 +61,68 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
             </CardHeader>
             <CardContent>
                 {lockedSubscriberId ? (
-                    <div className="flex items-center gap-4 bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
-                        <User className="h-8 w-8 text-blue-400" />
-                        <div>
+                    <div className="flex items-start gap-4 bg-blue-500/10 p-4 rounded-lg border border-blue-500/20">
+                        <User className="h-8 w-8 text-blue-400 mt-1 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
                             <p className="font-bold text-lg text-blue-400">1 Subscriber</p>
-                            {targetSubscriber ? (
-                                <div className="text-sm text-blue-300 mt-1">
-                                    <p className="font-medium">{targetSubscriber.first_name} {targetSubscriber.last_name}</p>
-                                    <p className="opacity-80">{targetSubscriber.email}</p>
+                            {editing ? (
+                                <div className="mt-2 space-y-2">
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={firstName}
+                                            onChange={(e) => setFirstName(e.target.value)}
+                                            placeholder="First name"
+                                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={lastName}
+                                            onChange={(e) => setLastName(e.target.value)}
+                                            placeholder="Last name"
+                                            className="flex-1 bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
+                                        />
+                                    </div>
+                                    <input
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        placeholder="Email"
+                                        className="w-full bg-background border border-border rounded px-2 py-1 text-sm focus:outline-none focus:border-primary"
+                                    />
+                                    <div className="flex gap-2 pt-1">
+                                        <button
+                                            onClick={handleSave}
+                                            disabled={saving}
+                                            className="px-3 py-1 bg-blue-500 text-white text-xs font-medium rounded hover:bg-blue-600 transition-colors flex items-center gap-1.5"
+                                        >
+                                            {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                                            {saving ? "Saving..." : "Save"}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setEditing(false)
+                                                setFirstName(targetSubscriber?.first_name || "")
+                                                setLastName(targetSubscriber?.last_name || "")
+                                                setEmail(targetSubscriber?.email || "")
+                                            }}
+                                            className="px-3 py-1 bg-muted text-muted-foreground text-xs font-medium rounded hover:bg-muted/80 transition-colors"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
                                 </div>
                             ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    Exclusive send to this individual.
-                                </p>
+                                <div
+                                    className="mt-1 group cursor-pointer"
+                                    onClick={() => setEditing(true)}
+                                >
+                                    <div className="flex items-center gap-1.5">
+                                        <p className="text-sm font-medium text-blue-300">{firstName} {lastName}</p>
+                                        <Pencil className="w-3 h-3 text-blue-400/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </div>
+                                    <p className="text-sm text-blue-300/80">{email}</p>
+                                </div>
                             )}
                         </div>
                     </div>
@@ -57,3 +141,4 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
         </Card>
     )
 }
+
