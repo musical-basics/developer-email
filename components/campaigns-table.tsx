@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
 import { duplicateCampaign, deleteCampaign } from "@/app/actions/campaigns"
@@ -167,6 +167,12 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                 </TableHead>
                                 <TableHead className="text-right">
                                     <div className="flex items-center justify-end gap-1">
+                                        <ShoppingCart className="h-3.5 w-3.5 text-emerald-500" />
+                                        Checkouts
+                                    </div>
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    <div className="flex items-center justify-end gap-1">
                                         <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                                         Avg Time
                                     </div>
@@ -179,7 +185,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={showAnalytics ? 6 : 3} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={showAnalytics ? 7 : 3} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
@@ -188,6 +194,8 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                             const recipients = campaign.total_recipients || 0
                             const openRate = recipients > 0 ? Math.round((campaign.total_opens / recipients) * 100) : 0
                             const clickRate = recipients > 0 ? Math.round((campaign.total_clicks / recipients) * 100) : 0
+                            const conversions = campaign.total_conversions || 0
+                            const checkoutRate = campaign.total_clicks > 0 ? Math.round((conversions / campaign.total_clicks) * 100) : 0
 
                             return (
                                 <TableRow key={campaign.id} className="border-border">
@@ -239,6 +247,15 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                 {recipients > 0 ? (
                                                     <span className={clickRate > 2 ? "text-blue-400 font-bold" : "text-muted-foreground"}>
                                                         {clickRate}%
+                                                    </span>
+                                                ) : "—"}
+                                            </TableCell>
+
+                                            {/* Checkouts */}
+                                            <TableCell className="text-right font-mono">
+                                                {campaign.total_clicks > 0 ? (
+                                                    <span className={checkoutRate > 0 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
+                                                        {checkoutRate}% ({conversions})
                                                     </span>
                                                 ) : "—"}
                                             </TableCell>

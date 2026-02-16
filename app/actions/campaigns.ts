@@ -68,9 +68,18 @@ export async function getCampaigns() {
         .eq("type", "click")
         .in("campaign_id", completedIds)
 
+    // Fetch Conversion Events (hitting the customize/checkout page)
+    const { data: conversionEvents } = await supabase
+        .from("subscriber_events")
+        .select("campaign_id, subscriber_id")
+        .eq("type", "page_view")
+        .ilike("url", "%/customize%")
+        .in("campaign_id", completedIds)
+
     // Count unique subscribers per campaign
     const uniqueOpens: Record<string, Set<string>> = {}
     const uniqueClicks: Record<string, Set<string>> = {}
+    const uniqueConversions: Record<string, Set<string>> = {}
 
     openEvents?.forEach(e => {
         if (!uniqueOpens[e.campaign_id]) uniqueOpens[e.campaign_id] = new Set()
@@ -82,11 +91,19 @@ export async function getCampaigns() {
         uniqueClicks[e.campaign_id].add(e.subscriber_id)
     })
 
+    conversionEvents?.forEach(e => {
+        if (e.campaign_id) {
+            if (!uniqueConversions[e.campaign_id]) uniqueConversions[e.campaign_id] = new Set()
+            uniqueConversions[e.campaign_id].add(e.subscriber_id)
+        }
+    })
+
     // Override the stored counters with computed unique counts
     return campaigns.map(c => ({
         ...c,
         total_opens: uniqueOpens[c.id]?.size ?? c.total_opens ?? 0,
         total_clicks: uniqueClicks[c.id]?.size ?? c.total_clicks ?? 0,
+        total_conversions: uniqueConversions[c.id]?.size ?? 0,
     }))
 }
 

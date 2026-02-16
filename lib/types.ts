@@ -14,6 +14,7 @@ export interface Campaign {
     total_recipients: number
     total_opens: number
     total_clicks: number
+    total_conversions?: number
     average_read_time: number
     resend_email_id?: string | null
 }
