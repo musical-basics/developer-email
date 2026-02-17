@@ -62,8 +62,8 @@ export async function POST(request: Request) {
             .from("subscribers")
             .upsert({
                 email,
-                first_name,
-                last_name,
+                first_name: first_name || "",
+                last_name: last_name || "",
                 tags: mergedTags,
                 status: "active",
                 // 📍 NEW: Location Data
