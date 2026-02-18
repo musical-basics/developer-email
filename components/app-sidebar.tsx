@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, GitBranch } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -13,6 +13,7 @@ const navItems = [
     { name: "Modular Builder", href: "/modular-editor", icon: Layers },
     { name: "Assets Library", href: "/assets", icon: ImageIcon },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
+    { name: "Chains", href: "/chains", icon: GitBranch },
     { name: "Settings", href: "/settings", icon: Settings },
 ]
 
