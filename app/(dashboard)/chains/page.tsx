@@ -470,7 +470,7 @@ function ChainFormDialog({
                                         Remove
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
                                     <Input value={step.label} onChange={e => updateStep(i, "label", e.target.value)} placeholder="Step label" className="text-xs" />
                                     <Input
                                         value={step.template_key}
@@ -479,7 +479,37 @@ function ChainFormDialog({
                                         className="font-mono text-xs"
                                         list="template-keys"
                                     />
-                                    <Input value={step.wait_after} onChange={e => updateStep(i, "wait_after", e.target.value)} placeholder="Wait (e.g., 2 days)" className="text-xs" />
+                                    <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">Wait</span>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            value={parseInt(step.wait_after) || ""}
+                                            onChange={e => {
+                                                const num = e.target.value
+                                                const unit = step.wait_after.replace(/^\d+\s*/, "") || "days"
+                                                updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
+                                            }}
+                                            placeholder="0"
+                                            className="text-xs w-16"
+                                        />
+                                        <Select
+                                            value={step.wait_after.replace(/^\d+\s*/, "").replace(/\s*\(.*\)/, "") || "days"}
+                                            onValueChange={unit => {
+                                                const num = parseInt(step.wait_after) || 0
+                                                updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-[90px] text-xs">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="hours" className="text-xs">hours</SelectItem>
+                                                <SelectItem value="days" className="text-xs">days</SelectItem>
+                                                <SelectItem value="weeks" className="text-xs">weeks</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                             </div>
                         ))}
