@@ -66,11 +66,13 @@ export async function POST(request: Request) {
                 finalHtml = finalHtml
                     .replace(/{{first_name}}/g, simulationSubscriber.first_name || "Musical Family")
                     .replace(/{{last_name}}/g, simulationSubscriber.last_name || "")
-                    .replace(/{{email}}/g, simulationSubscriber.email);
+                    .replace(/{{email}}/g, simulationSubscriber.email)
+                    .replace(/{{subscriber_id}}/g, simulationSubscriber.id);
             } else {
                 finalHtml = finalHtml
                     .replace(/{{first_name}}/g, "[Test Name]")
-                    .replace(/{{email}}/g, "test@example.com");
+                    .replace(/{{email}}/g, "test@example.com")
+                    .replace(/{{subscriber_id}}/g, "test-subscriber-id");
             }
 
             // Test Footer
@@ -144,23 +146,8 @@ export async function POST(request: Request) {
                         .replace(/{{first_name}}/g, sub.first_name || "Musical Family")
                         .replace(/{{last_name}}/g, sub.last_name || "")
                         .replace(/{{email}}/g, sub.email)
-                        .replace(/{{unsubscribe_url}}/g, unsubscribeUrl);
-
-                    // Wrap links for click tracking
-                    personalHtml = personalHtml.replace(/href=(["'])([^"']+)\1/g, (match, quote, url) => {
-                        if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) return match;
-                        const encodedUrl = encodeURIComponent(url);
-                        const trackingUrl = `${baseUrl}/api/track/click?u=${encodedUrl}&c=${campaignId}&s=${sub.id}`;
-                        return `href=${quote}${trackingUrl}${quote}`;
-                    });
-
-                    // Inject Open Tracking Pixel
-                    const trackingPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${sub.id}" width="1" height="1" style="display:none;" alt="" />`;
-                    if (personalHtml.includes("</body>")) {
-                        personalHtml = personalHtml.replace("</body>", `${trackingPixel}</body>`);
-                    } else {
-                        personalHtml += trackingPixel;
-                    }
+                        .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
+                        .replace(/{{subscriber_id}}/g, sub.id);
 
                     // Send Email
                     const { data: sendData, error } = await resend.emails.send({

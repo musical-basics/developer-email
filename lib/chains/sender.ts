@@ -19,23 +19,10 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
 
     let finalHtml = rawHtml + unsubscribeFooter;
 
-    // 1. Wrap all links for click tracking
-    finalHtml = finalHtml.replace(/href=(["'])([^"']+)\1/g, (match, quote, url) => {
-        if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) return match;
-        const encodedUrl = encodeURIComponent(url);
-        const trackingUrl = `${baseUrl}/api/track/click?u=${encodedUrl}&c=${template.campaign_id}&s=${subscriberId}`;
-        return `href=${quote}${trackingUrl}${quote}`;
-    });
+    // Replace subscriber_id placeholder if present in links
+    finalHtml = finalHtml.replace(/{{subscriber_id}}/g, subscriberId);
 
-    // 2. Inject Open Tracking Pixel
-    const trackingPixel = `<img src="${baseUrl}/api/track/open?c=${template.campaign_id}&s=${subscriberId}" width="1" height="1" style="display:none;" alt="" />`;
-    if (finalHtml.includes("</body>")) {
-        finalHtml = finalHtml.replace("</body>", `${trackingPixel}</body>`);
-    } else {
-        finalHtml += trackingPixel;
-    }
-
-    // 3. Send Email
+    // Send Email
     await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "Lionel Yu <lionel@musicalbasics.com>",
         to: email,

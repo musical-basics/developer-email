@@ -82,23 +82,8 @@ export const sendCampaign = inngest.createFunction(
                             .replace(/{{first_name}}/g, sub.first_name || "there")
                             .replace(/{{last_name}}/g, sub.last_name || "")
                             .replace(/{{email}}/g, sub.email)
-                            .replace(/{{unsubscribe_url}}/g, unsubscribeUrl);
-
-                        // Wrap links for tracking
-                        personalHtml = personalHtml.replace(/href=(["'])([^"']+)\1/g, (match, quote, url) => {
-                            if (url.startsWith("mailto:") || url.startsWith("tel:") || url.startsWith("#")) return match;
-                            const encodedUrl = encodeURIComponent(url);
-                            const trackingUrl = `${baseUrl}/api/track/click?u=${encodedUrl}&c=${campaignId}&s=${sub.id}`;
-                            return `href=${quote}${trackingUrl}${quote}`;
-                        });
-
-                        // Inject Open Tracking Pixel
-                        const trackingPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${sub.id}" width="1" height="1" style="display:none;" alt="" />`;
-                        if (personalHtml.includes("</body>")) {
-                            personalHtml = personalHtml.replace("</body>", `${trackingPixel}</body>`);
-                        } else {
-                            personalHtml += trackingPixel;
-                        }
+                            .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
+                            .replace(/{{subscriber_id}}/g, sub.id);
 
                         // Send Email
                         const { error } = await resend.emails.send({
