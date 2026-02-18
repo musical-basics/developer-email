@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import {
     Dialog, DialogContent, DialogDescription,
@@ -33,6 +36,22 @@ interface BranchForm { label: string; condition: string; action: string; descrip
 
 const emptyStep = (): StepForm => ({ label: "", template_key: "", wait_after: "" })
 const emptyBranch = (): BranchForm => ({ label: "", condition: "", action: "", description: "" })
+
+const TRIGGER_EVENT_OPTIONS = [
+    { value: "chain.dreamplay.start", label: "chain.dreamplay.start" },
+    { value: "chain.educational.start", label: "chain.educational.start" },
+    { value: "chain.welcome.start", label: "chain.welcome.start" },
+    { value: "chain.winback.start", label: "chain.winback.start" },
+    { value: "chain.nurture.start", label: "chain.nurture.start" },
+]
+
+const TRIGGER_LABEL_OPTIONS = [
+    { value: "New subscriber signup (webhook)", label: "New subscriber signup (webhook)" },
+    { value: "Handed off from DreamPlay chain (low interest / ghosted)", label: "Handed off from DreamPlay chain" },
+    { value: "Manual trigger via dashboard", label: "Manual trigger via dashboard" },
+    { value: "Tag added to subscriber", label: "Tag added to subscriber" },
+    { value: "Purchase completed (Shopify webhook)", label: "Purchase completed (Shopify webhook)" },
+]
 
 function chainRowToFormData(chain: ChainRow): ChainFormData {
     return {
@@ -404,12 +423,34 @@ function ChainFormDialog({
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="chain-trigger-event">Trigger Event</Label>
-                                <Input id="chain-trigger-event" value={triggerEvent} onChange={e => setTriggerEvent(e.target.value)} placeholder="chain.welcome.start" className="font-mono text-xs" />
+                                <Label>Trigger Event</Label>
+                                <Select value={triggerEvent} onValueChange={setTriggerEvent}>
+                                    <SelectTrigger className="w-full font-mono text-xs">
+                                        <SelectValue placeholder="Select trigger event..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TRIGGER_EVENT_OPTIONS.map(opt => (
+                                            <SelectItem key={opt.value} value={opt.value} className="font-mono text-xs">
+                                                {opt.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="chain-trigger-label">Trigger Label</Label>
-                                <Input id="chain-trigger-label" value={triggerLabel} onChange={e => setTriggerLabel(e.target.value)} placeholder="New subscriber signup" />
+                                <Label>Trigger Label</Label>
+                                <Select value={triggerLabel} onValueChange={setTriggerLabel}>
+                                    <SelectTrigger className="w-full text-xs">
+                                        <SelectValue placeholder="Select trigger label..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TRIGGER_LABEL_OPTIONS.map(opt => (
+                                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                                {opt.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                     </div>
