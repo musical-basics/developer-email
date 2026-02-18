@@ -39,6 +39,7 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     subscriberId: lockedSubscriberId,
+                    campaignId: campaign?.id,
                     firstName,
                     lastName,
                     email,
@@ -48,6 +49,18 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
 
             if (result.error) {
                 toast({ title: "Error updating subscriber", description: result.error, variant: "destructive" })
+            } else if (result.switched) {
+                // Email matched an existing subscriber — campaign was switched to them
+                const sub = result.subscriber
+                setFirstName(sub.first_name || "")
+                setLastName(sub.last_name || "")
+                setEmail(sub.email || "")
+                toast({
+                    title: "Switched to existing subscriber",
+                    description: `Matched ${sub.first_name || ""} ${sub.last_name || ""} (${sub.email}). Campaign target updated.`,
+                })
+                setEditing(false)
+                router.refresh()
             } else {
                 toast({ title: "Subscriber updated", description: "Destination info saved." })
                 setEditing(false)
