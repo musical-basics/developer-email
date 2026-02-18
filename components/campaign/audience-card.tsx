@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Users, User, Pencil, Loader2, Check } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Campaign, Subscriber } from "@/lib/types"
@@ -20,6 +21,7 @@ interface AudienceCardProps {
 export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceCardProps) {
     const lockedSubscriberId = campaign?.variable_values?.subscriber_id
     const { toast } = useToast()
+    const router = useRouter()
 
     const [editing, setEditing] = useState(false)
     const [saving, setSaving] = useState(false)
@@ -49,6 +51,7 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
             } else {
                 toast({ title: "Subscriber updated", description: "Destination info saved." })
                 setEditing(false)
+                router.refresh()
             }
         } catch (err) {
             toast({ title: "Error", description: "Failed to update subscriber.", variant: "destructive" })
