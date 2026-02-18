@@ -34,7 +34,8 @@
     "useDefaultPatterns": true,
     "customPatterns": [
       "_legacy_v0_code/**",
-      "**/*.local"
+      "**/*.local",
+      "*repomix*"
     ]
   },
   "security": {
