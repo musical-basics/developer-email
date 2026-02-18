@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { inngest } from "@/inngest/client";
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -75,6 +76,19 @@ export async function POST(request: Request) {
             .single();
 
         if (error) throw error;
+
+        // 📍 Drop NEW subscribers into the top of the DreamPlay funnel!
+        if (!existingUser) {
+            await inngest.send({
+                name: "chain.dreamplay.start",
+                data: {
+                    subscriberId: data.id,
+                    email: data.email,
+                    firstName: data.first_name || ""
+                }
+            });
+            console.log(`[Webhook] Started DreamPlay chain for ${data.email}`);
+        }
 
         return NextResponse.json(
             { success: true, id: data.id },
