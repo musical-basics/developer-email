@@ -38,11 +38,9 @@ const emptyStep = (): StepForm => ({ label: "", template_key: "", wait_after: ""
 const emptyBranch = (): BranchForm => ({ label: "", condition: "", action: "", description: "" })
 
 const TRIGGER_EVENT_OPTIONS = [
-    { value: "chain.dreamplay.start", label: "chain.dreamplay.start" },
-    { value: "chain.educational.start", label: "chain.educational.start" },
-    { value: "chain.welcome.start", label: "chain.welcome.start" },
-    { value: "chain.winback.start", label: "chain.winback.start" },
-    { value: "chain.nurture.start", label: "chain.nurture.start" },
+    { value: "chain.run", label: "chain.run (generic — recommended)" },
+    { value: "chain.dreamplay.start", label: "chain.dreamplay.start (custom)" },
+    { value: "chain.educational.start", label: "chain.educational.start (custom)" },
 ]
 
 const TRIGGER_LABEL_OPTIONS = [
