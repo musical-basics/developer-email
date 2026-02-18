@@ -407,21 +407,21 @@ function ChainFormDialog({
                         <h3 className="text-sm font-semibold text-foreground">Chain Details</h3>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label htmlFor="chain-name">Name</Label>
+                                <Label htmlFor="chain-name">Name <span className="text-muted-foreground font-normal">(required)</span></Label>
                                 <Input id="chain-name" value={name} onChange={e => handleNameChange(e.target.value)} placeholder="e.g., Welcome Sequence" />
                             </div>
                             <div className="space-y-2">
-                                <Label htmlFor="chain-slug">Slug</Label>
+                                <Label htmlFor="chain-slug">Slug <span className="text-muted-foreground font-normal">(auto-generated)</span></Label>
                                 <Input id="chain-slug" value={slug} onChange={e => setSlug(e.target.value)} placeholder="welcome-sequence-chain" className="font-mono text-xs" />
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <Label htmlFor="chain-desc">Description</Label>
+                            <Label htmlFor="chain-desc">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
                             <Input id="chain-desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="What this chain does..." />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>Trigger Event</Label>
+                                <Label>Trigger Event <span className="text-muted-foreground font-normal">(required)</span></Label>
                                 <Select value={triggerEvent} onValueChange={setTriggerEvent}>
                                     <SelectTrigger className="w-full font-mono text-xs">
                                         <SelectValue placeholder="Select trigger event..." />
@@ -436,7 +436,7 @@ function ChainFormDialog({
                                 </Select>
                             </div>
                             <div className="space-y-2">
-                                <Label>Trigger Label</Label>
+                                <Label>Trigger Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
                                 <Select value={triggerLabel} onValueChange={setTriggerLabel}>
                                     <SelectTrigger className="w-full text-xs">
                                         <SelectValue placeholder="Select trigger label..." />
