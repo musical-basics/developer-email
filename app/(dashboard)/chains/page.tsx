@@ -467,11 +467,10 @@ function ChainFormDialog({
                             <div key={i} className="rounded-lg border border-border p-3 space-y-2">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs font-medium text-muted-foreground">Step {i + 1}</span>
-                                    {steps.length > 1 && (
-                                        <button onClick={() => setSteps(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-red-400">
-                                            <X className="h-3.5 w-3.5" />
-                                        </button>
-                                    )}
+                                    <button onClick={() => setSteps(prev => prev.filter((_, j) => j !== i))} className="text-xs text-muted-foreground hover:text-red-400 flex items-center gap-1 transition-colors">
+                                        <X className="h-3 w-3" />
+                                        Remove
+                                    </button>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2">
                                     <Input value={step.label} onChange={e => updateStep(i, "label", e.target.value)} placeholder="Step label" className="text-xs" />
