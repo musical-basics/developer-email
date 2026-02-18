@@ -22,6 +22,13 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     // Replace subscriber_id placeholder if present in links
     finalHtml = finalHtml.replace(/{{subscriber_id}}/g, subscriberId);
 
+    // Auto-append sid to all links
+    finalHtml = finalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
+        if (url.includes('/unsubscribe')) return match;
+        const sep = url.includes('?') ? '&' : '?';
+        return `href=${quote}${url}${sep}sid=${subscriberId}${quote}`;
+    });
+
     // Send Email
     await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "Lionel Yu <lionel@musicalbasics.com>",

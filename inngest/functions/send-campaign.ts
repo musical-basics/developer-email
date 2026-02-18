@@ -85,6 +85,13 @@ export const sendCampaign = inngest.createFunction(
                             .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
                             .replace(/{{subscriber_id}}/g, sub.id);
 
+                        // Auto-append sid to all links
+                        personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
+                            if (url.includes('/unsubscribe')) return match;
+                            const sep = url.includes('?') ? '&' : '?';
+                            return `href=${quote}${url}${sep}sid=${sub.id}${quote}`;
+                        });
+
                         // Send Email
                         const { error } = await resend.emails.send({
                             from: process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>",

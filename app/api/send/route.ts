@@ -68,6 +68,13 @@ export async function POST(request: Request) {
                     .replace(/{{last_name}}/g, simulationSubscriber.last_name || "")
                     .replace(/{{email}}/g, simulationSubscriber.email)
                     .replace(/{{subscriber_id}}/g, simulationSubscriber.id);
+
+                // Auto-append sid to all links
+                finalHtml = finalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
+                    if (url.includes('/unsubscribe')) return match;
+                    const sep = url.includes('?') ? '&' : '?';
+                    return `href=${quote}${url}${sep}sid=${simulationSubscriber.id}${quote}`;
+                });
             } else {
                 finalHtml = finalHtml
                     .replace(/{{first_name}}/g, "[Test Name]")
@@ -148,6 +155,13 @@ export async function POST(request: Request) {
                         .replace(/{{email}}/g, sub.email)
                         .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
                         .replace(/{{subscriber_id}}/g, sub.id);
+
+                    // Auto-append sid to all links
+                    personalHtml = personalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
+                        if (url.includes('/unsubscribe')) return match;
+                        const sep = url.includes('?') ? '&' : '?';
+                        return `href=${quote}${url}${sep}sid=${sub.id}${quote}`;
+                    });
 
                     // Send Email
                     const { data: sendData, error } = await resend.emails.send({
