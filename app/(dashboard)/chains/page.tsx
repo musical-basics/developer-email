@@ -29,6 +29,7 @@ import {
     getChains, createChain, updateChain, deleteChain,
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
+import { getCampaignList } from "@/app/actions/campaigns"
 
 // ─── TYPES ─────────────────────────────────────────────────
 interface StepForm { label: string; template_key: string; wait_after: string }
@@ -316,6 +317,14 @@ function ChainFormDialog({
     const [triggerEvent, setTriggerEvent] = useState("")
     const [steps, setSteps] = useState<StepForm[]>([emptyStep()])
     const [branches, setBranches] = useState<BranchForm[]>([])
+    const [campaigns, setCampaigns] = useState<{ id: string; name: string; status: string }[]>([])
+
+    // Fetch saved campaigns when dialog opens
+    useEffect(() => {
+        if (open) {
+            getCampaignList().then(data => setCampaigns(data))
+        }
+    }, [open])
 
     // Populate form when editing
     useEffect(() => {
@@ -386,8 +395,6 @@ function ChainFormDialog({
             setLoading(false)
         }
     }
-
-    const templateKeys = Object.keys(CHAIN_TEMPLATES)
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -470,15 +477,31 @@ function ChainFormDialog({
                                         Remove
                                     </button>
                                 </div>
-                                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                                    <Input value={step.label} onChange={e => updateStep(i, "label", e.target.value)} placeholder="Step label" className="text-xs" />
-                                    <Input
-                                        value={step.template_key}
-                                        onChange={e => updateStep(i, "template_key", e.target.value)}
-                                        placeholder="Template key"
-                                        className="font-mono text-xs"
-                                        list="template-keys"
-                                    />
+                                <div className="space-y-2">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <Input value={step.label} onChange={e => updateStep(i, "label", e.target.value)} placeholder="Step label" className="text-xs" />
+                                        <Select
+                                            value={step.template_key}
+                                            onValueChange={val => updateStep(i, "template_key", val)}
+                                        >
+                                            <SelectTrigger className="text-xs">
+                                                <SelectValue placeholder="Select template..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {campaigns.map(c => (
+                                                    <SelectItem key={c.id} value={c.id} className="text-xs">
+                                                        {c.name}
+                                                    </SelectItem>
+                                                ))}
+                                                {/* Legacy hardcoded keys */}
+                                                {Object.keys(CHAIN_TEMPLATES).map(k => (
+                                                    <SelectItem key={k} value={k} className="text-xs font-mono">
+                                                        {k}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                     <div className="flex items-center gap-1.5">
                                         <span className="text-xs text-muted-foreground whitespace-nowrap">Wait</span>
                                         <Input
@@ -513,9 +536,6 @@ function ChainFormDialog({
                                 </div>
                             </div>
                         ))}
-                        <datalist id="template-keys">
-                            {templateKeys.map(k => <option key={k} value={k} />)}
-                        </datalist>
                     </div>
 
                     {/* Branches */}

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2 } from "lucide-react"
+import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -230,7 +230,13 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                     <div className="flex gap-2 overflow-x-auto pb-3">
                         {pendingAttachments.map((url, i) => (
                             <div key={i} className="relative group shrink-0">
-                                <img src={url} className="h-14 w-14 rounded-md object-cover border border-border" />
+                                {url.toLowerCase().endsWith('.pdf') ? (
+                                    <div className="h-14 w-14 rounded-md border border-border bg-muted flex items-center justify-center">
+                                        <FileText className="w-6 h-6 text-muted-foreground" />
+                                    </div>
+                                ) : (
+                                    <img src={url} className="h-14 w-14 rounded-md object-cover border border-border" />
+                                )}
                                 <button
                                     onClick={() => setPendingAttachments(prev => prev.filter((_, idx) => idx !== i))}
                                     className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -251,7 +257,7 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                     <input
                         type="file"
                         multiple
-                        accept="image/*"
+                        accept="image/*,.pdf,application/pdf"
                         className="hidden"
                         ref={fileInputRef}
                         onChange={handleFileSelect}

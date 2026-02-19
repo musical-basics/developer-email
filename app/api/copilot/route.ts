@@ -81,6 +81,13 @@ export async function POST(req: Request) {
     4. **IMAGE VARIABLES:** When adding images with {{mustache}} variables, the variable name MUST end with one of these suffixes: _src, _bg, _logo, _icon, _img — or contain the word "image" or "url". For example: {{hero_src}}, {{product_bg}}, {{banner_img}}. This ensures the Asset Loader recognizes them as images and shows the upload button. Additionally, ALWAYS wrap the image in a clickable link using a corresponding _link_url variable. For example: <a href="{{hero_link_url}}"><img src="{{hero_src}}" /></a>. This lets the user set the link destination in the Asset Loader.
     5. **NO EM-DASHES:** Never use em-dashes (—) in any copy or text you write. Use commas, periods, or semicolons instead.
     
+    ### TEMPLATE CREATION DEFAULTS:
+    When asked to create a NEW email template from scratch or from a reference image:
+    - All text/copy MUST be hardcoded directly in the HTML (not mustache variables). Write the actual words into the template.
+    - All image sources (src) MUST use {{mustache_variable}} names (e.g. {{hero_src}}, {{product_img}}).
+    - All links (href on <a> tags) MUST use {{mustache_variable}} names (e.g. {{cta_link_url}}, {{hero_link_url}}).
+    - This means the user only needs to load assets (images + links) via the Asset Loader, while the text is baked into the HTML.
+    
     ### RESPONSE FORMAT:
     { "explanation": "brief summary of changes", "updatedHtml": "<html>...</html>" }
     
@@ -98,11 +105,12 @@ export async function POST(req: Request) {
                 const role = (msg.role === 'result' ? 'assistant' : 'user') as "assistant" | "user";
                 let content: any[] = [];
 
-                // Add Images
+                // Add Images & Documents (PDFs)
                 if (msg.images) {
                     msg.images.forEach((img: any) => {
+                        const isPdf = img.mediaType === 'application/pdf';
                         content.push({
-                            type: "image",
+                            type: isPdf ? "document" : "image",
                             source: {
                                 type: "base64",
                                 media_type: img.mediaType,
