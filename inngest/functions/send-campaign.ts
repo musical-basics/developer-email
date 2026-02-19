@@ -85,11 +85,11 @@ export const sendCampaign = inngest.createFunction(
                             .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
                             .replace(/{{subscriber_id}}/g, sub.id);
 
-                        // Auto-append sid to all links
+                        // Auto-append sid and em to all links
                         personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                             if (url.includes('/unsubscribe')) return match;
                             const sep = url.includes('?') ? '&' : '?';
-                            return `href=${quote}${url}${sep}sid=${sub.id}${quote}`;
+                            return `href=${quote}${url}${sep}sid=${sub.id}&em=${encodeURIComponent(sub.email)}${quote}`;
                         });
 
                         // Send Email

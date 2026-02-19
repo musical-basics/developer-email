@@ -11,6 +11,7 @@ export async function GET(request: Request) {
     const url = searchParams.get("u");
     const campaignId = searchParams.get("c");
     const subscriberId = searchParams.get("s");
+    const email = searchParams.get("em");
 
     if (!url) return new NextResponse("Missing URL", { status: 400 });
 
@@ -57,6 +58,7 @@ export async function GET(request: Request) {
             destination.hostname === "localhost") {
             if (subscriberId) destination.searchParams.set("sid", subscriberId);
             if (campaignId) destination.searchParams.set("cid", campaignId);
+            if (email) destination.searchParams.set("em", email);
         }
     } catch (e) {
         // Fallback for relative URLs or malformed URLs
