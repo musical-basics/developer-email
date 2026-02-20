@@ -6,7 +6,6 @@ import { cn } from "@/lib/utils"
 import { BlockRenderer } from "./block-renderers"
 import type { EmailBlock, BlockType } from "@/lib/dnd-blocks/types"
 import { BLOCK_DEFAULTS } from "@/lib/dnd-blocks/defaults"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface DndCanvasProps {
     blocks: EmailBlock[]
@@ -115,9 +114,9 @@ export function DndCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdateBloc
     }
 
     return (
-        <ScrollArea className="flex-1">
+        <div className="h-full overflow-y-auto">
             <div
-                className="p-6 min-h-full"
+                className="p-6 pb-32 min-h-full"
                 onDrop={handleCanvasDrop}
                 onDragOver={handleCanvasDragOver}
             >
@@ -189,6 +188,6 @@ export function DndCanvas({ blocks, selectedBlockId, onSelectBlock, onUpdateBloc
                     ))}
                 </div>
             </div>
-        </ScrollArea>
+        </div>
     )
 }
