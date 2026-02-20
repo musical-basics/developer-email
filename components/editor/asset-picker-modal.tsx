@@ -249,6 +249,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                 src={croppingAsset.url}
                                 onCropComplete={handleCropComplete}
                                 onCancel={() => setCroppingAsset(null)}
+                                onSkip={handleSkipCrop}
                             />
                         </div>
                     ) : (

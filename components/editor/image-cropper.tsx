@@ -27,10 +27,11 @@ interface ImageCropperProps {
     src: string
     onCropComplete: (croppedBlob: Blob) => void
     onCancel: () => void
+    onSkip?: () => void
     initialAspect?: number // Optional: lock aspect ratio if needed (e.g., 16/9)
 }
 
-export function ImageCropper({ src, onCropComplete, onCancel, initialAspect }: ImageCropperProps) {
+export function ImageCropper({ src, onCropComplete, onCancel, onSkip, initialAspect }: ImageCropperProps) {
     const [crop, setCrop] = useState<Crop>()
     const [completedCrop, setCompletedCrop] = useState<PixelCrop>()
     const [aspect, setAspect] = useState<number | undefined>(initialAspect)
@@ -170,6 +171,11 @@ export function ImageCropper({ src, onCropComplete, onCancel, initialAspect }: I
                         <X className="w-4 h-4 mr-2" />
                         Cancel
                     </Button>
+                    {onSkip && (
+                        <Button variant="secondary" onClick={onSkip} disabled={isProcessing}>
+                            Use as is
+                        </Button>
+                    )}
                     <Button onClick={handleSave} disabled={isProcessing || !completedCrop?.width}>
                         {isProcessing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Check className="w-4 h-4 mr-2" />}
                         Save Crop
