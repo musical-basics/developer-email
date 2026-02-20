@@ -1,17 +1,22 @@
 "use client"
 
 import { useState } from "react"
-import { Send, CheckCircle2, Loader2 } from "lucide-react"
+import { Send, CheckCircle2, Loader2, Mail } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 
 interface SendTestCardProps {
     onSendTest: (email: string) => Promise<void>
 }
 
+const TEST_EMAILS = [
+    "musicalbasics@gmail.com",
+    "djsputty@gmail.com",
+] as const
+
 export function SendTestCard({ onSendTest }: SendTestCardProps) {
-    const [email, setEmail] = useState("")
+    const [email, setEmail] = useState<string>(TEST_EMAILS[0])
     const [isSending, setIsSending] = useState(false)
     const [isSent, setIsSent] = useState(false)
 
@@ -24,7 +29,6 @@ export function SendTestCard({ onSendTest }: SendTestCardProps) {
             setIsSent(true)
             setTimeout(() => {
                 setIsSent(false)
-                setEmail("")
             }, 3000)
         } finally {
             setIsSending(false)
@@ -44,13 +48,19 @@ export function SendTestCard({ onSendTest }: SendTestCardProps) {
             </CardHeader>
             <CardContent>
                 <div className="flex gap-3">
-                    <Input
-                        type="email"
-                        placeholder="Enter test email..."
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="flex-1 border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-[#D4AF37]"
-                    />
+                    <div className="relative flex-1">
+                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground z-10" />
+                        <Select value={email} onValueChange={setEmail}>
+                            <SelectTrigger className="pl-10 border-border bg-background text-foreground focus:ring-[#D4AF37]">
+                                <SelectValue placeholder="Select test email" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {TEST_EMAILS.map((e) => (
+                                    <SelectItem key={e} value={e}>{e}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                     <Button
                         variant="secondary"
                         onClick={handleSendTest}
