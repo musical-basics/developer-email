@@ -22,7 +22,7 @@ import {
 import {
     GitBranch, Mail, Clock, ChevronDown, ChevronUp,
     Zap, ArrowRight, Eye, MousePointer2, Ghost, GraduationCap,
-    Plus, Pencil, Trash2, X
+    Plus, Pencil, Trash2, X, Pause, Play, XCircle, User, Timer, Loader2, CheckCircle2
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -30,6 +30,8 @@ import {
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
 import { getCampaignList } from "@/app/actions/campaigns"
+import { getChainProcesses, updateProcessStatus } from "@/app/actions/chain-processes"
+import type { ChainProcess, ChainProcessHistoryEntry } from "@/lib/types"
 
 // ─── TYPES ─────────────────────────────────────────────────
 interface StepForm { label: string; template_key: string; wait_after: string }
@@ -591,6 +593,198 @@ function ChainFormDialog({
     )
 }
 
+// ─── PROCESS STATUS BADGE ──────────────────────────────────
+function ProcessStatusBadge({ status }: { status: string }) {
+    const styles: Record<string, string> = {
+        active: "text-emerald-400 border-emerald-500/50 bg-emerald-500/10",
+        paused: "text-amber-400 border-amber-500/50 bg-amber-500/10",
+        cancelled: "text-red-400 border-red-500/50 bg-red-500/10",
+        completed: "text-blue-400 border-blue-500/50 bg-blue-500/10",
+    }
+    return (
+        <Badge variant="outline" className={`capitalize ${styles[status] || ""}`}>
+            {status}
+        </Badge>
+    )
+}
+
+// ─── COUNTDOWN HELPER ──────────────────────────────────────
+function formatCountdown(nextStepAt: string | null): string | null {
+    if (!nextStepAt) return null
+    const diff = new Date(nextStepAt).getTime() - Date.now()
+    if (diff <= 0) return "Processing soon..."
+    const days = Math.floor(diff / 86400000)
+    const hours = Math.floor((diff % 86400000) / 3600000)
+    const minutes = Math.floor((diff % 3600000) / 60000)
+    if (days > 0) return `${days}d ${hours}h remaining`
+    if (hours > 0) return `${hours}h ${minutes}m remaining`
+    return `${minutes}m remaining`
+}
+
+// ─── CHAIN PROCESS CARD ────────────────────────────────────
+function ChainProcessCard({
+    process,
+    onStatusChange,
+}: {
+    process: ChainProcess
+    onStatusChange: (processId: string, newStatus: "active" | "paused" | "cancelled") => void
+}) {
+    const [expanded, setExpanded] = useState(false)
+    const [updating, setUpdating] = useState(false)
+    const { toast } = useToast()
+
+    const handleStatusChange = async (newStatus: "active" | "paused" | "cancelled") => {
+        setUpdating(true)
+        onStatusChange(process.id, newStatus)
+        setUpdating(false)
+    }
+
+    const countdown = formatCountdown(process.next_step_at)
+    const totalSteps = process.chain_steps?.length || 0
+    const progress = totalSteps > 0 ? Math.round((process.current_step_index / totalSteps) * 100) : 0
+    const isTerminal = process.status === "cancelled" || process.status === "completed"
+
+    return (
+        <Card className="border-border">
+            <CardContent className="p-5">
+                {/* Header Row */}
+                <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                            <GitBranch className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                            <h3 className="font-semibold text-foreground truncate">{process.chain_name}</h3>
+                            <ProcessStatusBadge status={process.status} />
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <User className="h-3.5 w-3.5" />
+                            <span>{process.subscriber_first_name ? `${process.subscriber_first_name} — ` : ""}{process.subscriber_email}</span>
+                        </div>
+                    </div>
+
+                    {/* Controls */}
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                        {!isTerminal && (
+                            <>
+                                {process.status === "active" ? (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleStatusChange("paused")}
+                                        disabled={updating}
+                                        className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                                    >
+                                        <Pause className="h-3.5 w-3.5 mr-1" /> Pause
+                                    </Button>
+                                ) : process.status === "paused" ? (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleStatusChange("active")}
+                                        disabled={updating}
+                                        className="text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                    >
+                                        <Play className="h-3.5 w-3.5 mr-1" /> Resume
+                                    </Button>
+                                ) : null}
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleStatusChange("cancelled")}
+                                    disabled={updating}
+                                    className="text-red-400 border-red-500/30 hover:bg-red-500/10"
+                                >
+                                    <XCircle className="h-3.5 w-3.5 mr-1" /> Cancel
+                                </Button>
+                            </>
+                        )}
+                    </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="mt-3">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span>Step {process.current_step_index} of {totalSteps}</span>
+                        <span>{progress}%</span>
+                    </div>
+                    <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                            className={`h-full rounded-full transition-all ${process.status === "completed" ? "bg-blue-500" :
+                                    process.status === "cancelled" ? "bg-red-500" :
+                                        process.status === "paused" ? "bg-amber-500" : "bg-emerald-500"
+                                }`}
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                </div>
+
+                {/* Countdown */}
+                {countdown && process.status === "active" && (
+                    <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-400">
+                        <Timer className="h-3.5 w-3.5" />
+                        {countdown}
+                    </div>
+                )}
+
+                {/* Expandable Timeline */}
+                <button
+                    onClick={() => setExpanded(!expanded)}
+                    className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                    {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    {expanded ? "Hide" : "Show"} History ({process.history?.length || 0} events)
+                </button>
+
+                {expanded && process.history && process.history.length > 0 && (
+                    <div className="mt-3 ml-2 border-l-2 border-muted pl-4 space-y-2">
+                        {process.history.map((entry: ChainProcessHistoryEntry, idx: number) => (
+                            <div key={idx} className="relative">
+                                <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full border-2 border-muted bg-background" />
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-medium text-foreground">{entry.action}</span>
+                                    {entry.step_name !== "System" && (
+                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">{entry.step_name}</Badge>
+                                    )}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="text-[10px] text-muted-foreground">
+                                        {new Date(entry.timestamp).toLocaleString()}
+                                    </span>
+                                    {entry.details && (
+                                        <span className="text-[10px] text-muted-foreground">— {entry.details}</span>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Upcoming Steps Preview */}
+                {!isTerminal && totalSteps > 0 && process.current_step_index < totalSteps && (
+                    <div className="mt-3 pt-3 border-t border-border">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1.5">Upcoming</p>
+                        <div className="space-y-1">
+                            {process.chain_steps!.slice(process.current_step_index).map((step: any, idx: number) => (
+                                <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
+                                    <Mail className="h-3 w-3" />
+                                    <span>{step.label}</span>
+                                    {step.wait_after && (
+                                        <span className="text-[10px] text-muted-foreground/60">→ wait {step.wait_after}</span>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* Started date */}
+                <p className="mt-3 text-[10px] text-muted-foreground">
+                    Started {new Date(process.created_at).toLocaleString()}
+                </p>
+            </CardContent>
+        </Card>
+    )
+}
+
 // ─── MAIN PAGE ─────────────────────────────────────────────
 export default function ChainsPage() {
     const [chains, setChains] = useState<ChainRow[]>([])
@@ -599,6 +793,9 @@ export default function ChainsPage() {
     const [editingChain, setEditingChain] = useState<ChainRow | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<ChainRow | null>(null)
     const [deleting, setDeleting] = useState(false)
+    const [activeTab, setActiveTab] = useState<"templates" | "running">("templates")
+    const [processes, setProcesses] = useState<ChainProcess[]>([])
+    const [loadingProcesses, setLoadingProcesses] = useState(false)
     const { toast } = useToast()
 
     const fetchChains = useCallback(async () => {
@@ -611,7 +808,21 @@ export default function ChainsPage() {
         setLoading(false)
     }, [toast])
 
+    const fetchProcesses = useCallback(async () => {
+        setLoadingProcesses(true)
+        const { data, error } = await getChainProcesses()
+        if (error) {
+            toast({ title: "Error loading processes", description: error, variant: "destructive" })
+        } else {
+            setProcesses(data)
+        }
+        setLoadingProcesses(false)
+    }, [toast])
+
     useEffect(() => { fetchChains() }, [fetchChains])
+    useEffect(() => {
+        if (activeTab === "running") fetchProcesses()
+    }, [activeTab, fetchProcesses])
 
     const handleSave = async (formData: ChainFormData, chainId?: string) => {
         if (chainId) {
@@ -646,6 +857,20 @@ export default function ChainsPage() {
         setDeleteTarget(null)
     }
 
+    const handleProcessStatusChange = async (processId: string, newStatus: "active" | "paused" | "cancelled") => {
+        const result = await updateProcessStatus(processId, newStatus)
+        if (!result.success) {
+            toast({ title: "Error", description: result.error || "Failed to update status", variant: "destructive" })
+        } else {
+            const actionLabel = newStatus === "active" ? "resumed" : newStatus === "paused" ? "paused" : "cancelled"
+            toast({ title: `Chain ${actionLabel}` })
+            fetchProcesses()
+        }
+    }
+
+    const activeProcesses = processes.filter(p => p.status === "active" || p.status === "paused")
+    const completedProcesses = processes.filter(p => p.status === "completed" || p.status === "cancelled")
+
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
@@ -655,31 +880,104 @@ export default function ChainsPage() {
                         Automated email sequences powered by Inngest. Each chain runs independently with built-in unsubscribe safety checks.
                     </p>
                 </div>
-                <Button onClick={() => { setEditingChain(null); setFormOpen(true) }}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    New Chain
-                </Button>
-            </div>
-
-            <div className="space-y-4">
-                {loading ? (
-                    <div className="text-center py-12 text-muted-foreground">Loading chains...</div>
-                ) : chains.length === 0 ? (
-                    <div className="text-center py-12">
-                        <GitBranch className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
-                        <p className="text-muted-foreground">No chains yet. Create your first email chain to get started.</p>
-                    </div>
-                ) : (
-                    chains.map(chain => (
-                        <ChainCard
-                            key={chain.id}
-                            chain={chain}
-                            onEdit={(c) => { setEditingChain(c); setFormOpen(true) }}
-                            onDelete={(c) => setDeleteTarget(c)}
-                        />
-                    ))
+                {activeTab === "templates" && (
+                    <Button onClick={() => { setEditingChain(null); setFormOpen(true) }}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Chain
+                    </Button>
                 )}
             </div>
+
+            {/* Tab Bar */}
+            <div className="flex gap-1 border-b border-border">
+                <button
+                    onClick={() => setActiveTab("templates")}
+                    className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "templates" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                >
+                    Chain Templates
+                    {chains.length > 0 && (
+                        <span className="ml-2 text-xs text-muted-foreground">({chains.length})</span>
+                    )}
+                    {activeTab === "templates" && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37]" />
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab("running")}
+                    className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "running" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                >
+                    Currently Running
+                    {activeProcesses.length > 0 && (
+                        <span className="ml-2 text-xs text-emerald-400">({activeProcesses.length})</span>
+                    )}
+                    {activeTab === "running" && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37]" />
+                    )}
+                </button>
+            </div>
+
+            {/* TEMPLATES TAB */}
+            {activeTab === "templates" && (
+                <div className="space-y-4">
+                    {loading ? (
+                        <div className="text-center py-12 text-muted-foreground">Loading chains...</div>
+                    ) : chains.length === 0 ? (
+                        <div className="text-center py-12">
+                            <GitBranch className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                            <p className="text-muted-foreground">No chains yet. Create your first email chain to get started.</p>
+                        </div>
+                    ) : (
+                        chains.map(chain => (
+                            <ChainCard
+                                key={chain.id}
+                                chain={chain}
+                                onEdit={(c) => { setEditingChain(c); setFormOpen(true) }}
+                                onDelete={(c) => setDeleteTarget(c)}
+                            />
+                        ))
+                    )}
+                </div>
+            )}
+
+            {/* CURRENTLY RUNNING TAB */}
+            {activeTab === "running" && (
+                <div className="space-y-6">
+                    {loadingProcesses ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : processes.length === 0 ? (
+                        <div className="text-center py-12">
+                            <GitBranch className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                            <p className="text-muted-foreground">No chain processes yet. Start a chain from the Audience page.</p>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Active Processes */}
+                            {activeProcesses.length > 0 && (
+                                <div className="space-y-3">
+                                    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active / Paused</h2>
+                                    {activeProcesses.map(p => (
+                                        <ChainProcessCard key={p.id} process={p} onStatusChange={handleProcessStatusChange} />
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Completed / Cancelled */}
+                            {completedProcesses.length > 0 && (
+                                <div className="space-y-3">
+                                    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Completed / Cancelled</h2>
+                                    {completedProcesses.map(p => (
+                                        <ChainProcessCard key={p.id} process={p} onStatusChange={handleProcessStatusChange} />
+                                    ))}
+                                </div>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
 
             {/* Create/Edit Dialog */}
             <ChainFormDialog

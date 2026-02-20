@@ -21,6 +21,7 @@ import {
     Send,
     Copy,
     Loader2,
+    GitBranch,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -78,6 +79,8 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
 import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
+import { getChains, type ChainRow } from "@/app/actions/chains"
+import { startChainProcess } from "@/app/actions/chain-processes"
 import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -132,6 +135,13 @@ export default function AudienceManagerPage() {
     const [existingCampaigns, setExistingCampaigns] = useState<Campaign[]>([])
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
     const [duplicating, setDuplicating] = useState(false)
+
+    // Start Chain State
+    const [isChainPickerOpen, setIsChainPickerOpen] = useState(false)
+    const [chainTarget, setChainTarget] = useState<Subscriber | null>(null)
+    const [availableChains, setAvailableChains] = useState<ChainRow[]>([])
+    const [loadingChains, setLoadingChains] = useState(false)
+    const [startingChain, setStartingChain] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState<Partial<Subscriber>>({
@@ -436,6 +446,45 @@ export default function AudienceManagerPage() {
         }
     }
 
+    const handleOpenChainPicker = async (subscriber: Subscriber) => {
+        setChainTarget(subscriber)
+        setIsChainPickerOpen(true)
+        setLoadingChains(true)
+        try {
+            const { data } = await getChains()
+            setAvailableChains(data || [])
+        } catch (error) {
+            console.error("Failed to load chains", error)
+            toast({ title: "Error loading chains", variant: "destructive" })
+        } finally {
+            setLoadingChains(false)
+        }
+    }
+
+    const handleStartChain = async (chain: ChainRow) => {
+        if (!chainTarget) return
+        setStartingChain(true)
+        try {
+            const result = await startChainProcess(chainTarget.id, chain.id)
+            if (!result.success) {
+                throw new Error(result.error || "Failed to start chain")
+            }
+            toast({
+                title: "Chain Started",
+                description: `"${chain.name}" is now running for ${chainTarget.email}`,
+            })
+            setIsChainPickerOpen(false)
+        } catch (error: any) {
+            toast({
+                title: "Error starting chain",
+                description: error.message,
+                variant: "destructive",
+            })
+        } finally {
+            setStartingChain(false)
+        }
+    }
+
     const allSelected = filteredSubscribers.length > 0 && selectedIds.length === filteredSubscribers.length
     const someSelected = selectedIds.length > 0 && selectedIds.length < filteredSubscribers.length
 
@@ -722,6 +771,13 @@ export default function AudienceManagerPage() {
                                                             <Copy className="mr-2 h-4 w-4" />
                                                             Send Existing Campaign
                                                         </DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            handleOpenChainPicker(subscriber)
+                                                        }}>
+                                                            <GitBranch className="mr-2 h-4 w-4" />
+                                                            Start Chain
+                                                        </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                 </DropdownMenu>
                                             </div>
@@ -986,6 +1042,56 @@ export default function AudienceManagerPage() {
                                             <p className="text-[10px] text-muted-foreground mt-2">
                                                 Created: {formatDate(campaign.created_at)}
                                             </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Chain Picker Dialog */}
+            <Dialog open={isChainPickerOpen} onOpenChange={setIsChainPickerOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Start Email Chain</DialogTitle>
+                        <DialogDescription>
+                            Select a chain to start for {chainTarget?.email}.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4">
+                        {loadingChains ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : availableChains.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-8">No chains found. Create one first.</p>
+                        ) : (
+                            <ScrollArea className="h-[300px] pr-4">
+                                <div className="space-y-2">
+                                    {availableChains.map(chain => (
+                                        <div
+                                            key={chain.id}
+                                            onClick={() => !startingChain && handleStartChain(chain)}
+                                            className={cn(
+                                                "p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors",
+                                                startingChain && "opacity-50 pointer-events-none"
+                                            )}
+                                        >
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <GitBranch className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                                                    <h4 className="font-medium text-sm text-foreground">{chain.name}</h4>
+                                                </div>
+                                                {chain.description && (
+                                                    <p className="text-xs text-muted-foreground line-clamp-2 pl-6">{chain.description}</p>
+                                                )}
+                                                <p className="text-[10px] text-muted-foreground pl-6">
+                                                    {chain.chain_steps?.length || 0} steps · {chain.chain_branches?.length || 0} branches
+                                                </p>
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

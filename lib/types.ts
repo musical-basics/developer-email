@@ -29,3 +29,30 @@ export interface Subscriber {
     status: 'active' | 'unsubscribed' | 'bounced'
     created_at: string
 }
+
+export type ChainProcessStatus = 'active' | 'paused' | 'cancelled' | 'completed'
+
+export interface ChainProcessHistoryEntry {
+    step_name: string
+    action: string
+    timestamp: string
+    details?: string
+}
+
+export interface ChainProcess {
+    id: string
+    chain_id: string
+    subscriber_id: string
+    status: ChainProcessStatus
+    current_step_index: number
+    next_step_at: string | null
+    history: ChainProcessHistoryEntry[]
+    created_at: string
+    updated_at: string
+    // Joined fields for UI
+    chain_name?: string
+    chain_steps?: any[]
+    chain_branches?: any[]
+    subscriber_email?: string
+    subscriber_first_name?: string
+}
