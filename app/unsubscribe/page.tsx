@@ -7,6 +7,7 @@ export default async function UnsubscribePage({
 }) {
     const resolvedParams = await searchParams; // Next.js 15+ async searchParams
     const subscriberId = resolvedParams.s;
+    const campaignId = resolvedParams.c;
 
     if (!subscriberId) {
         return (
@@ -21,7 +22,7 @@ export default async function UnsubscribePage({
     return (
         <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
             <div className="max-w-md w-full bg-white rounded-lg shadow-sm p-8 border border-gray-100">
-                <UnsubscribeConfirm subscriberId={subscriberId} />
+                <UnsubscribeConfirm subscriberId={subscriberId} campaignId={campaignId} />
             </div>
         </div>
     );

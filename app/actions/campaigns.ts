@@ -148,6 +148,7 @@ export async function duplicateCampaign(campaignId: string) {
                 subject_line: original.subject_line,
                 html_content: original.html_content,
                 variable_values: original.variable_values,
+                parent_template_id: original.is_template ? original.id : (original.parent_template_id || null),
             },
         ])
         .select()
@@ -244,6 +245,7 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
                     ...original.variable_values,
                     subscriber_id: subscriberId
                 },
+                parent_template_id: original.is_template ? original.id : (original.parent_template_id || null),
             },
         ])
         .select()

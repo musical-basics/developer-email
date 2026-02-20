@@ -5,13 +5,13 @@ import { unsubscribeUser } from "@/app/actions/unsubscribe"
 import { Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-export function UnsubscribeConfirm({ subscriberId }: { subscriberId: string }) {
+export function UnsubscribeConfirm({ subscriberId, campaignId }: { subscriberId: string; campaignId?: string }) {
     const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
 
     const handleUnsubscribe = async () => {
         setStatus("loading")
         try {
-            const result = await unsubscribeUser(subscriberId)
+            const result = await unsubscribeUser(subscriberId, campaignId)
             if (result.success) {
                 setStatus("success")
             } else {
