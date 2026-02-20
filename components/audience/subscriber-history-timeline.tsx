@@ -69,16 +69,44 @@ export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: stri
                     <div className="relative border-l border-border space-y-8">
                         {events.length === 0 ? (
                             <p className="pl-6 text-sm text-muted-foreground">No activity recorded yet.</p>
-                        ) : (
-                            events.map((event, index) => (
+                        ) : (() => {
+                            // Group consecutive identical events
+                            type GroupedEvent = TimelineEvent & { count: number }
+                            const grouped: GroupedEvent[] = []
+
+                            for (const event of events) {
+                                const prev = grouped[grouped.length - 1]
+                                const sameType = prev && prev.type === event.type
+                                const sameCampaign = prev?.campaigns?.name === event.campaigns?.name
+                                const sameUrl = prev?.url === event.url
+
+                                if (sameType && sameCampaign && sameUrl) {
+                                    prev.count++
+                                } else {
+                                    grouped.push({ ...event, count: 1 })
+                                }
+                            }
+
+                            const label = (type: string, count: number) => {
+                                const names: Record<string, string> = {
+                                    sent: "Received Email",
+                                    open: "Opened Email",
+                                    click: "Clicked Link",
+                                    page_view: "Visited Website",
+                                    session_end: "Session Ended",
+                                }
+                                const name = names[type] || type
+                                return count > 1 ? `${name} (x${count})` : name
+                            }
+
+                            return grouped.map((event) => (
                                 <div key={event.id} className="ml-4 relative">
                                     {/* Timeline Dot */}
                                     <div className="absolute -left-[25px] top-1 h-4 w-4 rounded-full bg-card border border-border flex items-center justify-center z-10">
-                                        {/* Inner colored dot based on type */}
                                         <div className={`h-2 w-2 rounded-full ${event.type === 'open' ? 'bg-amber-500' :
-                                                event.type === 'click' ? 'bg-emerald-500' :
-                                                    event.type === 'page_view' ? 'bg-blue-500' :
-                                                        'bg-zinc-600'
+                                            event.type === 'click' ? 'bg-emerald-500' :
+                                                event.type === 'page_view' ? 'bg-blue-500' :
+                                                    'bg-zinc-600'
                                             }`} />
                                     </div>
 
@@ -89,11 +117,7 @@ export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: stri
                                                 {getIcon(event.type)}
                                             </span>
                                             <span className="text-sm font-medium text-foreground">
-                                                {event.type === 'sent' && "Received Email"}
-                                                {event.type === 'open' && "Opened Email"}
-                                                {event.type === 'click' && "Clicked Link"}
-                                                {event.type === 'page_view' && "Visited Website"}
-                                                {event.type === 'session_end' && "Session Ended"}
+                                                {label(event.type, event.count)}
                                             </span>
                                             <span className="text-xs text-muted-foreground ml-auto">
                                                 {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
@@ -135,7 +159,7 @@ export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: stri
                                     </div>
                                 </div>
                             ))
-                        )}
+                        })()}
                     </div>
                 </div>
             </ScrollArea>
