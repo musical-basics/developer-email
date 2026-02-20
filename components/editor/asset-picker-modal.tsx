@@ -2,10 +2,10 @@
 
 import type React from "react"
 import { useState, useCallback, useEffect } from "react"
-import { X, Upload, ImageIcon, Loader2, Trash2, FolderPlus, Folder, ChevronRight, LayoutGrid, List, Home } from "lucide-react"
+import { X, Upload, ImageIcon, Loader2, Trash2, FolderPlus, Folder, ChevronRight, LayoutGrid, List, Home, FolderInput, CheckSquare, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { deleteAsset, createFolder, deleteFolder, moveAsset } from "@/app/actions/assets"
+import { deleteAsset, deleteAssets, createFolder, deleteFolder, moveAsset, moveAssets } from "@/app/actions/assets"
 import { ImageCropper } from "./image-cropper"
 
 interface Asset {
@@ -44,7 +44,17 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     const [creatingFolderLoading, setCreatingFolderLoading] = useState(false)
     const [movingAsset, setMovingAsset] = useState<string | null>(null)
     const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null)
+
+    // ─── Multi-Select State ───
+    const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set())
+    const [bulkDeleting, setBulkDeleting] = useState(false)
+    const [bulkMoving, setBulkMoving] = useState(false)
+    const [showMoveDialog, setShowMoveDialog] = useState(false)
+    const [allFolders, setAllFolders] = useState<string[]>([])
+
     const supabase = createClient()
+
+    const isMultiSelectMode = multiSelectedIds.size > 0
 
     const fetchAssets = useCallback(async () => {
         setLoading(true)
@@ -101,8 +111,99 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
             setSelectedAsset(null)
             setCroppingAsset(null)
             setCreatingFolder(false)
+            setMultiSelectedIds(new Set())
+            setShowMoveDialog(false)
         }
     }, [isOpen])
+
+    // Clear multi-select when navigating folders
+    useEffect(() => {
+        setMultiSelectedIds(new Set())
+    }, [currentFolder])
+
+    // ─── Fetch all root folders for "Move to" dialog ───
+    const fetchAllFolders = useCallback(async () => {
+        const { data, error } = await supabase.storage.from("email-assets").list("", {
+            limit: 200,
+            sortBy: { column: "name", order: "asc" },
+        })
+        if (!error && data) {
+            const folderNames = data.filter(item => item.id === null).map(item => item.name)
+            setAllFolders(folderNames)
+        }
+    }, [supabase])
+
+    // ─── Multi-Select Handlers ───
+    const toggleMultiSelect = (assetId: string, e?: React.MouseEvent) => {
+        e?.stopPropagation()
+        setMultiSelectedIds(prev => {
+            const next = new Set(prev)
+            if (next.has(assetId)) {
+                next.delete(assetId)
+            } else {
+                next.add(assetId)
+            }
+            return next
+        })
+    }
+
+    const selectAll = () => {
+        if (multiSelectedIds.size === assets.length) {
+            setMultiSelectedIds(new Set())
+        } else {
+            setMultiSelectedIds(new Set(assets.map(a => a.id)))
+        }
+    }
+
+    const getSelectedAssets = () => assets.filter(a => multiSelectedIds.has(a.id))
+
+    const handleBulkDelete = async () => {
+        const selected = getSelectedAssets()
+        if (selected.length === 0) return
+        if (!confirm(`Delete ${selected.length} asset${selected.length > 1 ? "s" : ""}? This cannot be undone.`)) return
+
+        setBulkDeleting(true)
+        const filePaths = selected.map(a => currentFolder ? `${currentFolder}/${a.name}` : a.name)
+        const result = await deleteAssets(filePaths)
+
+        if (!result.success) {
+            console.error("Error bulk deleting:", result.error)
+        } else {
+            setMultiSelectedIds(new Set())
+            if (selectedAsset && multiSelectedIds.has(selectedAsset.id)) {
+                setSelectedAsset(null)
+            }
+            await fetchAssets()
+        }
+        setBulkDeleting(false)
+    }
+
+    const handleBulkMoveToFolder = async (targetFolder: string) => {
+        const selected = getSelectedAssets()
+        if (selected.length === 0) return
+
+        setBulkMoving(true)
+        const moves = selected.map(a => ({
+            oldPath: currentFolder ? `${currentFolder}/${a.name}` : a.name,
+            newPath: `${targetFolder}/${a.name}`,
+        }))
+
+        const result = await moveAssets(moves)
+
+        if (!result.success) {
+            console.error("Error bulk moving:", result.error)
+        } else {
+            setMultiSelectedIds(new Set())
+            setShowMoveDialog(false)
+            await fetchAssets()
+        }
+        setBulkMoving(false)
+    }
+
+    const openMoveDialog = async () => {
+        await fetchAllFolders()
+        setShowMoveDialog(true)
+    }
 
     const compressImage = async (file: File): Promise<File> => {
         return new Promise((resolve, reject) => {
@@ -262,6 +363,8 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
             if (selectedAsset?.id === asset.id) {
                 setSelectedAsset(null)
             }
+            multiSelectedIds.delete(asset.id)
+            setMultiSelectedIds(new Set(multiSelectedIds))
             await fetchAssets()
         }
         setDeleting(null)
@@ -363,9 +466,24 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
         setMovingAsset(null)
     }
 
+    // Handle click on asset — multi-select mode vs single-select mode
+    const handleAssetClick = (asset: Asset, e: React.MouseEvent) => {
+        if (isMultiSelectMode) {
+            toggleMultiSelect(asset.id, e)
+        } else {
+            setSelectedAsset(asset)
+        }
+    }
+
     if (!isOpen) return null
 
     const breadcrumbParts = currentFolder ? currentFolder.split("/") : []
+
+    // Filter out current folder from move targets
+    const moveTargetFolders = allFolders.filter(f => {
+        if (currentFolder === "") return true // show all folders when at root
+        return f !== currentFolder.split("/")[0] // exclude current root folder
+    })
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
@@ -541,6 +659,28 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                 </div>
                             )}
 
+                            {/* Select All Bar (when assets exist) */}
+                            {assets.length > 0 && (
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={selectAll}
+                                        className="flex items-center gap-1.5 px-2 py-1 text-xs rounded-md text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-colors"
+                                    >
+                                        {multiSelectedIds.size === assets.length ? (
+                                            <CheckSquare className="w-3.5 h-3.5 text-amber-500" />
+                                        ) : (
+                                            <Square className="w-3.5 h-3.5" />
+                                        )}
+                                        {multiSelectedIds.size === assets.length ? "Deselect All" : "Select All"}
+                                    </button>
+                                    {isMultiSelectMode && (
+                                        <span className="text-xs text-amber-400">
+                                            {multiSelectedIds.size} selected
+                                        </span>
+                                    )}
+                                </div>
+                            )}
+
                             {/* Content Area */}
                             <div className="max-h-[400px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-neutral-700 scrollbar-track-transparent">
                                 {loading ? (
@@ -591,56 +731,82 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                         ))}
 
                                         {/* Image assets */}
-                                        {assets.map((asset) => (
-                                            <button
-                                                key={asset.id}
-                                                draggable
-                                                onDragStart={(e) => handleAssetDragStart(e, asset)}
-                                                onDragEnd={handleAssetDragEnd}
-                                                onClick={() => setSelectedAsset(asset)}
-                                                className={cn(
-                                                    "group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 transition-all cursor-grab active:cursor-grabbing",
-                                                    selectedAsset?.id === asset.id
-                                                        ? "border-amber-500 ring-2 ring-amber-500/30"
-                                                        : "border-transparent hover:border-neutral-600",
-                                                    movingAsset === asset.name && "opacity-40",
-                                                )}
-                                            >
-                                                <img
-                                                    src={asset.url || "/placeholder.svg"}
-                                                    alt={asset.name}
-                                                    loading="lazy"
-                                                    className="w-full h-full object-cover"
-                                                />
-                                                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
-                                                    <p className="text-xs text-neutral-300 truncate">{asset.name}</p>
-                                                </div>
+                                        {assets.map((asset) => {
+                                            const isMultiSelected = multiSelectedIds.has(asset.id)
+                                            return (
                                                 <button
-                                                    onClick={(e) => handleDeleteAsset(e, asset)}
-                                                    disabled={deleting === asset.id}
-                                                    className="absolute top-2 left-2 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
-                                                    title="Delete asset"
+                                                    key={asset.id}
+                                                    draggable={!isMultiSelectMode}
+                                                    onDragStart={(e) => handleAssetDragStart(e, asset)}
+                                                    onDragEnd={handleAssetDragEnd}
+                                                    onClick={(e) => handleAssetClick(asset, e)}
+                                                    className={cn(
+                                                        "group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 transition-all",
+                                                        isMultiSelectMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+                                                        isMultiSelected
+                                                            ? "border-amber-500 ring-2 ring-amber-500/30"
+                                                            : selectedAsset?.id === asset.id && !isMultiSelectMode
+                                                                ? "border-amber-500 ring-2 ring-amber-500/30"
+                                                                : "border-transparent hover:border-neutral-600",
+                                                        movingAsset === asset.name && "opacity-40",
+                                                    )}
                                                 >
-                                                    {deleting === asset.id ? (
-                                                        <Loader2 className="w-3 h-3 text-white animate-spin" />
-                                                    ) : (
-                                                        <Trash2 className="w-3 h-3 text-white" />
+                                                    <img
+                                                        src={asset.url || "/placeholder.svg"}
+                                                        alt={asset.name}
+                                                        loading="lazy"
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
+                                                        <p className="text-xs text-neutral-300 truncate">{asset.name}</p>
+                                                    </div>
+                                                    {/* Multi-select checkbox */}
+                                                    <button
+                                                        onClick={(e) => toggleMultiSelect(asset.id, e)}
+                                                        className={cn(
+                                                            "absolute top-2 right-2 w-5 h-5 rounded flex items-center justify-center transition-all",
+                                                            isMultiSelected
+                                                                ? "bg-amber-500"
+                                                                : "bg-black/50 border border-neutral-500 opacity-0 group-hover:opacity-100",
+                                                        )}
+                                                    >
+                                                        {isMultiSelected && (
+                                                            <svg className="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                    {/* Single delete */}
+                                                    {!isMultiSelectMode && (
+                                                        <button
+                                                            onClick={(e) => handleDeleteAsset(e, asset)}
+                                                            disabled={deleting === asset.id}
+                                                            className="absolute top-2 left-2 w-6 h-6 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity disabled:opacity-50"
+                                                            title="Delete asset"
+                                                        >
+                                                            {deleting === asset.id ? (
+                                                                <Loader2 className="w-3 h-3 text-white animate-spin" />
+                                                            ) : (
+                                                                <Trash2 className="w-3 h-3 text-white" />
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                    {/* Single select indicator */}
+                                                    {!isMultiSelectMode && selectedAsset?.id === asset.id && (
+                                                        <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
+                                                            <svg
+                                                                className="w-3 h-3 text-black"
+                                                                fill="none"
+                                                                viewBox="0 0 24 24"
+                                                                stroke="currentColor"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        </div>
                                                     )}
                                                 </button>
-                                                {selectedAsset?.id === asset.id && (
-                                                    <div className="absolute top-2 right-2 w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center">
-                                                        <svg
-                                                            className="w-3 h-3 text-black"
-                                                            fill="none"
-                                                            viewBox="0 0 24 24"
-                                                            stroke="currentColor"
-                                                        >
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                    </div>
-                                                )}
-                                            </button>
-                                        ))}
+                                            )
+                                        })}
                                     </div>
                                 ) : (
                                     /* ─── List View ─── */
@@ -679,59 +845,83 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                         ))}
 
                                         {/* Image assets */}
-                                        {assets.map((asset) => (
-                                            <button
-                                                key={asset.id}
-                                                draggable
-                                                onDragStart={(e) => handleAssetDragStart(e, asset)}
-                                                onDragEnd={handleAssetDragEnd}
-                                                onClick={() => setSelectedAsset(asset)}
-                                                className={cn(
-                                                    "group w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-left cursor-grab active:cursor-grabbing",
-                                                    selectedAsset?.id === asset.id
-                                                        ? "bg-amber-500/10 ring-1 ring-amber-500/30"
-                                                        : "hover:bg-neutral-800/70",
-                                                    movingAsset === asset.name && "opacity-40",
-                                                )}
-                                            >
-                                                <div className="w-12 h-12 rounded overflow-hidden bg-neutral-900 flex-shrink-0">
-                                                    <img
-                                                        src={asset.url || "/placeholder.svg"}
-                                                        alt={asset.name}
-                                                        loading="lazy"
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm text-neutral-200 truncate">{asset.name}</p>
-                                                    <p className="text-xs text-neutral-500">{formatFileSize(asset.size)}</p>
-                                                </div>
+                                        {assets.map((asset) => {
+                                            const isMultiSelected = multiSelectedIds.has(asset.id)
+                                            return (
                                                 <button
-                                                    onClick={(e) => handleDeleteAsset(e, asset)}
-                                                    disabled={deleting === asset.id}
-                                                    className="p-1 rounded text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
-                                                    title="Delete asset"
+                                                    key={asset.id}
+                                                    draggable={!isMultiSelectMode}
+                                                    onDragStart={(e) => handleAssetDragStart(e, asset)}
+                                                    onDragEnd={handleAssetDragEnd}
+                                                    onClick={(e) => handleAssetClick(asset, e)}
+                                                    className={cn(
+                                                        "group w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-left",
+                                                        isMultiSelectMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+                                                        isMultiSelected
+                                                            ? "bg-amber-500/10 ring-1 ring-amber-500/30"
+                                                            : selectedAsset?.id === asset.id && !isMultiSelectMode
+                                                                ? "bg-amber-500/10 ring-1 ring-amber-500/30"
+                                                                : "hover:bg-neutral-800/70",
+                                                        movingAsset === asset.name && "opacity-40",
+                                                    )}
                                                 >
-                                                    {deleting === asset.id ? (
-                                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                                    ) : (
-                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                    {/* Checkbox */}
+                                                    <button
+                                                        onClick={(e) => toggleMultiSelect(asset.id, e)}
+                                                        className={cn(
+                                                            "w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all",
+                                                            isMultiSelected
+                                                                ? "bg-amber-500"
+                                                                : "border border-neutral-600 opacity-0 group-hover:opacity-100",
+                                                        )}
+                                                    >
+                                                        {isMultiSelected && (
+                                                            <svg className="w-3 h-3 text-black" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                    <div className="w-12 h-12 rounded overflow-hidden bg-neutral-900 flex-shrink-0">
+                                                        <img
+                                                            src={asset.url || "/placeholder.svg"}
+                                                            alt={asset.name}
+                                                            loading="lazy"
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm text-neutral-200 truncate">{asset.name}</p>
+                                                        <p className="text-xs text-neutral-500">{formatFileSize(asset.size)}</p>
+                                                    </div>
+                                                    {!isMultiSelectMode && (
+                                                        <button
+                                                            onClick={(e) => handleDeleteAsset(e, asset)}
+                                                            disabled={deleting === asset.id}
+                                                            className="p-1 rounded text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all disabled:opacity-50"
+                                                            title="Delete asset"
+                                                        >
+                                                            {deleting === asset.id ? (
+                                                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                                            ) : (
+                                                                <Trash2 className="w-3.5 h-3.5" />
+                                                            )}
+                                                        </button>
+                                                    )}
+                                                    {!isMultiSelectMode && selectedAsset?.id === asset.id && (
+                                                        <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
+                                                            <svg
+                                                                className="w-3 h-3 text-black"
+                                                                fill="none"
+                                                                viewBox="0 0 24 24"
+                                                                stroke="currentColor"
+                                                            >
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                            </svg>
+                                                        </div>
                                                     )}
                                                 </button>
-                                                {selectedAsset?.id === asset.id && (
-                                                    <div className="w-5 h-5 rounded-full bg-amber-500 flex items-center justify-center flex-shrink-0">
-                                                        <svg
-                                                            className="w-3 h-3 text-black"
-                                                            fill="none"
-                                                            viewBox="0 0 24 24"
-                                                            stroke="currentColor"
-                                                        >
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                                        </svg>
-                                                    </div>
-                                                )}
-                                            </button>
-                                        ))}
+                                            )
+                                        })}
                                     </div>
                                 )}
                             </div>
@@ -739,36 +929,121 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                     )}
                 </div>
 
-                {/* Footer - Only show if NOT cropping */}
+                {/* Footer */}
                 {!croppingAsset && (
                     <div className="flex items-center justify-between px-6 py-4 border-t border-neutral-800 flex-shrink-0">
                         <p className="text-sm text-neutral-500">
                             {folders.length > 0 && `${folders.length} folder${folders.length !== 1 ? "s" : ""}, `}
                             {assets.length} asset{assets.length !== 1 ? "s" : ""}
                         </p>
-                        <div className="flex items-center gap-3">
-                            <button
-                                onClick={onClose}
-                                className="px-4 py-2 text-sm font-medium text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 rounded-md transition-colors"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                onClick={handleSelect}
-                                disabled={!selectedAsset}
-                                className={cn(
-                                    "px-4 py-2 text-sm font-medium rounded-md transition-colors",
-                                    selectedAsset
-                                        ? "bg-amber-500 text-black hover:bg-amber-400"
-                                        : "bg-neutral-700 text-neutral-500 cursor-not-allowed",
-                                )}
-                            >
-                                Select & Adjust
-                            </button>
+                        <div className="flex items-center gap-2">
+                            {isMultiSelectMode ? (
+                                /* ─── Bulk Actions ─── */
+                                <>
+                                    <button
+                                        onClick={() => setMultiSelectedIds(new Set())}
+                                        className="px-3 py-2 text-sm font-medium text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 rounded-md transition-colors"
+                                    >
+                                        Cancel ({multiSelectedIds.size})
+                                    </button>
+                                    <button
+                                        onClick={openMoveDialog}
+                                        disabled={bulkMoving}
+                                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-md bg-neutral-700 text-neutral-100 hover:bg-neutral-600 disabled:opacity-50 transition-colors"
+                                    >
+                                        <FolderInput className="w-3.5 h-3.5" />
+                                        Move to Folder
+                                    </button>
+                                    <button
+                                        onClick={handleBulkDelete}
+                                        disabled={bulkDeleting}
+                                        className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-md bg-red-600 text-white hover:bg-red-500 disabled:opacity-50 transition-colors"
+                                    >
+                                        {bulkDeleting ? (
+                                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                        )}
+                                        Delete ({multiSelectedIds.size})
+                                    </button>
+                                </>
+                            ) : (
+                                /* ─── Normal Actions ─── */
+                                <>
+                                    <button
+                                        onClick={onClose}
+                                        className="px-4 py-2 text-sm font-medium text-neutral-300 hover:text-neutral-100 hover:bg-neutral-800 rounded-md transition-colors"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSelect}
+                                        disabled={!selectedAsset}
+                                        className={cn(
+                                            "px-4 py-2 text-sm font-medium rounded-md transition-colors",
+                                            selectedAsset
+                                                ? "bg-amber-500 text-black hover:bg-amber-400"
+                                                : "bg-neutral-700 text-neutral-500 cursor-not-allowed",
+                                        )}
+                                    >
+                                        Select & Adjust
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 )}
             </div>
+
+            {/* ─── Move to Folder Dialog ─── */}
+            {showMoveDialog && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60">
+                    <div className="w-full max-w-sm mx-4 rounded-lg bg-[#1a1a1a] border border-neutral-700 shadow-2xl overflow-hidden">
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-neutral-700">
+                            <h4 className="text-sm font-medium text-neutral-100">
+                                Move {multiSelectedIds.size} asset{multiSelectedIds.size > 1 ? "s" : ""} to…
+                            </h4>
+                            <button
+                                onClick={() => setShowMoveDialog(false)}
+                                className="p-1 text-neutral-400 hover:text-neutral-100 transition-colors"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        </div>
+                        <div className="p-3 max-h-[300px] overflow-y-auto space-y-1">
+                            {currentFolder && (
+                                <button
+                                    onClick={() => handleBulkMoveToFolder("")}
+                                    disabled={bulkMoving}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-neutral-800 transition-colors text-left disabled:opacity-50"
+                                >
+                                    <Home className="w-4 h-4 text-amber-500/70" />
+                                    <span className="text-sm text-neutral-200">Root (All Assets)</span>
+                                </button>
+                            )}
+                            {moveTargetFolders.length === 0 && !currentFolder ? (
+                                <p className="text-sm text-neutral-500 text-center py-6">No folders available. Create one first.</p>
+                            ) : (
+                                moveTargetFolders.map((folder) => (
+                                    <button
+                                        key={folder}
+                                        onClick={() => handleBulkMoveToFolder(folder)}
+                                        disabled={bulkMoving}
+                                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-neutral-800 transition-colors text-left disabled:opacity-50"
+                                    >
+                                        {bulkMoving ? (
+                                            <Loader2 className="w-4 h-4 text-amber-500 animate-spin" />
+                                        ) : (
+                                            <Folder className="w-4 h-4 text-amber-500/70" />
+                                        )}
+                                        <span className="text-sm text-neutral-200">{folder}</span>
+                                    </button>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

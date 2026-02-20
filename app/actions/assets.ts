@@ -22,6 +22,52 @@ export async function deleteAsset(filePath: string) {
     return { success: true }
 }
 
+export async function deleteAssets(filePaths: string[]) {
+    const supabase = getSupabase()
+
+    const { error } = await supabase.storage.from("email-assets").remove(filePaths)
+
+    if (error) {
+        console.error("Error bulk deleting assets:", error)
+        return { success: false, error: error.message }
+    }
+
+    return { success: true }
+}
+
+export async function moveAssets(moves: { oldPath: string; newPath: string }[]) {
+    const supabase = getSupabase()
+    const errors: string[] = []
+
+    for (const { oldPath, newPath } of moves) {
+        const { data: fileData, error: downloadError } = await supabase.storage
+            .from("email-assets")
+            .download(oldPath)
+
+        if (downloadError || !fileData) {
+            errors.push(`Download failed for ${oldPath}: ${downloadError?.message}`)
+            continue
+        }
+
+        const { error: uploadError } = await supabase.storage
+            .from("email-assets")
+            .upload(newPath, fileData)
+
+        if (uploadError) {
+            errors.push(`Upload failed for ${newPath}: ${uploadError.message}`)
+            continue
+        }
+
+        await supabase.storage.from("email-assets").remove([oldPath])
+    }
+
+    if (errors.length > 0) {
+        return { success: false, error: errors.join("; ") }
+    }
+
+    return { success: true }
+}
+
 export async function listFolders() {
     const supabase = getSupabase()
 
