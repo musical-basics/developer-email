@@ -35,14 +35,23 @@ export async function POST(req: Request) {
         const { currentHtml, messages, model } = await req.json();
 
         // 1. FETCH CONTEXT FROM DB ⚡️
-        const { data: setting } = await supabase
-            .from('app_settings')
-            .select('value')
-            .eq('key', 'company_context')
-            .single();
+        const [{ data: setting }, { data: linksSetting }] = await Promise.all([
+            supabase.from('app_settings').select('value').eq('key', 'company_context').single(),
+            supabase.from('app_settings').select('value').eq('key', 'default_links').single(),
+        ]);
 
         // Fallback if DB is empty
         const dynamicContext = setting?.value || "Product: DreamPlay One. Feature: Narrow Keys.";
+        let defaultLinksBlock = "";
+        try {
+            const links = linksSetting?.value ? JSON.parse(linksSetting.value) : null;
+            if (links) {
+                const entries = Object.entries(links).filter(([_, v]) => v);
+                if (entries.length > 0) {
+                    defaultLinksBlock = `\n### DEFAULT LINKS:\nWhen creating NEW templates, use these URLs as defaults. CTA links go into button hrefs and image link hrefs. Footer links go into the email footer. Users can still override these in the variable loader, so use {{mustache}} variables for CTA links but hardcode footer links directly.\n${entries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}\n`;
+                }
+            }
+        } catch { }
 
         // 2. Process History: Convert ALL image URLs to Base64
         // We do this server-side so we don't hit the 4MB payload limit from the client.
@@ -93,6 +102,7 @@ export async function POST(req: Request) {
     
     ### COMPANY CONTEXT:
     ${dynamicContext}
+    ${defaultLinksBlock}
     `;
 
         let rawResponse = "";
