@@ -226,10 +226,11 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                     <TableCell className="text-center">
                                         <Badge variant="outline" className={`
                                             capitalize border-opacity-50
-                                            ${campaign.status === 'completed' ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : ''}
-                                            ${campaign.status === 'draft' ? 'text-zinc-400 border-zinc-500/50 bg-zinc-500/10' : ''}
+                                            ${campaign.is_template ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' : ''}
+                                            ${!campaign.is_template && campaign.status === 'completed' ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : ''}
+                                            ${!campaign.is_template && campaign.status === 'draft' ? 'text-zinc-400 border-zinc-500/50 bg-zinc-500/10' : ''}
                                         `}>
-                                            {campaign.status}
+                                            {campaign.is_template ? 'Master Template' : campaign.status}
                                         </Badge>
                                     </TableCell>
 
@@ -281,8 +282,8 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                 }}
                                                 disabled={togglingTemplateId === campaign.id}
                                                 className={`h-8 w-8 ${campaign.is_template
-                                                        ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                                                        : "text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
+                                                    ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                                                    : "text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
                                                     }`}
                                                 title={campaign.is_template ? "Remove from Master Templates" : "Promote to Master Template"}
                                             >
