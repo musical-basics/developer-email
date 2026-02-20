@@ -5,14 +5,85 @@ import { createClient } from "@supabase/supabase-js"
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!
 
-export async function deleteAsset(fileName: string) {
-    const supabase = createClient(supabaseUrl, supabaseServiceKey)
+function getSupabase() {
+    return createClient(supabaseUrl, supabaseServiceKey)
+}
 
-    const { error } = await supabase.storage.from("email-assets").remove([fileName])
+export async function deleteAsset(filePath: string) {
+    const supabase = getSupabase()
+
+    const { error } = await supabase.storage.from("email-assets").remove([filePath])
 
     if (error) {
         console.error("Error deleting asset:", error)
         return { success: false, error: error.message }
+    }
+
+    return { success: true }
+}
+
+export async function listFolders() {
+    const supabase = getSupabase()
+
+    // List items at root level — folders appear as items with id=null
+    const { data, error } = await supabase.storage.from("email-assets").list("", {
+        limit: 200,
+        sortBy: { column: "name", order: "asc" },
+    })
+
+    if (error) {
+        console.error("Error listing folders:", error)
+        return { folders: [], error: error.message }
+    }
+
+    // Supabase returns folders as entries with metadata.mimetype === undefined and id === null
+    const folders = (data || [])
+        .filter((item) => item.id === null)
+        .map((item) => item.name)
+
+    return { folders }
+}
+
+export async function createFolder(name: string) {
+    const supabase = getSupabase()
+
+    // Supabase Storage doesn't have real folders — upload a placeholder file
+    const placeholder = new Blob([""], { type: "text/plain" })
+    const { error } = await supabase.storage
+        .from("email-assets")
+        .upload(`${name}/.folder`, placeholder)
+
+    if (error) {
+        console.error("Error creating folder:", error)
+        return { success: false, error: error.message }
+    }
+
+    return { success: true }
+}
+
+export async function deleteFolder(name: string) {
+    const supabase = getSupabase()
+
+    // First, list all files in the folder
+    const { data: files, error: listError } = await supabase.storage
+        .from("email-assets")
+        .list(name, { limit: 500 })
+
+    if (listError) {
+        console.error("Error listing folder contents:", listError)
+        return { success: false, error: listError.message }
+    }
+
+    if (files && files.length > 0) {
+        const filePaths = files.map((f) => `${name}/${f.name}`)
+        const { error: removeError } = await supabase.storage
+            .from("email-assets")
+            .remove(filePaths)
+
+        if (removeError) {
+            console.error("Error deleting folder contents:", removeError)
+            return { success: false, error: removeError.message }
+        }
     }
 
     return { success: true }
