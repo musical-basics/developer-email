@@ -4,6 +4,7 @@ import { User, Mail } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface SenderIdentityCardProps {
     fromName: string
@@ -53,16 +54,16 @@ export function SenderIdentityCard({
                         From Email
                     </Label>
                     <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            id="from-email"
-                            type="email"
-                            value={fromEmail}
-                            onChange={(e) => onFromEmailChange?.(e.target.value)}
-                            readOnly={readOnly}
-                            className="pl-10 border-border bg-background text-foreground placeholder:text-muted-foreground focus-visible:ring-[#D4AF37]"
-                            placeholder="e.g., lionel@email.dreamplaypianos.com"
-                        />
+                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground z-10" />
+                        <Select value={fromEmail} onValueChange={onFromEmailChange} disabled={readOnly}>
+                            <SelectTrigger id="from-email" className="pl-10 border-border bg-background text-foreground focus:ring-[#D4AF37]">
+                                <SelectValue placeholder="Select email" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="lionel@musicalbasics.com">lionel@musicalbasics.com</SelectItem>
+                                <SelectItem value="lionel@email.dreamplaypianos.com">lionel@email.dreamplaypianos.com</SelectItem>
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
             </CardContent>

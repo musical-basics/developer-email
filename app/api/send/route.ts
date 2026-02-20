@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 
             console.log("🚀 Sending Test Email...");
             const { data, error } = await resend.emails.send({
-                from: "DreamPlay <hello@email.dreamplaypianos.com>",
+                from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                 to: email,
                 subject: `[TEST] ${campaign.subject_line}`,
                 html: finalHtml,
@@ -165,7 +165,7 @@ export async function POST(request: Request) {
 
                     // Send Email
                     const { data: sendData, error } = await resend.emails.send({
-                        from: process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>",
+                        from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                         to: sub.email,
                         subject: campaign.subject_line,
                         html: personalHtml,

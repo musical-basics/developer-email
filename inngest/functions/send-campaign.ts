@@ -93,8 +93,11 @@ export const sendCampaign = inngest.createFunction(
                         });
 
                         // Send Email
+                        const fromName = campaign.variable_values?.from_name;
+                        const fromEmail = campaign.variable_values?.from_email;
+
                         const { error } = await resend.emails.send({
-                            from: process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>",
+                            from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                             to: sub.email,
                             subject: campaign.subject_line,
                             html: personalHtml,
