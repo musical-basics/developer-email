@@ -320,22 +320,14 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                 size="icon"
                                                 asChild
                                                 className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                                title="Classic Editor"
+                                                title="Edit"
                                             >
-                                                <Link href={`/editor?id=${campaign.id}`}>
+                                                <Link href={
+                                                    campaign.html_content?.includes('"_marker":"__dnd_blocks__"')
+                                                        ? `/dnd-editor?id=${campaign.id}`
+                                                        : `/editor?id=${campaign.id}`
+                                                }>
                                                     <PenLine className="w-4 h-4" />
-                                                </Link>
-                                            </Button>
-
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                asChild
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                                title="Modular Editor"
-                                            >
-                                                <Link href={`/modular-editor?id=${campaign.id}`}>
-                                                    <LayoutTemplate className="w-4 h-4" />
                                                 </Link>
                                             </Button>
 

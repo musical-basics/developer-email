@@ -91,7 +91,11 @@ export function CampaignHeader({ campaign }: CampaignHeaderProps) {
                 </div>
 
                 <Button variant="outline" asChild className="w-fit gap-2 border-border hover:bg-secondary bg-transparent">
-                    <Link href={`/editor?id=${campaign.id}`}>
+                    <Link href={
+                        campaign.html_content?.includes('"_marker":"__dnd_blocks__"')
+                            ? `/dnd-editor?id=${campaign.id}`
+                            : `/editor?id=${campaign.id}`
+                    }>
                         <Pencil className="h-4 w-4" />
                         Edit Design
                     </Link>
