@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useCallback, useEffect } from "react"
-import { Upload, ImageIcon, Loader2, Trash2 } from "lucide-react"
+import { Upload, ImageIcon, Loader2, Trash2, Folder, Home, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,32 +15,53 @@ interface Asset {
     created_at?: string
 }
 
+interface FolderItem {
+    name: string
+}
+
 export default function AssetsPage() {
     const [assets, setAssets] = useState<Asset[]>([])
+    const [folders, setFolders] = useState<FolderItem[]>([])
     const [loading, setLoading] = useState(true)
     const [uploading, setUploading] = useState(false)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [isDragOver, setIsDragOver] = useState(false)
+    const [currentFolder, setCurrentFolder] = useState("")
     const supabase = createClient()
 
     const fetchAssets = useCallback(async () => {
         setLoading(true)
-        const { data, error } = await supabase.storage.from("email-assets").list()
+        const { data, error } = await supabase.storage.from("email-assets").list(currentFolder || "", {
+            limit: 200,
+            sortBy: { column: "name", order: "asc" },
+        })
 
         if (error) {
             console.error("Error fetching assets:", error)
         } else if (data) {
-            const loadedAssets: Asset[] = data.map((file) => ({
-                id: file.id,
-                name: file.name,
-                url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${encodeURIComponent(file.name)}`,
-                size: file.metadata?.size,
-                created_at: file.created_at,
-            }))
-            setAssets(loadedAssets)
+            const folderItems: FolderItem[] = []
+            const fileItems: Asset[] = []
+
+            for (const item of data) {
+                if (item.id === null) {
+                    folderItems.push({ name: item.name })
+                } else if (item.name !== ".folder") {
+                    const path = currentFolder ? `${currentFolder}/${item.name}` : item.name
+                    fileItems.push({
+                        id: item.id,
+                        name: item.name,
+                        url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${encodeURIComponent(path)}`,
+                        size: (item.metadata as any)?.size,
+                        created_at: item.created_at,
+                    })
+                }
+            }
+
+            setFolders(folderItems)
+            setAssets(fileItems)
         }
         setLoading(false)
-    }, [supabase])
+    }, [supabase, currentFolder])
 
     useEffect(() => {
         fetchAssets()
@@ -111,7 +132,8 @@ export default function AssetsPage() {
             }
 
             const fileName = `${Date.now()}-${fileToUpload.name}`
-            const { error } = await supabase.storage.from("email-assets").upload(fileName, fileToUpload)
+            const uploadPath = currentFolder ? `${currentFolder}/${fileName}` : fileName
+            const { error } = await supabase.storage.from("email-assets").upload(uploadPath, fileToUpload)
 
             if (error) {
                 console.error("Error uploading file:", error)
@@ -128,7 +150,8 @@ export default function AssetsPage() {
         if (!confirm(`Delete "${asset.name}"? This cannot be undone.`)) return
 
         setDeleting(asset.id)
-        const result = await deleteAsset(asset.name)
+        const filePath = currentFolder ? `${currentFolder}/${asset.name}` : asset.name
+        const result = await deleteAsset(filePath)
 
         if (!result.success) {
             console.error("Error deleting asset:", result.error)
@@ -171,6 +194,21 @@ export default function AssetsPage() {
         if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     }
+
+    const navigateToFolder = (folderName: string) => {
+        setCurrentFolder((prev) => (prev ? `${prev}/${folderName}` : folderName))
+    }
+
+    const navigateToRoot = () => {
+        setCurrentFolder("")
+    }
+
+    const navigateToBreadcrumb = (index: number) => {
+        const parts = currentFolder.split("/")
+        setCurrentFolder(parts.slice(0, index + 1).join("/"))
+    }
+
+    const breadcrumbParts = currentFolder ? currentFolder.split("/") : []
 
     return (
         <div className="p-6">
@@ -222,23 +260,70 @@ export default function AssetsPage() {
                 </CardContent>
             </Card>
 
+            {/* Breadcrumb Navigation */}
+            {currentFolder && (
+                <div className="flex items-center gap-1 text-sm flex-wrap mb-4">
+                    <button
+                        onClick={navigateToRoot}
+                        className="flex items-center gap-1 px-2 py-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    >
+                        <Home className="w-3.5 h-3.5" />
+                        All Assets
+                    </button>
+                    {breadcrumbParts.map((part, i) => (
+                        <div key={i} className="flex items-center gap-1">
+                            <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" />
+                            <button
+                                onClick={() => navigateToBreadcrumb(i)}
+                                className={cn(
+                                    "px-2 py-1 rounded-md transition-colors",
+                                    i === breadcrumbParts.length - 1
+                                        ? "text-foreground font-medium"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                                )}
+                            >
+                                {part}
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+
             <Card>
                 <CardHeader>
                     <CardTitle>Your Assets</CardTitle>
-                    <CardDescription>Showing {assets.length} assets</CardDescription>
+                    <CardDescription>
+                        {folders.length > 0 && `${folders.length} folder${folders.length !== 1 ? "s" : ""}, `}
+                        {assets.length} asset{assets.length !== 1 ? "s" : ""}
+                    </CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (
                         <div className="flex justify-center py-12">
                             <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
                         </div>
-                    ) : assets.length === 0 ? (
+                    ) : folders.length === 0 && assets.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-16 text-center">
                             <ImageIcon className="w-12 h-12 text-muted-foreground mb-3" />
-                            <p className="text-muted-foreground">No assets found. Upload one to get started.</p>
+                            <p className="text-muted-foreground">
+                                {currentFolder ? "This folder is empty." : "No assets found. Upload one to get started."}
+                            </p>
                         </div>
                     ) : (
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                            {/* Folders */}
+                            {folders.map((folder) => (
+                                <button
+                                    key={`folder-${folder.name}`}
+                                    onClick={() => navigateToFolder(folder.name)}
+                                    className="group relative aspect-square rounded-lg overflow-hidden bg-muted border border-border hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-2"
+                                >
+                                    <Folder className="w-12 h-12 text-primary/70" />
+                                    <p className="text-sm text-foreground truncate px-2 max-w-full">{folder.name}</p>
+                                </button>
+                            ))}
+
+                            {/* Image Assets */}
                             {assets.map((asset) => (
                                 <div
                                     key={asset.id}
