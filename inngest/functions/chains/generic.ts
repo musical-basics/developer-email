@@ -4,7 +4,6 @@
 
 import { inngest } from "@/inngest/client";
 import { sendChainEmail } from "@/lib/chains/sender";
-import { CHAIN_TEMPLATES } from "@/lib/chains/templates";
 import { createClient } from "@supabase/supabase-js";
 
 function parseWaitDuration(waitAfter: string): string {
@@ -82,20 +81,18 @@ export const genericChainRunner = inngest.createFunction(
 
         for (let i = 0; i < chain.steps.length; i++) {
             const stepDef = chain.steps[i];
-            const templateKey = stepDef.template_key as keyof typeof CHAIN_TEMPLATES;
-            const template = CHAIN_TEMPLATES[templateKey];
 
             // Safety check: is subscriber still active?
             const active = await step.run(`check-active-${i}`, checkActive);
             if (!active) return { status: "halted", reason: "unsubscribed", stepsCompleted: i };
 
             // Send the email
-            await step.run(`send-step-${i}-${stepDef.label}`, async () => {
-                await sendChainEmail(subscriberId, email, firstName, templateKey);
+            const sendResult = await step.run(`send-step-${i}-${stepDef.label}`, async () => {
+                return await sendChainEmail(subscriberId, email, firstName, stepDef.template_key);
             });
 
-            if (template) {
-                sentCampaignIds.push(template.campaign_id);
+            if (sendResult && sendResult.campaignId) {
+                sentCampaignIds.push(sendResult.campaignId);
             }
 
             // Wait if there's a wait period and it's not the last step

@@ -392,7 +392,7 @@ export default function AudienceManagerPage() {
 
         try {
             const campaigns = await getCampaignList()
-            setExistingCampaigns(campaigns as Campaign[])
+            setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
         } catch (error) {
             console.error("Failed to load campaigns", error)
             toast({ title: "Error loading campaigns", variant: "destructive" })

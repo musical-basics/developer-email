@@ -322,7 +322,7 @@ function ChainFormDialog({
     // Fetch saved campaigns when dialog opens
     useEffect(() => {
         if (open) {
-            getCampaignList().then(data => setCampaigns(data))
+            getCampaignList().then(data => setCampaigns(data.filter((c: any) => c.is_template === true)))
         }
     }, [open])
 

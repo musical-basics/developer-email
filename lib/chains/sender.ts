@@ -1,15 +1,52 @@
 // lib/chains/sender.ts
 import { Resend } from "resend";
 import { CHAIN_TEMPLATES } from "./templates";
+import { createClient } from "@supabase/supabase-js";
+import { renderTemplate } from "@/lib/render-template";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
 
-export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKey: keyof typeof CHAIN_TEMPLATES) {
-    const template = CHAIN_TEMPLATES[templateKey];
-    const rawHtml = template.generateHtml(firstName || "there");
+export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKeyOrId: string) {
+    let rawHtml = "";
+    let subject = "";
+    let campaignId = "";
 
-    const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${template.campaign_id}`;
+    const template = CHAIN_TEMPLATES[templateKeyOrId as keyof typeof CHAIN_TEMPLATES];
+
+    if (template) {
+        // Legacy hardcoded template
+        rawHtml = template.generateHtml(firstName || "there");
+        subject = template.subject;
+        campaignId = template.campaign_id;
+    } else {
+        // Dynamic Database Template — templateKeyOrId is a UUID
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_KEY!
+        );
+        const { data: dbTemplate, error } = await supabase
+            .from("campaigns")
+            .select("*")
+            .eq("id", templateKeyOrId)
+            .single();
+
+        if (error || !dbTemplate) {
+            console.error("Failed to load template for chain:", templateKeyOrId, error);
+            return { success: false, campaignId: "", error: "Template not found" };
+        }
+
+        const vars: Record<string, string> = {
+            ...dbTemplate.variable_values,
+            first_name: firstName || "there",
+            email: email,
+        };
+        rawHtml = renderTemplate(dbTemplate.html_content || "", vars);
+        subject = dbTemplate.subject_line || "No Subject";
+        campaignId = dbTemplate.id;
+    }
+
+    const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${campaignId}`;
 
     const unsubscribeFooter = `
         <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
@@ -33,7 +70,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "Lionel Yu <lionel@musicalbasics.com>",
         to: email,
-        subject: template.subject,
+        subject: subject,
         html: finalHtml,
         headers: {
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
@@ -41,5 +78,5 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         }
     });
 
-    return { success: true, campaignId: template.campaign_id };
+    return { success: true, campaignId };
 }

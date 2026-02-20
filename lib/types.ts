@@ -17,6 +17,7 @@ export interface Campaign {
     total_conversions?: number
     average_read_time: number
     resend_email_id?: string | null
+    is_template?: boolean
 }
 
 export interface Subscriber {

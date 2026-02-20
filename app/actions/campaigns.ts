@@ -39,7 +39,7 @@ export async function getCampaigns() {
     // Fetch campaigns
     const { data: campaigns, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id")
+        .select("id, name, status, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, variable_values")
         .order("created_at", { ascending: false })
 
     if (error) {
@@ -112,7 +112,7 @@ export async function getCampaignList() {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, created_at")
+        .select("id, name, status, created_at, is_template")
         .order("created_at", { ascending: false })
 
     if (error) {
@@ -269,6 +269,22 @@ export async function deleteCampaign(campaignId: string) {
     if (error) {
         console.error("Error deleting campaign:", error)
         return { error: error.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { success: true }
+}
+
+export async function toggleTemplateStatus(campaignId: string, isTemplate: boolean) {
+    const supabase = await createClient()
+    const { error } = await supabase
+        .from("campaigns")
+        .update({ is_template: isTemplate })
+        .eq("id", campaignId)
+
+    if (error) {
+        console.error("Error toggling template status:", error)
+        return { success: false, error: error.message }
     }
 
     revalidatePath("/campaigns")

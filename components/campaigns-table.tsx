@@ -10,10 +10,10 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star } from "lucide-react"
 
 import { createClient } from "@/lib/supabase/client"
-import { duplicateCampaign, deleteCampaign } from "@/app/actions/campaigns"
+import { duplicateCampaign, deleteCampaign, toggleTemplateStatus } from "@/app/actions/campaigns"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -45,6 +45,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [newName, setNewName] = useState("")
     const [renaming, setRenaming] = useState(false)
     const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+    const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null)
 
     const supabase = createClient()
     const { toast } = useToast()
@@ -269,6 +270,24 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                     {/* Actions */}
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={async () => {
+                                                    setTogglingTemplateId(campaign.id)
+                                                    await toggleTemplateStatus(campaign.id, !campaign.is_template)
+                                                    router.refresh()
+                                                    setTogglingTemplateId(null)
+                                                }}
+                                                disabled={togglingTemplateId === campaign.id}
+                                                className={`h-8 w-8 ${campaign.is_template
+                                                        ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                                                        : "text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
+                                                    }`}
+                                                title={campaign.is_template ? "Remove from Master Templates" : "Promote to Master Template"}
+                                            >
+                                                <Star className={`w-4 h-4 ${campaign.is_template ? "fill-current" : ""}`} />
+                                            </Button>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
