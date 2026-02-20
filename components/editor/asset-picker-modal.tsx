@@ -5,7 +5,7 @@ import { useState, useCallback, useEffect } from "react"
 import { X, Upload, ImageIcon, Loader2, Trash2, FolderPlus, Folder, ChevronRight, LayoutGrid, List, Home } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
-import { deleteAsset, createFolder, deleteFolder } from "@/app/actions/assets"
+import { deleteAsset, createFolder, deleteFolder, moveAsset } from "@/app/actions/assets"
 import { ImageCropper } from "./image-cropper"
 
 interface Asset {
@@ -42,6 +42,8 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     const [creatingFolder, setCreatingFolder] = useState(false)
     const [newFolderName, setNewFolderName] = useState("")
     const [creatingFolderLoading, setCreatingFolderLoading] = useState(false)
+    const [movingAsset, setMovingAsset] = useState<string | null>(null)
+    const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null)
     const supabase = createClient()
 
     const fetchAssets = useCallback(async () => {
@@ -319,6 +321,48 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
         return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
     }
 
+    // ─── Drag & Drop: Move assets into folders ───
+    const handleAssetDragStart = (e: React.DragEvent, asset: Asset) => {
+        e.dataTransfer.setData("text/plain", asset.name)
+        e.dataTransfer.effectAllowed = "move"
+        setMovingAsset(asset.name)
+    }
+
+    const handleAssetDragEnd = () => {
+        setMovingAsset(null)
+        setDropTargetFolder(null)
+    }
+
+    const handleFolderDragOver = (e: React.DragEvent, folderName: string) => {
+        if (!movingAsset) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "move"
+        setDropTargetFolder(folderName)
+    }
+
+    const handleFolderDragLeave = () => {
+        setDropTargetFolder(null)
+    }
+
+    const handleFolderDrop = async (e: React.DragEvent, folderName: string) => {
+        e.preventDefault()
+        setDropTargetFolder(null)
+        const assetName = e.dataTransfer.getData("text/plain")
+        if (!assetName) return
+
+        setMovingAsset(assetName)
+        const oldPath = currentFolder ? `${currentFolder}/${assetName}` : assetName
+        const newPath = currentFolder ? `${currentFolder}/${folderName}/${assetName}` : `${folderName}/${assetName}`
+
+        const result = await moveAsset(oldPath, newPath)
+        if (!result.success) {
+            console.error("Error moving asset:", result.error)
+        } else {
+            await fetchAssets()
+        }
+        setMovingAsset(null)
+    }
+
     if (!isOpen) return null
 
     const breadcrumbParts = currentFolder ? currentFolder.split("/") : []
@@ -518,9 +562,17 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                             <button
                                                 key={`folder-${folder.name}`}
                                                 onClick={() => navigateToFolder(folder.name)}
-                                                className="group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 border-transparent hover:border-amber-500/50 transition-all flex flex-col items-center justify-center gap-2"
+                                                onDragOver={(e) => handleFolderDragOver(e, folder.name)}
+                                                onDragLeave={handleFolderDragLeave}
+                                                onDrop={(e) => handleFolderDrop(e, folder.name)}
+                                                className={cn(
+                                                    "group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 transition-all flex flex-col items-center justify-center gap-2",
+                                                    dropTargetFolder === folder.name
+                                                        ? "border-amber-500 bg-amber-500/10 scale-105"
+                                                        : "border-transparent hover:border-amber-500/50",
+                                                )}
                                             >
-                                                <Folder className="w-10 h-10 text-amber-500/70" />
+                                                <Folder className={cn("w-10 h-10", dropTargetFolder === folder.name ? "text-amber-500" : "text-amber-500/70")} />
                                                 <p className="text-xs text-neutral-300 truncate px-2 max-w-full">{folder.name}</p>
                                                 {/* Delete folder button */}
                                                 <button
@@ -542,12 +594,16 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                         {assets.map((asset) => (
                                             <button
                                                 key={asset.id}
+                                                draggable
+                                                onDragStart={(e) => handleAssetDragStart(e, asset)}
+                                                onDragEnd={handleAssetDragEnd}
                                                 onClick={() => setSelectedAsset(asset)}
                                                 className={cn(
-                                                    "group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 transition-all",
+                                                    "group relative aspect-square rounded-md overflow-hidden bg-neutral-900 border-2 transition-all cursor-grab active:cursor-grabbing",
                                                     selectedAsset?.id === asset.id
                                                         ? "border-amber-500 ring-2 ring-amber-500/30"
                                                         : "border-transparent hover:border-neutral-600",
+                                                    movingAsset === asset.name && "opacity-40",
                                                 )}
                                             >
                                                 <img
@@ -594,9 +650,17 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                             <button
                                                 key={`folder-${folder.name}`}
                                                 onClick={() => navigateToFolder(folder.name)}
-                                                className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-neutral-800/70 transition-colors text-left"
+                                                onDragOver={(e) => handleFolderDragOver(e, folder.name)}
+                                                onDragLeave={handleFolderDragLeave}
+                                                onDrop={(e) => handleFolderDrop(e, folder.name)}
+                                                className={cn(
+                                                    "group w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left",
+                                                    dropTargetFolder === folder.name
+                                                        ? "bg-amber-500/10 ring-1 ring-amber-500/50"
+                                                        : "hover:bg-neutral-800/70",
+                                                )}
                                             >
-                                                <Folder className="w-5 h-5 text-amber-500/70 flex-shrink-0" />
+                                                <Folder className={cn("w-5 h-5 flex-shrink-0", dropTargetFolder === folder.name ? "text-amber-500" : "text-amber-500/70")} />
                                                 <span className="flex-1 text-sm text-neutral-200 truncate">{folder.name}</span>
                                                 <button
                                                     onClick={(e) => handleDeleteFolder(e, folder.name)}
@@ -618,12 +682,16 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                         {assets.map((asset) => (
                                             <button
                                                 key={asset.id}
+                                                draggable
+                                                onDragStart={(e) => handleAssetDragStart(e, asset)}
+                                                onDragEnd={handleAssetDragEnd}
                                                 onClick={() => setSelectedAsset(asset)}
                                                 className={cn(
-                                                    "group w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-left",
+                                                    "group w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors text-left cursor-grab active:cursor-grabbing",
                                                     selectedAsset?.id === asset.id
                                                         ? "bg-amber-500/10 ring-1 ring-amber-500/30"
                                                         : "hover:bg-neutral-800/70",
+                                                    movingAsset === asset.name && "opacity-40",
                                                 )}
                                             >
                                                 <div className="w-12 h-12 rounded overflow-hidden bg-neutral-900 flex-shrink-0">

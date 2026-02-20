@@ -88,3 +88,37 @@ export async function deleteFolder(name: string) {
 
     return { success: true }
 }
+
+export async function moveAsset(oldPath: string, newPath: string) {
+    const supabase = getSupabase()
+
+    // Supabase Storage has no native move — download, re-upload, delete
+    const { data: fileData, error: downloadError } = await supabase.storage
+        .from("email-assets")
+        .download(oldPath)
+
+    if (downloadError || !fileData) {
+        console.error("Error downloading asset for move:", downloadError)
+        return { success: false, error: downloadError?.message || "Download failed" }
+    }
+
+    const { error: uploadError } = await supabase.storage
+        .from("email-assets")
+        .upload(newPath, fileData)
+
+    if (uploadError) {
+        console.error("Error uploading asset to new path:", uploadError)
+        return { success: false, error: uploadError.message }
+    }
+
+    const { error: deleteError } = await supabase.storage
+        .from("email-assets")
+        .remove([oldPath])
+
+    if (deleteError) {
+        console.error("Error deleting original asset after move:", deleteError)
+        // File was copied but original not deleted — not ideal but not fatal
+    }
+
+    return { success: true }
+}
