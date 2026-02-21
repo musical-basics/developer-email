@@ -232,13 +232,15 @@ ${aiDossier ? `
                 lastMsg.content.push({ type: "text", text: `\n\n### CURRENT HTML:\n${currentHtml}` });
             }
 
-            const msg = await anthropic.messages.create({
+            const stream = anthropic.messages.stream({
                 model: actualModel,
                 max_tokens: 32768,
                 temperature: 0,
                 system: systemInstruction,
                 messages: anthropicMessages
             });
+
+            const msg = await stream.finalMessage();
 
             const textBlock = msg.content[0];
             if (textBlock.type === 'text') rawResponse = textBlock.text;
