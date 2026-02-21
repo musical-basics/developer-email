@@ -227,7 +227,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                                 msg.role === "user"
                                     ? "p-3 bg-primary text-primary-foreground rounded-br-sm"
                                     : msg.role === "details"
-                                        ? "px-3 py-1.5 text-[11px] font-mono text-muted-foreground/60 bg-transparent"
+                                        ? "px-3 py-1.5 text-[11px] font-mono text-muted-foreground bg-transparent"
                                         : "p-3 bg-muted text-foreground rounded-bl-sm"
                             )}>
                                 {msg.content}
