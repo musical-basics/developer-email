@@ -89,12 +89,12 @@ export async function POST(req: Request) {
 
             if (isEmpty) {
                 // Empty canvas always needs Sonnet (building from scratch)
-                actualModel = "claude-sonnet-4-20250514";
+                actualModel = "claude-sonnet-4-6";
                 routingReason = "New template from scratch → Sonnet.";
             } else if (hasImages) {
                 // Images present — still classify the TEXT prompt to pick the right model
                 // but always use Sonnet since vision tasks need the stronger model
-                actualModel = "claude-sonnet-4-20250514";
+                actualModel = "claude-sonnet-4-6";
                 routingReason = "Vision task (screenshot reference) → Sonnet.";
             } else {
                 // Text-only: fast classification using Gemini Flash
@@ -115,14 +115,14 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
                     const intent = routerResult.response.text().trim().toUpperCase();
 
                     if (intent.includes("COMPLEX")) {
-                        actualModel = "claude-sonnet-4-20250514";
+                        actualModel = "claude-sonnet-4-6";
                         routingReason = "Complex structural edit → Sonnet.";
                     } else {
-                        actualModel = "claude-3-5-haiku-latest";
+                        actualModel = "claude-haiku-4-5-20251001";
                         routingReason = "Simple text/style edit → Haiku.";
                     }
                 } catch (e) {
-                    actualModel = "claude-sonnet-4-20250514";
+                    actualModel = "claude-sonnet-4-6";
                     routingReason = "Router fallback → Sonnet.";
                 }
             }
@@ -209,7 +209,9 @@ ${aiDossier ? `
         // Pricing per million tokens
         const PRICING: Record<string, { input: number; output: number }> = {
             "claude-3-5-haiku-latest": { input: 0.80, output: 4.00 },
+            "claude-haiku-4-5-20251001": { input: 0.80, output: 4.00 },
             "claude-sonnet-4-20250514": { input: 3.00, output: 15.00 },
+            "claude-sonnet-4-6": { input: 3.00, output: 15.00 },
         };
 
         // --- A. CLAUDE (Anthropic) ---
