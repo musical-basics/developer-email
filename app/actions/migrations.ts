@@ -93,6 +93,9 @@ export async function processMigration(formData: FormData): Promise<{
     try {
         const htmlFile = formData.get("htmlFile") as File
         const templateName = (formData.get("templateName") as string) || "Untitled Migration"
+        const aiMode = (formData.get("aiMode") as string) || "both"
+        const geminiModel = (formData.get("geminiModel") as string) || ""
+        const claudeModel = (formData.get("claudeModel") as string) || ""
 
         if (!htmlFile) {
             return { success: false, error: "No HTML file provided" }
@@ -115,11 +118,13 @@ export async function processMigration(formData: FormData): Promise<{
         const htmlContent = await htmlFile.text()
         const parsed = parseMailchimpHtml(htmlContent)
 
-        // Step 3: Run AI conversion with Mustache variable mappings
+        // Step 3: Run AI conversion with selected model(s)
         const { generatedHtml } = await convertMailchimpToEmail(
             htmlContent,
             assetMappings,
-            "both" // Use Gemini for analysis + Claude for generation
+            aiMode as "both" | "gemini" | "claude",
+            geminiModel,
+            claudeModel
         )
 
         // Step 4: Build variable_values map (variableName → Supabase public URL)

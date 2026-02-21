@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
     Upload,
@@ -11,6 +11,8 @@ import {
     CheckCircle2,
     AlertCircle,
     X,
+    Cpu,
+    ChevronDown,
 } from "lucide-react"
 import { processMigration, analyzeMailchimpFile } from "@/app/actions/migrations"
 import { useToast } from "@/hooks/use-toast"
@@ -29,6 +31,14 @@ interface AnalysisResult {
     summary: string
 }
 
+type AiMode = "both" | "gemini" | "claude"
+
+interface ModelInfo {
+    id: string
+    name: string
+    provider: "gemini" | "anthropic"
+}
+
 export default function MigratePage() {
     const router = useRouter()
     const { toast } = useToast()
@@ -40,8 +50,37 @@ export default function MigratePage() {
     const [isConverting, setIsConverting] = useState(false)
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [aiMode, setAiMode] = useState<AiMode>("both")
+    const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
+    const [selectedGeminiModel, setSelectedGeminiModel] = useState("")
+    const [selectedClaudeModel, setSelectedClaudeModel] = useState("")
+    const [loadingModels, setLoadingModels] = useState(true)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const assetInputRef = useRef<HTMLInputElement>(null)
+
+    // Fetch available models on mount
+    useEffect(() => {
+        async function fetchModels() {
+            try {
+                const res = await fetch("/api/models")
+                const data = await res.json()
+                const models: ModelInfo[] = data.models || []
+                setAvailableModels(models)
+                const firstGemini = models.find((m) => m.provider === "gemini")
+                const firstClaude = models.find((m) => m.provider === "anthropic")
+                if (firstGemini) setSelectedGeminiModel(firstGemini.id)
+                if (firstClaude) setSelectedClaudeModel(firstClaude.id)
+            } catch {
+                console.error("Failed to fetch models")
+            } finally {
+                setLoadingModels(false)
+            }
+        }
+        fetchModels()
+    }, [])
+
+    const geminiModels = availableModels.filter((m) => m.provider === "gemini")
+    const claudeModels = availableModels.filter((m) => m.provider === "anthropic")
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault()
@@ -115,6 +154,9 @@ export default function MigratePage() {
             const formData = new FormData()
             formData.append("htmlFile", htmlFile)
             formData.append("templateName", templateName || "Untitled Migration")
+            formData.append("aiMode", aiMode)
+            formData.append("geminiModel", selectedGeminiModel)
+            formData.append("claudeModel", selectedClaudeModel)
             assetFiles.forEach((f, i) => formData.append(`asset_${i}`, f))
 
             const result = await processMigration(formData)
@@ -262,6 +304,87 @@ export default function MigratePage() {
                                     onChange={(e) => setTemplateName(e.target.value)}
                                     placeholder="My Email Template"
                                 />
+                            </CardContent>
+                        </Card>
+
+                        {/* AI Pipeline */}
+                        <Card>
+                            <CardHeader className="pb-3">
+                                <CardTitle className="text-sm flex items-center gap-2">
+                                    <Cpu className="w-4 h-4 text-primary" />
+                                    AI Pipeline
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {/* Mode toggle */}
+                                <div className="flex gap-1 p-1 rounded-lg bg-muted/50">
+                                    {(["both", "gemini", "claude"] as const).map((mode) => (
+                                        <button
+                                            key={mode}
+                                            onClick={() => setAiMode(mode)}
+                                            className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                                                ${aiMode === mode
+                                                    ? "bg-primary text-primary-foreground"
+                                                    : "text-muted-foreground hover:text-foreground"}`}
+                                        >
+                                            {mode === "both" ? "Both" : mode === "gemini" ? "Gemini" : "Claude"}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Gemini model dropdown */}
+                                {(aiMode === "both" || aiMode === "gemini") && (
+                                    <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
+                                            {aiMode === "both" ? "Analysis Model (Gemini)" : "Gemini Model"}
+                                        </Label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedGeminiModel}
+                                                onChange={(e) => setSelectedGeminiModel(e.target.value)}
+                                                className="w-full appearance-none px-3 py-2 pr-8 rounded-md bg-muted/50 border border-border text-sm text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                                            >
+                                                {loadingModels ? (
+                                                    <option>Loading models...</option>
+                                                ) : geminiModels.length === 0 ? (
+                                                    <option>No Gemini models — check API key</option>
+                                                ) : (
+                                                    geminiModels.map((m) => (
+                                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                                    ))
+                                                )}
+                                            </select>
+                                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Claude model dropdown */}
+                                {(aiMode === "both" || aiMode === "claude") && (
+                                    <div>
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
+                                            {aiMode === "both" ? "Generation Model (Claude)" : "Claude Model"}
+                                        </Label>
+                                        <div className="relative">
+                                            <select
+                                                value={selectedClaudeModel}
+                                                onChange={(e) => setSelectedClaudeModel(e.target.value)}
+                                                className="w-full appearance-none px-3 py-2 pr-8 rounded-md bg-muted/50 border border-border text-sm text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                                            >
+                                                {loadingModels ? (
+                                                    <option>Loading models...</option>
+                                                ) : claudeModels.length === 0 ? (
+                                                    <option>No Claude models — check API key</option>
+                                                ) : (
+                                                    claudeModels.map((m) => (
+                                                        <option key={m.id} value={m.id}>{m.name}</option>
+                                                    ))
+                                                )}
+                                            </select>
+                                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                        </div>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
 
