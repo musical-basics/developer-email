@@ -154,11 +154,10 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
             // Add cost/model details as a second bubble
             if (data.meta) {
                 const m = data.meta;
-                const modelShort = m.model.includes("haiku") ? "Haiku" : m.model.includes("sonnet") ? "Sonnet" : m.model;
                 const costStr = m.cost < 0.01 ? `$${(m.cost * 100).toFixed(2)}¢` : `$${m.cost.toFixed(4)}`;
                 resultMessages.push({
                     role: "details",
-                    content: `${modelShort}  ·  ${m.inputTokens.toLocaleString()} in / ${m.outputTokens.toLocaleString()} out  ·  ${costStr}`
+                    content: `${m.model}  ·  ${m.inputTokens.toLocaleString()} in / ${m.outputTokens.toLocaleString()} out  ·  ${costStr}`
                 });
             }
 
