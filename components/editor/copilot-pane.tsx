@@ -25,17 +25,18 @@ interface CopilotPaneProps {
 import { getAnthropicModels } from "@/app/actions/ai-models"
 
 export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay", aiDossier = "" }: CopilotPaneProps) {
-    const [selectedModel, setSelectedModel] = useState("auto")
+    const [selectedModel, setSelectedModel] = useState(() => {
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("mb_default_model") || "auto"
+        }
+        return "auto"
+    })
     const [availableModels, setAvailableModels] = useState<string[]>([])
 
     useEffect(() => {
         getAnthropicModels().then(models => {
             if (models.length > 0) {
                 setAvailableModels(models)
-                // If current selection isn't in list, switch to the first available one (usually the newest)
-                if (!models.includes(selectedModel) && selectedModel !== "auto" && !selectedModel.includes("gemini")) {
-                    setSelectedModel(models[0])
-                }
             }
         })
     }, [])

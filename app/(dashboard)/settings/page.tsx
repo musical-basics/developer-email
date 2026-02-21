@@ -1,14 +1,16 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft } from "lucide-react"
+import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
+import { getAnthropicModels } from "@/app/actions/ai-models"
 import {
     getCompanyContext, saveCompanyContext,
     getDefaultLinks, saveDefaultLinks,
@@ -45,6 +47,8 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true)
     const [savingContext, setSavingContext] = useState<string | null>(null)
     const [savingLinks, setSavingLinks] = useState<string | null>(null)
+    const [defaultModel, setDefaultModel] = useState("auto")
+    const [availableModels, setAvailableModels] = useState<string[]>([])
     const { toast } = useToast()
 
     // ─── Load ───────────────────────────────────────
@@ -70,6 +74,15 @@ export default function SettingsPage() {
             }
         }
         loadAll()
+
+        // Load default model from localStorage
+        const saved = localStorage.getItem("mb_default_model")
+        if (saved) setDefaultModel(saved)
+
+        // Fetch available models
+        getAnthropicModels().then(models => {
+            if (models.length > 0) setAvailableModels(models)
+        })
     }, [])
 
     // ─── Save Handlers ──────────────────────────────
@@ -124,6 +137,39 @@ export default function SettingsPage() {
                     Configure AI context and default links per brand. The AI Copilot uses this data when generating email templates.
                 </p>
             </div>
+            {/* ─── Default Model Card ─── */}
+            <Card className="mb-6">
+                <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                        <Bot className="w-5 h-5 text-amber-500" />
+                        Default Copilot Model
+                    </CardTitle>
+                    <CardDescription>
+                        This model loads by default every time you open the editor copilot.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Select
+                        value={defaultModel}
+                        onValueChange={(val) => {
+                            setDefaultModel(val)
+                            localStorage.setItem("mb_default_model", val)
+                            toast({ title: "Default model updated", description: `Copilot will now default to ${val}` })
+                        }}
+                    >
+                        <SelectTrigger className="w-full max-w-md">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="auto">✨ Auto (Smart Routing)</SelectItem>
+                            {availableModels.map(model => (
+                                <SelectItem key={model} value={model}>{model}</SelectItem>
+                            ))}
+                            <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </CardContent>
+            </Card>
 
             <Tabs defaultValue="dreamplay" className="space-y-6">
                 <TabsList className="grid w-full grid-cols-3">
