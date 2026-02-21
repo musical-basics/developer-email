@@ -186,6 +186,14 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
       "updatedHtml": "<!DOCTYPE html>\n<html>...</html>"
     }
     
+    ### CRITICAL: QUESTION vs EDIT DETECTION:
+    If the user is asking a QUESTION, requesting SUGGESTIONS, brainstorming ideas, or anything that does NOT require modifying the HTML:
+    - Set "updatedHtml" to the EXACT ORIGINAL HTML unchanged (copy it character-for-character)
+    - Put your full answer/suggestions in the "explanation" field
+    - Do NOT replace the HTML with text responses, lists, or suggestions
+    Examples of questions (DO NOT modify HTML): "suggest subject lines", "what do you think of this copy", "come up with alternatives", "how can I improve", "give me ideas"
+    Examples of edits (DO modify HTML): "change the title to X", "make the button red", "add a new section"
+    
     ### COMPANY CONTEXT:
     ${dynamicContext}
     ${defaultLinksBlock}
