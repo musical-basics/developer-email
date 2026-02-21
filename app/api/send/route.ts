@@ -127,7 +127,11 @@ export async function POST(request: Request) {
                         status: "draft",
                         is_template: false,
                         parent_template_id: campaignId,
-                        variable_values: campaign.variable_values || {},
+                        // Strip subscriber_id so child shows in Completed tab (not filtered as subscriber-locked)
+                        variable_values: (() => {
+                            const { subscriber_id, ...rest } = campaign.variable_values || {};
+                            return rest;
+                        })(),
                     })
                     .select("id")
                     .single();
