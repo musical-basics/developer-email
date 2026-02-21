@@ -60,6 +60,51 @@ export async function POST(req: Request) {
     try {
         const { currentBlocks, messages, model, audienceContext = "dreamplay", aiDossier = "" } = await req.json();
 
+        // --- SMART ROUTER LOGIC ---
+        let actualModel = model;
+        let routingReason = "";
+
+        if (model === "auto") {
+            const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop();
+            const hasImages = lastUserMessage?.imageUrls?.length > 0;
+            const isEmpty = !currentBlocks || currentBlocks.length === 0;
+
+            if (hasImages || isEmpty) {
+                actualModel = "claude-sonnet-4-20250514";
+                routingReason = hasImages ? "Image detected, routed to Sonnet." : "Empty canvas, routed to Sonnet.";
+            } else {
+                try {
+                    const { GoogleGenerativeAI } = await import("@google/generative-ai");
+                    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+                    const flash = genAI.getGenerativeModel({
+                        model: "gemini-2.0-flash",
+                        generationConfig: { maxOutputTokens: 10, temperature: 0 }
+                    });
+
+                    const routerPrompt = `You are a routing agent for an email editor.
+User request: "${lastUserMessage?.content}"
+Is this a simple edit (changing text, fixing a typo, updating a color, swapping a link) or a complex edit (creating new layouts, adding new sections, structural redesign)?
+Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
+
+                    const routerResult = await flash.generateContent(routerPrompt);
+                    const intent = routerResult.response.text().trim().toUpperCase();
+
+                    if (intent.includes("COMPLEX")) {
+                        actualModel = "claude-sonnet-4-20250514";
+                        routingReason = "Complex structural request, routed to Sonnet.";
+                    } else {
+                        actualModel = "claude-3-5-haiku-latest";
+                        routingReason = "Simple edit, routed to Haiku.";
+                    }
+                } catch (e) {
+                    actualModel = "claude-sonnet-4-20250514";
+                    routingReason = "Router fallback, routed to Sonnet.";
+                }
+            }
+            console.log(`[Smart Router DnD] ${routingReason} (model: ${actualModel})`);
+        }
+        // ------------------------------
+
         // Fetch audience-driven context
         const payload = await getAllContextForAudience(audienceContext);
         const { contextBlock: dynamicContext, linksBlock: defaultLinksBlock } = await formatContextForPrompt(payload, audienceContext);
@@ -109,7 +154,7 @@ ${aiDossier}
 
         let rawResponse = "";
 
-        if (model.includes("claude")) {
+        if (actualModel.includes("claude")) {
             const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
             const anthropicMessages = processedMessages.map((msg: any) => {
@@ -131,7 +176,7 @@ ${aiDossier}
             });
 
             const msg = await anthropic.messages.create({
-                model: model,
+                model: actualModel,
                 max_tokens: 8192,
                 temperature: 0,
                 system: systemInstruction,
@@ -178,6 +223,11 @@ ${aiDossier}
         try {
             const cleaned = extractJson(rawResponse);
             const parsed = JSON.parse(cleaned);
+
+            if (routingReason) {
+                parsed.explanation = `*(⚡️ ${routingReason})*\n\n` + (parsed.explanation || "");
+            }
+
             return NextResponse.json(parsed);
         } catch (e: any) {
             console.error("JSON Parse Error:", e.message);

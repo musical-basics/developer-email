@@ -25,7 +25,7 @@ interface CopilotPaneProps {
 import { getAnthropicModels } from "@/app/actions/ai-models"
 
 export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay", aiDossier = "" }: CopilotPaneProps) {
-    const [selectedModel, setSelectedModel] = useState("claude-3-5-sonnet-20240620")
+    const [selectedModel, setSelectedModel] = useState("auto")
     const [availableModels, setAvailableModels] = useState<string[]>([])
 
     useEffect(() => {
@@ -33,7 +33,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
             if (models.length > 0) {
                 setAvailableModels(models)
                 // If current selection isn't in list, switch to the first available one (usually the newest)
-                if (!models.includes(selectedModel) && !selectedModel.includes("gemini")) {
+                if (!models.includes(selectedModel) && selectedModel !== "auto" && !selectedModel.includes("gemini")) {
                     setSelectedModel(models[0])
                 }
             }
@@ -176,6 +176,9 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                        {/* Smart Auto-Router */}
+                        <SelectItem value="auto">✨ Auto (Smart Routing)</SelectItem>
+
                         {/* Dynamic Anthropic Models */}
                         {availableModels.map(model => (
                             <SelectItem key={model} value={model}>{model}</SelectItem>

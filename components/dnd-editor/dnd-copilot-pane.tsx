@@ -27,7 +27,7 @@ export function DndCopilotPane({ blocks, onBlocksChange, audienceContext = "drea
     const [messages, setMessages] = useState<Message[]>([])
     const [inputValue, setInputValue] = useState("")
     const [isLoading, setIsLoading] = useState(false)
-    const [model, setModel] = useState("claude-sonnet-4-20250514")
+    const [model, setModel] = useState("auto")
     const [models, setModels] = useState<string[]>([])
     const [imageUrls, setImageUrls] = useState<string[]>([])
     const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -132,6 +132,7 @@ export function DndCopilotPane({ blocks, onBlocksChange, audienceContext = "drea
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                            <SelectItem value="auto" className="text-xs">✨ Auto (Smart Routing)</SelectItem>
                             {models.map(m => (
                                 <SelectItem key={m} value={m} className="text-xs">{m}</SelectItem>
                             ))}
