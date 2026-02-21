@@ -156,17 +156,16 @@ export async function POST(request: Request) {
                         .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
                         .replace(/{{subscriber_id}}/g, sub.id);
 
-                    // Auto-append sid and em to all links
-                    personalHtml = personalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
+                    // Auto-append sid and em to all links (no click redirect)
+                    personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                         if (url.includes('/unsubscribe')) return match;
                         const sep = url.includes('?') ? '&' : '?';
                         return `href=${quote}${url}${sep}sid=${sub.id}&em=${encodeURIComponent(sub.email)}${quote}`;
                     });
 
-                    // Open tracking pixel (loaded from our own domain — no deliverability impact)
+                    // Open tracking pixel (loaded from our own domain)
                     const openPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
                     personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
-                    // Fallback: if no </body> tag, append at end
                     if (!personalHtml.includes(openPixel)) {
                         personalHtml += openPixel;
                     }
