@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import { createClient } from "@/lib/supabase/client"
 import { duplicateCampaign, deleteCampaign, toggleTemplateStatus } from "@/app/actions/campaigns"
@@ -37,15 +38,18 @@ interface CampaignsTableProps {
     onRefresh?: () => void
     title?: string
     showAnalytics?: boolean
+    enableBulkDelete?: boolean
 }
 
-export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false }: CampaignsTableProps) {
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [newName, setNewName] = useState("")
     const [renaming, setRenaming] = useState(false)
     const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
     const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null)
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+    const [bulkDeleting, setBulkDeleting] = useState(false)
 
     const supabase = createClient()
     const { toast } = useToast()
@@ -137,6 +141,46 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
         }
     }
 
+    const allSelected = campaigns.length > 0 && selectedIds.size === campaigns.length
+    const someSelected = selectedIds.size > 0 && selectedIds.size < campaigns.length
+
+    const toggleSelect = (id: string) => {
+        setSelectedIds(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
+
+    const toggleAll = () => {
+        if (allSelected) {
+            setSelectedIds(new Set())
+        } else {
+            setSelectedIds(new Set(campaigns.map(c => c.id)))
+        }
+    }
+
+    const handleBulkDelete = async () => {
+        if (selectedIds.size === 0) return
+        const confirmed = window.confirm(`Delete ${selectedIds.size} campaign${selectedIds.size > 1 ? 's' : ''}? This cannot be undone.`)
+        if (!confirmed) return
+
+        setBulkDeleting(true)
+        let deleted = 0
+        for (const id of selectedIds) {
+            const result = await deleteCampaign(id)
+            if (!result.error) deleted++
+        }
+        setBulkDeleting(false)
+        setSelectedIds(new Set())
+        toast({
+            title: `Deleted ${deleted} campaign${deleted > 1 ? 's' : ''}`,
+            description: `${deleted} of ${selectedIds.size} campaigns removed.`,
+        })
+        router.refresh()
+    }
+
     if (loading) {
         return <div className="text-center py-10 text-muted-foreground opacity-50">Loading metrics...</div>
     }
@@ -145,10 +189,31 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
         <div className="rounded-lg border border-border bg-card">
             <div className="border-b border-border px-6 py-4 flex justify-between items-center">
                 <h2 className="text-lg font-semibold text-card-foreground">{title}</h2>
+                {enableBulkDelete && selectedIds.size > 0 && (
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleBulkDelete}
+                        disabled={bulkDeleting}
+                        className="gap-2"
+                    >
+                        <Trash2 className="w-4 h-4" />
+                        {bulkDeleting ? 'Deleting...' : `Delete ${selectedIds.size} Selected`}
+                    </Button>
+                )}
             </div>
             <Table>
                 <TableHeader>
                     <TableRow className="border-border hover:bg-transparent">
+                        {enableBulkDelete && (
+                            <TableHead className="w-[40px] px-3">
+                                <Checkbox
+                                    checked={allSelected}
+                                    onCheckedChange={toggleAll}
+                                    className="border-muted-foreground/50"
+                                />
+                            </TableHead>
+                        )}
                         <TableHead className="text-muted-foreground w-[300px]">Campaign</TableHead>
                         <TableHead className="text-center w-[100px]">Status</TableHead>
                         {/* New Metrics Columns */}
@@ -186,7 +251,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={showAnalytics ? 7 : 3} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={(showAnalytics ? 7 : 3) + (enableBulkDelete ? 1 : 0)} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
@@ -199,7 +264,16 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                             const checkoutRate = campaign.total_clicks > 0 ? Math.round((conversions / campaign.total_clicks) * 100) : 0
 
                             return (
-                                <TableRow key={campaign.id} className="border-border">
+                                <TableRow key={campaign.id} className={`border-border ${selectedIds.has(campaign.id) ? 'bg-primary/5' : ''}`}>
+                                    {enableBulkDelete && (
+                                        <TableCell className="px-3">
+                                            <Checkbox
+                                                checked={selectedIds.has(campaign.id)}
+                                                onCheckedChange={() => toggleSelect(campaign.id)}
+                                                className="border-muted-foreground/50"
+                                            />
+                                        </TableCell>
+                                    )}
                                     {/* Name & Metadata */}
                                     <TableCell>
                                         <div className="flex flex-col group">

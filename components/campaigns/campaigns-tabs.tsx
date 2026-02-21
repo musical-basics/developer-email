@@ -22,9 +22,9 @@ export function CampaignsTabs({ campaigns }: CampaignsTabsProps) {
     ]
 
     const tabData = {
-        templates: { title: "Master Templates", campaigns: templates, showAnalytics: false },
-        drafts: { title: "Drafts", campaigns: drafts, showAnalytics: false },
-        completed: { title: "Completed", campaigns: completed, showAnalytics: true },
+        templates: { title: "Master Templates", campaigns: templates, showAnalytics: false, enableBulkDelete: false },
+        drafts: { title: "Drafts", campaigns: drafts, showAnalytics: false, enableBulkDelete: false },
+        completed: { title: "Completed", campaigns: completed, showAnalytics: true, enableBulkDelete: true },
     }
 
     const active = tabData[activeTab]
@@ -59,6 +59,7 @@ export function CampaignsTabs({ campaigns }: CampaignsTabsProps) {
                 campaigns={active.campaigns}
                 loading={false}
                 showAnalytics={active.showAnalytics}
+                enableBulkDelete={active.enableBulkDelete}
             />
         </div>
     )

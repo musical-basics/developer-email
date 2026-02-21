@@ -264,6 +264,10 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
 export async function deleteCampaign(campaignId: string) {
     const supabase = await createClient()
 
+    // Delete related records first (foreign key constraints)
+    await supabase.from("subscriber_events").delete().eq("campaign_id", campaignId)
+    await supabase.from("sent_history").delete().eq("campaign_id", campaignId)
+
     const { error } = await supabase
         .from("campaigns")
         .delete()
