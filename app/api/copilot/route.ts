@@ -20,6 +20,44 @@ function extractJson(text: string) {
     return text; // Fallback
 }
 
+// Fallback: manually extract updatedHtml and explanation when JSON.parse fails
+// This handles cases where the AI generates valid HTML but with characters that break JSON parsing
+function manualExtractClassic(raw: string): { updatedHtml: string; explanation: string } | null {
+    try {
+        // Look for the HTML between "updatedHtml" key value markers
+        // The AI typically outputs: "updatedHtml": "<!DOCTYPE html>..."  or  "updatedHtml": "<!doctype html>..."
+        const htmlMatch = raw.match(/"updatedHtml"\s*:\s*"([\s\S]*?)"\s*(?:,\s*"[a-zA-Z_]|\}$)/);
+
+        // Also try to grab from <!DOCTYPE to </html> directly
+        let html = '';
+        if (htmlMatch) {
+            html = htmlMatch[1]
+                .replace(/\\n/g, '\n')
+                .replace(/\\t/g, '\t')
+                .replace(/\\"/g, '"')
+                .replace(/\\\\/g, '\\');
+        } else {
+            // Last resort: find raw HTML in the response
+            const docMatch = raw.match(/(<!DOCTYPE html[\s\S]*?<\/html>)/i);
+            if (docMatch) {
+                html = docMatch[1];
+            }
+        }
+
+        if (!html) return null;
+
+        // Extract explanation
+        const expMatch = raw.match(/"explanation"\s*:\s*"([^"]*(?:\\.[^"]*)*)"/);
+        const explanation = expMatch
+            ? expMatch[1].replace(/\\"/g, '"').replace(/\\n/g, '\n')
+            : "Changes applied successfully.";
+
+        return { updatedHtml: html, explanation };
+    } catch {
+        return null;
+    }
+}
+
 // Helper: Download image from URL and convert to Base64
 async function urlToBase64(url: string) {
     try {
@@ -204,6 +242,13 @@ ${aiDossier ? `
             return NextResponse.json(JSON.parse(cleaned));
         } catch (e: any) {
             console.error("JSON Parse Error:", e.message);
+            console.error("Raw response preview (first 500 chars):", rawResponse.substring(0, 500));
+            // Fallback: try to manually extract HTML and explanation
+            const fallback = manualExtractClassic(rawResponse);
+            if (fallback) {
+                console.log("Recovered via manual extraction fallback");
+                return NextResponse.json(fallback);
+            }
             return NextResponse.json({
                 updatedHtml: currentHtml,
                 explanation: "I successfully generated the code, but my output formatting broke. Please try asking me again!"
