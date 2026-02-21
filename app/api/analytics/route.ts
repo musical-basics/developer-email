@@ -6,7 +6,7 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 )
 
-const EVENT_TYPES = ['open', 'click', 'unsubscribe', 'conversion_t1', 'conversion_t2', 'conversion_t3'] as const
+const EVENT_TYPES = ['open', 'click', 'unsubscribe', 'bounce', 'complaint', 'conversion_t1', 'conversion_t2', 'conversion_t3'] as const
 type EventType = typeof EVENT_TYPES[number]
 
 interface PerformanceRow {
@@ -15,12 +15,16 @@ interface PerformanceRow {
     opens: number
     clicks: number
     unsubs: number
+    bounces: number
+    complaints: number
     t1: number
     t2: number
     t3: number
     open_rate: number
     click_rate: number
     unsub_rate: number
+    bounce_rate: number
+    complaint_rate: number
     t1_rate: number
     t2_rate: number
     t3_rate: number
@@ -79,6 +83,8 @@ export async function GET() {
                 open: new Set(),
                 click: new Set(),
                 unsubscribe: new Set(),
+                bounce: new Set(),
+                complaint: new Set(),
                 conversion_t1: new Set(),
                 conversion_t2: new Set(),
                 conversion_t3: new Set(),
@@ -99,12 +105,16 @@ export async function GET() {
                 opens: eventCounts.open.size,
                 clicks: eventCounts.click.size,
                 unsubs: eventCounts.unsubscribe.size,
+                bounces: eventCounts.bounce.size,
+                complaints: eventCounts.complaint.size,
                 t1: eventCounts.conversion_t1.size,
                 t2: eventCounts.conversion_t2.size,
                 t3: eventCounts.conversion_t3.size,
                 open_rate: calcRate(eventCounts.open.size, sends),
                 click_rate: calcRate(eventCounts.click.size, sends),
                 unsub_rate: calcRate(eventCounts.unsubscribe.size, sends),
+                bounce_rate: calcRate(eventCounts.bounce.size, sends),
+                complaint_rate: calcRate(eventCounts.complaint.size, sends),
                 t1_rate: calcRate(eventCounts.conversion_t1.size, sends),
                 t2_rate: calcRate(eventCounts.conversion_t2.size, sends),
                 t3_rate: calcRate(eventCounts.conversion_t3.size, sends),
@@ -139,6 +149,8 @@ export async function GET() {
                     open: new Set(),
                     click: new Set(),
                     unsubscribe: new Set(),
+                    bounce: new Set(),
+                    complaint: new Set(),
                     conversion_t1: new Set(),
                     conversion_t2: new Set(),
                     conversion_t3: new Set(),
@@ -191,12 +203,16 @@ export async function GET() {
             opens: chain.events.open.size,
             clicks: chain.events.click.size,
             unsubs: chain.events.unsubscribe.size,
+            bounces: chain.events.bounce.size,
+            complaints: chain.events.complaint.size,
             t1: chain.events.conversion_t1.size,
             t2: chain.events.conversion_t2.size,
             t3: chain.events.conversion_t3.size,
             open_rate: calcRate(chain.events.open.size, chain.enrolled),
             click_rate: calcRate(chain.events.click.size, chain.enrolled),
             unsub_rate: calcRate(chain.events.unsubscribe.size, chain.enrolled),
+            bounce_rate: calcRate(chain.events.bounce.size, chain.enrolled),
+            complaint_rate: calcRate(chain.events.complaint.size, chain.enrolled),
             t1_rate: calcRate(chain.events.conversion_t1.size, chain.enrolled),
             t2_rate: calcRate(chain.events.conversion_t2.size, chain.enrolled),
             t3_rate: calcRate(chain.events.conversion_t3.size, chain.enrolled),

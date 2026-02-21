@@ -5,7 +5,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
     BarChart3, Loader2, GitBranch, Sparkles, TrendingUp,
-    MousePointer2, Eye, UserMinus, UserPlus, ShoppingCart, Package, Music, Piano, ArrowRightLeft
+    MousePointer2, Eye, UserMinus, UserPlus, ShoppingCart, Package, Music, Piano, ArrowRightLeft,
+    AlertTriangle, ShieldAlert
 } from "lucide-react"
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow
@@ -17,12 +18,16 @@ interface PerformanceRow {
     opens: number
     clicks: number
     unsubs: number
+    bounces: number
+    complaints: number
     t1: number
     t2: number
     t3: number
     open_rate: number
     click_rate: number
     unsub_rate: number
+    bounce_rate: number
+    complaint_rate: number
     t1_rate: number
     t2_rate: number
     t3_rate: number
@@ -65,6 +70,12 @@ function PerformanceTable({ data, sendsLabel }: { data: PerformanceRow[]; sendsL
                         <TableHead className="text-xs uppercase tracking-wider font-semibold text-muted-foreground text-center">
                             <div className="flex items-center justify-center gap-1"><UserMinus className="h-3.5 w-3.5" /> Unsubs</div>
                         </TableHead>
+                        <TableHead className="text-xs uppercase tracking-wider font-semibold text-red-500/70 text-center">
+                            <div className="flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" /> Bounces</div>
+                        </TableHead>
+                        <TableHead className="text-xs uppercase tracking-wider font-semibold text-red-500/70 text-center">
+                            <div className="flex items-center justify-center gap-1"><ShieldAlert className="h-3.5 w-3.5" /> Spam</div>
+                        </TableHead>
                         <TableHead className="text-xs uppercase tracking-wider font-semibold text-emerald-500/70 text-center">
                             <div className="flex items-center justify-center gap-1"><UserPlus className="h-3.5 w-3.5" /> T1: Accounts</div>
                         </TableHead>
@@ -87,6 +98,12 @@ function PerformanceTable({ data, sendsLabel }: { data: PerformanceRow[]; sendsL
                             <TableCell className="text-center"><MetricCell count={row.clicks} rate={row.click_rate} /></TableCell>
                             <TableCell className="text-center">
                                 <MetricCell count={row.unsubs} rate={row.unsub_rate} />
+                            </TableCell>
+                            <TableCell className="text-center bg-red-500/[0.03]">
+                                <MetricCell count={row.bounces} rate={row.bounce_rate} />
+                            </TableCell>
+                            <TableCell className="text-center bg-red-500/[0.03]">
+                                <MetricCell count={row.complaints} rate={row.complaint_rate} />
                             </TableCell>
                             <TableCell className="text-center bg-emerald-500/[0.03]"><MetricCell count={row.t1} rate={row.t1_rate} highlight /></TableCell>
                             <TableCell className="text-center bg-emerald-500/[0.03]"><MetricCell count={row.t2} rate={row.t2_rate} highlight /></TableCell>
@@ -194,8 +211,8 @@ export default function AnalyticsPage() {
                             key={f}
                             onClick={() => setAudienceFilter(f)}
                             className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1.5 ${audienceFilter === f
-                                    ? "bg-primary text-primary-foreground border-primary"
-                                    : "bg-muted/50 text-muted-foreground border-border hover:text-foreground hover:bg-muted"
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-muted/50 text-muted-foreground border-border hover:text-foreground hover:bg-muted"
                                 }`}
                         >
                             {icon}
@@ -265,6 +282,8 @@ export default function AnalyticsPage() {
                 <span><UserPlus className="h-3 w-3 inline mr-1 text-emerald-500" />T1 = Account Created</span>
                 <span><ShoppingCart className="h-3 w-3 inline mr-1 text-emerald-500" />T2 = Add to Cart</span>
                 <span><Package className="h-3 w-3 inline mr-1 text-emerald-500" />T3 = Purchase</span>
+                <span><AlertTriangle className="h-3 w-3 inline mr-1 text-red-500" />Bounce = Email undeliverable</span>
+                <span><ShieldAlert className="h-3 w-3 inline mr-1 text-red-500" />Spam = Reported as spam</span>
                 <span className="text-muted-foreground/50">• Chains use 7-day sliding window attribution</span>
             </div>
         </div>
