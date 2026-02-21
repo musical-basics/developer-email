@@ -69,9 +69,12 @@ export async function POST(req: Request) {
             const hasImages = lastUserMessage?.imageUrls?.length > 0;
             const isEmpty = !currentBlocks || currentBlocks.length === 0;
 
-            if (hasImages || isEmpty) {
+            if (isEmpty) {
                 actualModel = "claude-sonnet-4-20250514";
-                routingReason = hasImages ? "Image detected, routed to Sonnet." : "Empty canvas, routed to Sonnet.";
+                routingReason = "New template from scratch → Sonnet.";
+            } else if (hasImages) {
+                actualModel = "claude-sonnet-4-20250514";
+                routingReason = "Vision task (screenshot reference) → Sonnet.";
             } else {
                 try {
                     const { GoogleGenerativeAI } = await import("@google/generative-ai");
@@ -91,14 +94,14 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
 
                     if (intent.includes("COMPLEX")) {
                         actualModel = "claude-sonnet-4-20250514";
-                        routingReason = "Complex structural request, routed to Sonnet.";
+                        routingReason = "Complex structural edit → Sonnet.";
                     } else {
                         actualModel = "claude-3-5-haiku-latest";
-                        routingReason = "Simple edit, routed to Haiku.";
+                        routingReason = "Simple text/style edit → Haiku.";
                     }
                 } catch (e) {
                     actualModel = "claude-sonnet-4-20250514";
-                    routingReason = "Router fallback, routed to Sonnet.";
+                    routingReason = "Router fallback → Sonnet.";
                 }
             }
             console.log(`[Smart Router DnD] ${routingReason} (model: ${actualModel})`);
@@ -177,7 +180,7 @@ ${aiDossier}
 
             const msg = await anthropic.messages.create({
                 model: actualModel,
-                max_tokens: 8192,
+                max_tokens: 32768,
                 temperature: 0,
                 system: systemInstruction,
                 messages: anthropicMessages

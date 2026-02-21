@@ -87,11 +87,17 @@ export async function POST(req: Request) {
             const hasImages = lastUserMessage?.imageUrls?.length > 0;
             const isEmpty = !currentHtml || currentHtml.trim() === "";
 
-            if (hasImages || isEmpty) {
+            if (isEmpty) {
+                // Empty canvas always needs Sonnet (building from scratch)
                 actualModel = "claude-sonnet-4-20250514";
-                routingReason = hasImages ? "Image detected, routed to Sonnet." : "Empty canvas, routed to Sonnet.";
+                routingReason = "New template from scratch → Sonnet.";
+            } else if (hasImages) {
+                // Images present — still classify the TEXT prompt to pick the right model
+                // but always use Sonnet since vision tasks need the stronger model
+                actualModel = "claude-sonnet-4-20250514";
+                routingReason = "Vision task (screenshot reference) → Sonnet.";
             } else {
-                // Fast classification using Gemini Flash
+                // Text-only: fast classification using Gemini Flash
                 try {
                     const { GoogleGenerativeAI } = await import("@google/generative-ai");
                     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
@@ -110,14 +116,14 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
 
                     if (intent.includes("COMPLEX")) {
                         actualModel = "claude-sonnet-4-20250514";
-                        routingReason = "Complex structural request, routed to Sonnet.";
+                        routingReason = "Complex structural edit → Sonnet.";
                     } else {
                         actualModel = "claude-3-5-haiku-latest";
-                        routingReason = "Simple edit, routed to Haiku.";
+                        routingReason = "Simple text/style edit → Haiku.";
                     }
                 } catch (e) {
                     actualModel = "claude-sonnet-4-20250514";
-                    routingReason = "Router fallback, routed to Sonnet.";
+                    routingReason = "Router fallback → Sonnet.";
                 }
             }
             console.log(`[Smart Router] ${routingReason} (model: ${actualModel})`);
@@ -154,9 +160,9 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
     The user will give you HTML and a request.
     
     ### 🛑 CRITICAL INTEGRITY RULES:
-    1. **NEVER DELETE CONTENT:** Unless explicitly asked to remove something, you must PRESERVE all existing sections, text, and images.
-    2. **ADDING SECTIONS = FULL HTML:** If the user asks to "add", "insert", or "create" a new section/row/block, you MUST return the **COMPLETE HTML DOCUMENT** (starting with <!DOCTYPE html>). Do not return just the snippet, or the system will overwrite the wrong block.
-    3. **EDITING TEXT = SNIPPET:** Only if the user asks to typo-fix or rephrase *specific text inside the current block*, should you return just that HTML block. When in doubt, RETURN THE FULL HTML.
+    1. **NEVER DELETE CONTENT:** Unless explicitly asked to remove something, you must PRESERVE ALL existing sections, text, images, and structure. The user's screenshot may show only ONE section, but you MUST return the ENTIRE email.
+    2. **ALWAYS RETURN THE COMPLETE HTML DOCUMENT** starting with <!DOCTYPE html> and ending with </html>. Include EVERY section from the original HTML, even if the user's edit only affects one small part. If you return partial HTML, the entire email will be overwritten and the user will lose their work.
+    3. **EDITING TEXT = FULL HTML:** Even for small text changes, return the full HTML document with only the requested text modified and everything else preserved exactly.
     
     ### CODING STANDARDS:
     1. **LAYOUT:** Use HTML <table>, <tr>, <td> for structure. No Flexbox/Grid.
@@ -228,7 +234,7 @@ ${aiDossier ? `
 
             const msg = await anthropic.messages.create({
                 model: actualModel,
-                max_tokens: 8192,
+                max_tokens: 32768,
                 temperature: 0,
                 system: systemInstruction,
                 messages: anthropicMessages
