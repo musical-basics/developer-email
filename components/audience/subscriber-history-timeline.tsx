@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { formatDistanceToNow } from "date-fns"
+import Link from "next/link"
 import {
     Mail,
     MousePointer2,
@@ -9,9 +10,11 @@ import {
     Globe,
     Clock,
     MoreHorizontal,
-    ArrowUpRight
+    ArrowUpRight,
+    Send,
+    Link2
 } from "lucide-react"
-import { getSubscriberHistory } from "@/app/actions/subscriber-history"
+import { getSubscriberHistory, getSubscriberCampaigns, getSubscriberChains } from "@/app/actions/subscriber-history"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -26,13 +29,36 @@ interface TimelineEvent {
     campaigns?: { name: string }
 }
 
+interface CampaignSend {
+    campaign_id: string
+    created_at: string
+    campaigns: { id: string; name: string; status: string } | null
+}
+
+interface ChainProcess {
+    id: string
+    status: string
+    current_step_index: number
+    created_at: string
+    updated_at: string
+    email_chains: { id: string; name: string; slug: string } | null
+}
+
 export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: string }) {
     const [events, setEvents] = useState<TimelineEvent[]>([])
+    const [campaigns, setCampaigns] = useState<CampaignSend[]>([])
+    const [chains, setChains] = useState<ChainProcess[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        getSubscriberHistory(subscriberId).then((data) => {
-            setEvents(data as any)
+        Promise.all([
+            getSubscriberHistory(subscriberId),
+            getSubscriberCampaigns(subscriberId),
+            getSubscriberChains(subscriberId),
+        ]).then(([historyData, campaignData, chainData]) => {
+            setEvents(historyData as any)
+            setCampaigns(campaignData as any)
+            setChains(chainData as any)
             setLoading(false)
         })
     }, [subscriberId])
@@ -52,6 +78,13 @@ export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: stri
         if (!seconds) return ""
         if (seconds < 60) return `${seconds}s`
         return `${Math.floor(seconds / 60)}m ${seconds % 60}s`
+    }
+
+    const chainStatusStyle: Record<string, string> = {
+        active: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+        completed: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+        paused: "bg-amber-500/10 text-amber-400 border-amber-500/20",
+        cancelled: "bg-red-500/10 text-red-400 border-red-500/20",
     }
 
     if (loading) return <div className="p-8 text-center text-muted-foreground">Loading history...</div>
@@ -160,6 +193,82 @@ export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: stri
                                 </div>
                             ))
                         })()}
+                    </div>
+
+                    {/* ─── Campaigns Sent ─── */}
+                    <div className="mt-10 pt-6 border-t border-border">
+                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
+                            <Send className="w-4 h-4 text-primary" />
+                            Campaigns Received ({campaigns.length})
+                        </h3>
+                        {campaigns.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No campaigns sent to this subscriber yet.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {campaigns.map((c) => (
+                                    <div key={c.campaign_id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="p-1.5 rounded-md bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
+                                                <Mail className="w-3.5 h-3.5 text-blue-400" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <Link
+                                                    href={`/dashboard/${c.campaign_id}`}
+                                                    className="text-sm font-medium text-foreground hover:underline truncate block"
+                                                >
+                                                    {c.campaigns?.name || "Unknown Campaign"}
+                                                </Link>
+                                                <span className="text-[11px] text-muted-foreground">
+                                                    Sent {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        {c.campaigns?.status && (
+                                            <Badge variant="outline" className="text-[10px] capitalize ml-2 flex-shrink-0">
+                                                {c.campaigns.status}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* ─── Chain Enrollments ─── */}
+                    <div className="mt-8 pt-6 border-t border-border">
+                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
+                            <Link2 className="w-4 h-4 text-primary" />
+                            Chain Enrollments ({chains.length})
+                        </h3>
+                        {chains.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">Not enrolled in any chains.</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {chains.map((ch) => (
+                                    <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20 flex-shrink-0">
+                                                <Link2 className="w-3.5 h-3.5 text-purple-400" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <span className="text-sm font-medium text-foreground truncate block">
+                                                    {ch.email_chains?.name || "Unknown Chain"}
+                                                </span>
+                                                <span className="text-[11px] text-muted-foreground">
+                                                    Step {ch.current_step_index + 1} · Started {formatDistanceToNow(new Date(ch.created_at), { addSuffix: true })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <Badge
+                                            variant="outline"
+                                            className={`text-[10px] capitalize ml-2 flex-shrink-0 ${chainStatusStyle[ch.status] || ""}`}
+                                        >
+                                            {ch.status}
+                                        </Badge>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </div>
             </ScrollArea>
