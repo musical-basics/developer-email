@@ -112,6 +112,35 @@ export async function POST(request: Request) {
         else if (type === "broadcast") {
             console.log(`🚀 Starting broadcast for campaign ${campaignId}`);
 
+            // If broadcasting from a template, create a child campaign for tracking
+            let trackingCampaignId = campaignId;
+            if (campaign.is_template) {
+                const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                const childName = `${campaign.name} — ${today}`;
+
+                const { data: child, error: childError } = await supabaseAdmin
+                    .from("campaigns")
+                    .insert({
+                        name: childName,
+                        subject_line: campaign.subject_line,
+                        html_content: campaign.html_content,
+                        status: "draft",
+                        is_template: false,
+                        parent_template_id: campaignId,
+                        variable_values: campaign.variable_values || {},
+                    })
+                    .select("id")
+                    .single();
+
+                if (childError || !child) {
+                    console.error("Failed to create child campaign:", childError);
+                    return NextResponse.json({ error: "Failed to create send record" }, { status: 500 });
+                }
+
+                trackingCampaignId = child.id;
+                console.log(`📋 Created child campaign ${trackingCampaignId} from template ${campaignId}`);
+            }
+
             // Fetch recipients
             const lockedSubscriberId = campaign.variable_values?.subscriber_id;
             let query = supabaseAdmin.from("subscribers").select("*").eq("status", "active");
@@ -146,7 +175,7 @@ export async function POST(request: Request) {
             // Send to each recipient
             await Promise.all(recipients.map(async (sub) => {
                 try {
-                    const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${campaignId}`;
+                    const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${trackingCampaignId}`;
 
                     // Personalize content
                     let personalHtml = htmlWithFooter
@@ -164,7 +193,7 @@ export async function POST(request: Request) {
                     });
 
                     // Open tracking pixel (loaded from our own domain)
-                    const openPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+                    const openPixel = `<img src="${baseUrl}/api/track/open?c=${trackingCampaignId}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
                     personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
                     if (!personalHtml.includes(openPixel)) {
                         personalHtml += openPixel;
@@ -192,7 +221,7 @@ export async function POST(request: Request) {
                             firstResendEmailId = sendData.id;
                         }
                         sentRecords.push({
-                            campaign_id: campaignId,
+                            campaign_id: trackingCampaignId,
                             subscriber_id: sub.id,
                             sent_at: new Date().toISOString(),
                             variant_sent: campaign.subject_line || null
@@ -210,7 +239,7 @@ export async function POST(request: Request) {
                 if (historyError) console.error("Failed to insert history:", historyError);
             }
 
-            // Update campaign status
+            // Update the tracking campaign (child or original) to completed
             const updateData: any = {
                 status: "completed",
                 total_recipients: recipients.length
@@ -218,7 +247,7 @@ export async function POST(request: Request) {
             if (firstResendEmailId) {
                 updateData.resend_email_id = firstResendEmailId;
             }
-            await supabaseAdmin.from("campaigns").update(updateData).eq("id", campaignId);
+            await supabaseAdmin.from("campaigns").update(updateData).eq("id", trackingCampaignId);
 
             const message = `Broadcast complete: ${successCount} sent, ${failureCount} failed out of ${recipients.length} recipients.`;
             console.log(`✅ ${message}`);
