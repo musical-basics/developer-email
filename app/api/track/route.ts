@@ -26,19 +26,23 @@ export async function OPTIONS(request: Request) {
 
 export async function POST(request: Request) {
     try {
-        const { subscriber_id, campaign_id, type, url, duration, ip } = await request.json();
+        const { subscriber_id, campaign_id, type, url, duration, ip, temp_session_id } = await request.json();
 
-        // 2. Validate
-        if (!subscriber_id) return NextResponse.json({ error: "No ID" }, { status: 400 });
+        // 2. Validate — need at least subscriber_id or temp_session_id
+        if (!subscriber_id && !temp_session_id) return NextResponse.json({ error: "No ID" }, { status: 400 });
 
         // 3. Log the Event
+        const metadata: Record<string, any> = {};
+        if (duration) metadata.duration_seconds = duration;
+        if (temp_session_id) metadata.temp_session_id = temp_session_id;
+
         await supabase.from("subscriber_events").insert({
-            subscriber_id,
-            campaign_id, // Optional (null for organic website visits)
-            type, // 'open', 'click', 'page_view', 'session_end'
+            subscriber_id: subscriber_id || null,
+            campaign_id,
+            type,
             url,
             ip_address: ip,
-            metadata: duration ? { duration_seconds: duration } : {}
+            metadata: Object.keys(metadata).length > 0 ? metadata : {},
         });
 
         // 4. Browse Abandonment Triggers

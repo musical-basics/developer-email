@@ -36,7 +36,7 @@ export async function OPTIONS(request: Request) {
 
 export async function POST(request: Request) {
     try {
-        const { email, first_name, last_name, tags, city, country, ip_address } = await request.json();
+        const { email, first_name, last_name, tags, city, country, ip_address, temp_session_id } = await request.json();
 
         if (!email) {
             return NextResponse.json(
@@ -88,6 +88,21 @@ export async function POST(request: Request) {
                 }
             });
             console.log(`[Webhook] Started DreamPlay chain for ${data.email}`);
+        }
+
+        // 📍 IDENTITY STITCHING: Link anonymous browsing history to new subscriber
+        if (temp_session_id && data.id) {
+            const { error: stitchError, count } = await supabase
+                .from("subscriber_events")
+                .update({ subscriber_id: data.id })
+                .is("subscriber_id", null)
+                .eq("metadata->>temp_session_id", temp_session_id);
+
+            if (stitchError) {
+                console.error("[Webhook] Identity stitch error:", stitchError);
+            } else {
+                console.log(`[Webhook] Stitched ${count || 0} anonymous events for ${data.email}`);
+            }
         }
 
         return NextResponse.json(

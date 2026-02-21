@@ -89,6 +89,18 @@ export const sendCampaign = inngest.createFunction(
                             .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
                             .replace(/{{subscriber_id}}/g, sub.id);
 
+                        // Smart Blocks: process conditional tag content per subscriber
+                        const subscriberTags = sub.tags || [];
+                        personalHtml = personalHtml.replace(
+                            /\{\{#if\s+tag_(\w+)\}\}([\s\S]*?)\{\{\/?endif\}\}/gi,
+                            (_match: string, tagName: string, content: string) => {
+                                const hasTag = subscriberTags.some(
+                                    (t: string) => t.toLowerCase() === tagName.toLowerCase()
+                                );
+                                return hasTag ? content.trim() : "";
+                            }
+                        );
+
                         // Auto-append sid and em to all links
                         personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                             if (url.includes('/unsubscribe')) return match;

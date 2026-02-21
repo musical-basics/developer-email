@@ -4,8 +4,22 @@
  * @param assets - An object mapping variable names to their replacement values
  * @returns The processed HTML string with all placeholders replaced
  */
-export function renderTemplate(html: string, assets: Record<string, string>): string {
+export function renderTemplate(html: string, assets: Record<string, string>, subscriberTags: string[] = []): string {
     let result = html
+
+    // Pass 0: Smart Blocks — Conditional Tag Content
+    // Syntax: {{#if tag_Europe}} content {{/endif}}
+    // Keeps content if subscriberTags includes the tag name, strips it otherwise.
+    result = result.replace(
+        /\{\{#if\s+tag_(\w+)\}\}([\s\S]*?)\{\{\/?endif\}\}/gi,
+        (_match, tagName: string, content: string) => {
+            // Check manual tags (case-insensitive)
+            const hasTag = subscriberTags.some(
+                t => t.toLowerCase() === tagName.toLowerCase()
+            );
+            return hasTag ? content.trim() : "";
+        }
+    );
 
     // 1. (Removed premature replacement)
 
