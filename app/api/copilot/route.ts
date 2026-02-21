@@ -10,9 +10,14 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-// Keep existing helper
-function cleanJson(text: string) {
-    return text.replace(/```json/g, "").replace(/```/g, "").trim();
+// Robust JSON extractor: finds the first '{' and last '}' to ignore chatty text
+function extractJson(text: string) {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+        return text.substring(start, end + 1);
+    }
+    return text; // Fallback
 }
 
 // Helper: Download image from URL and convert to Base64
@@ -83,8 +88,13 @@ export async function POST(req: Request) {
     - All links (href on <a> tags) MUST use {{mustache_variable}} names (e.g. {{cta_link_url}}, {{hero_link_url}}).
     - This means the user only needs to load assets (images + links) via the Asset Loader, while the text is baked into the HTML.
     
-    ### RESPONSE FORMAT:
-    { "explanation": "brief summary of changes", "updatedHtml": "<html>...</html>" }
+    ### RESPONSE FORMAT (STRICT JSON ONLY):
+    You MUST return ONLY a valid JSON object. Do not include any conversational text before or after the JSON.
+    {
+      "_thoughts": "Think step-by-step about what needs to be changed. Explain your math or logic here before writing the code.",
+      "explanation": "A brief, friendly summary of changes for the user interface",
+      "updatedHtml": "<!DOCTYPE html>\n<html>...</html>"
+    }
     
     ### COMPANY CONTEXT:
     ${dynamicContext}
@@ -190,10 +200,14 @@ ${aiDossier ? `
 
         // --- PARSE ---
         try {
-            const cleaned = cleanJson(rawResponse);
+            const cleaned = extractJson(rawResponse);
             return NextResponse.json(JSON.parse(cleaned));
-        } catch (e) {
-            return NextResponse.json({ updatedHtml: currentHtml, explanation: rawResponse });
+        } catch (e: any) {
+            console.error("JSON Parse Error:", e.message);
+            return NextResponse.json({
+                updatedHtml: currentHtml,
+                explanation: "I successfully generated the code, but my output formatting broke. Please try asking me again!"
+            });
         }
 
     } catch (error: any) {

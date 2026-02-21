@@ -8,8 +8,14 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-function cleanJson(text: string) {
-    return text.replace(/```json/g, "").replace(/```/g, "").trim();
+// Robust JSON extractor: finds the first '{' and last '}' to ignore chatty text
+function extractJson(text: string) {
+    const start = text.indexOf('{');
+    const end = text.lastIndexOf('}');
+    if (start !== -1 && end !== -1 && end > start) {
+        return text.substring(start, end + 1);
+    }
+    return text; // Fallback
 }
 
 async function urlToBase64(url: string) {
@@ -75,8 +81,13 @@ The user will describe what they want, and you return a structured array of bloc
 
 ${BLOCK_SCHEMA}
 
-### RESPONSE FORMAT:
-{ "explanation": "brief summary of what you created/changed", "blocks": [ ...array of block objects... ] }
+### RESPONSE FORMAT (STRICT JSON ONLY):
+You MUST return ONLY a valid JSON object. Do not include any conversational text before or after the JSON.
+{ 
+  "_thoughts": "Think step-by-step about the blocks you need to create/modify.",
+  "explanation": "A brief summary of what you created/changed", 
+  "blocks": [ ...array of block objects... ] 
+}
 
 ### COMPANY CONTEXT:
 ${dynamicContext}
@@ -163,13 +174,17 @@ ${aiDossier}
             rawResponse = result.response.text();
         }
 
-        // Parse response
+        // --- PARSE ---
         try {
-            const cleaned = cleanJson(rawResponse);
+            const cleaned = extractJson(rawResponse);
             const parsed = JSON.parse(cleaned);
             return NextResponse.json(parsed);
-        } catch (e) {
-            return NextResponse.json({ blocks: currentBlocks, explanation: rawResponse });
+        } catch (e: any) {
+            console.error("JSON Parse Error:", e.message);
+            return NextResponse.json({
+                blocks: currentBlocks,
+                explanation: "I successfully generated the blocks, but my output formatting broke. Please try asking me again!"
+            });
         }
 
     } catch (error: any) {
