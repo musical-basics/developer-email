@@ -119,6 +119,7 @@ function formatDate(dateString: string): string {
 export default function AudienceManagerPage() {
     const [subscribers, setSubscribers] = useState<Subscriber[]>([])
     const [loading, setLoading] = useState(true)
+    const [lastSentSubjects, setLastSentSubjects] = useState<Record<string, string>>({})
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedTags, setSelectedTags] = useState<string[]>([])
     const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -168,6 +169,27 @@ export default function AudienceManagerPage() {
 
         if (data) {
             setSubscribers(data as Subscriber[])
+
+            // Fetch last sent email subject per subscriber
+            const subIds = data.map((s: any) => s.id)
+            if (subIds.length > 0) {
+                const { data: sentData } = await supabase
+                    .from("sent_history")
+                    .select("subscriber_id, sent_at, campaign_id, campaigns(subject_line)")
+                    .in("subscriber_id", subIds)
+                    .order("sent_at", { ascending: false })
+
+                if (sentData) {
+                    const lookup: Record<string, string> = {}
+                    sentData.forEach((row: any) => {
+                        if (!lookup[row.subscriber_id]) {
+                            const subject = row.campaigns?.subject_line
+                            if (subject) lookup[row.subscriber_id] = subject
+                        }
+                    })
+                    setLastSentSubjects(lookup)
+                }
+            }
         } else if (error) {
             console.error("Error fetching subscribers:", error)
             toast({
@@ -687,9 +709,16 @@ export default function AudienceManagerPage() {
                                                 </Avatar>
                                                 <div>
                                                     <p className="font-medium text-foreground">{subscriber.email}</p>
-                                                    <p className="text-sm text-muted-foreground">
-                                                        {subscriber.first_name} {subscriber.last_name}
-                                                    </p>
+                                                    {subscriber.first_name && (
+                                                        <p className="text-sm text-muted-foreground">
+                                                            {subscriber.first_name} {subscriber.last_name}
+                                                        </p>
+                                                    )}
+                                                    {lastSentSubjects[subscriber.id] && (
+                                                        <p className="text-xs text-muted-foreground/70 italic truncate max-w-[250px]">
+                                                            Last sent: {lastSentSubjects[subscriber.id]}
+                                                        </p>
+                                                    )}
                                                 </div>
                                             </div>
                                         </TableCell>
