@@ -119,7 +119,7 @@ function formatDate(dateString: string): string {
 export default function AudienceManagerPage() {
     const [subscribers, setSubscribers] = useState<Subscriber[]>([])
     const [loading, setLoading] = useState(true)
-    const [lastSentSubjects, setLastSentSubjects] = useState<Record<string, string>>({})
+    const [lastSentSubjects, setLastSentSubjects] = useState<Record<string, { subject: string; sentAt: string }>>({})
     const [searchQuery, setSearchQuery] = useState("")
     const [selectedTags, setSelectedTags] = useState<string[]>([])
     const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -180,11 +180,11 @@ export default function AudienceManagerPage() {
                     .order("sent_at", { ascending: false })
 
                 if (sentData) {
-                    const lookup: Record<string, string> = {}
+                    const lookup: Record<string, { subject: string; sentAt: string }> = {}
                     sentData.forEach((row: any) => {
                         if (!lookup[row.subscriber_id]) {
                             const subject = row.campaigns?.subject_line
-                            if (subject) lookup[row.subscriber_id] = subject
+                            if (subject) lookup[row.subscriber_id] = { subject, sentAt: row.sent_at }
                         }
                     })
                     setLastSentSubjects(lookup)
@@ -715,8 +715,8 @@ export default function AudienceManagerPage() {
                                                         </p>
                                                     )}
                                                     {lastSentSubjects[subscriber.id] && (
-                                                        <p className="text-xs text-muted-foreground/70 italic truncate max-w-[250px]">
-                                                            Last sent: {lastSentSubjects[subscriber.id]}
+                                                        <p className="text-xs text-muted-foreground/70 italic truncate max-w-[300px]">
+                                                            Last sent: {lastSentSubjects[subscriber.id].subject} · {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                                                         </p>
                                                     )}
                                                 </div>
