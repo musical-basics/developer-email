@@ -292,6 +292,11 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                     <Pencil className="w-3.5 h-3.5" />
                                                 </button>
                                             </div>
+                                            {campaign.subject_line && (
+                                                <span className="text-xs text-muted-foreground/70 italic truncate max-w-[280px]">
+                                                    {campaign.subject_line}
+                                                </span>
+                                            )}
                                             <span className="text-xs text-muted-foreground">
                                                 Created {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true })}
                                             </span>

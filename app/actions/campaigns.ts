@@ -39,7 +39,7 @@ export async function getCampaigns() {
     // Fetch campaigns
     const { data: campaigns, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, variable_values")
+        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, variable_values")
         .order("created_at", { ascending: false })
 
     if (error) {
