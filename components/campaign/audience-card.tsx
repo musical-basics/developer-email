@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Users, User, Pencil, Loader2, Check } from "lucide-react"
+import { Users, User, Pencil, Loader2, Check, Tag } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Campaign, Subscriber } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -20,6 +20,7 @@ interface AudienceCardProps {
 
 export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceCardProps) {
     const lockedSubscriberId = campaign?.variable_values?.subscriber_id
+    const targetTag = campaign?.variable_values?.target_tag
     const { toast } = useToast()
     const router = useRouter()
 
@@ -143,6 +144,20 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
                                     <p className="text-sm text-blue-300/80">{email}</p>
                                 </div>
                             )}
+                        </div>
+                    </div>
+                ) : targetTag ? (
+                    <div className="flex items-start gap-4 bg-amber-500/10 p-4 rounded-lg border border-amber-500/20">
+                        <Tag className="h-8 w-8 text-amber-400 mt-1 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-lg text-amber-400">Targeting Tag</p>
+                            <p className="mt-1 text-sm text-amber-300">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-amber-500/20 border border-amber-500/30 rounded-full text-xs font-semibold text-amber-300">
+                                    <Tag className="h-3 w-3" />
+                                    {targetTag}
+                                </span>
+                            </p>
+                            <p className="mt-2 text-xs text-amber-300/60">Only subscribers with this tag will receive this campaign.</p>
                         </div>
                     </div>
                 ) : (

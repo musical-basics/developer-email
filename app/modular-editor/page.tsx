@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { saveCampaignBackup } from "@/app/actions/campaigns"
+import { getCampaignDossier } from "@/app/actions/audience-intelligence"
 
 const DEFAULT_HTML = `<!DOCTYPE html>
 <html>
@@ -43,6 +44,7 @@ function ModularEditorPageContent() {
     const [fromName, setFromName] = useState("Lionel Yu")
     const [fromEmail, setFromEmail] = useState("lionel@email.dreamplaypianos.com")
     const [audienceContext, setAudienceContext] = useState<"dreamplay" | "musicalbasics" | "both">("dreamplay")
+    const [aiDossier, setAiDossier] = useState("")
 
     const [loading, setLoading] = useState(!!id)
     const [saving, setSaving] = useState(false)
@@ -173,6 +175,7 @@ function ModularEditorPageContent() {
                 fromName={fromName}
                 fromEmail={fromEmail}
                 audienceContext={audienceContext}
+                aiDossier={aiDossier}
                 onHtmlChange={setHtml}
                 onAssetsChange={setAssets}
                 onSubjectChange={setSubjectLine}

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { saveCampaignBackup } from "@/app/actions/campaigns"
+import { getCampaignDossier } from "@/app/actions/audience-intelligence"
 import type { EmailDesign } from "@/lib/dnd-blocks/types"
 import { serializeBlocks, deserializeBlocks } from "@/lib/dnd-blocks/types"
 import { compileBlocksToHtml } from "@/lib/dnd-blocks/compiler"
@@ -33,6 +34,7 @@ function DndEditorPageContent() {
     const [fromName, setFromName] = useState("Lionel Yu")
     const [fromEmail, setFromEmail] = useState("lionel@email.dreamplaypianos.com")
     const [audienceContext, setAudienceContext] = useState<"dreamplay" | "musicalbasics" | "both">("dreamplay")
+    const [aiDossier, setAiDossier] = useState("")
 
     const [loading, setLoading] = useState(!!id)
     const [saving, setSaving] = useState(false)
@@ -67,6 +69,8 @@ function DndEditorPageContent() {
                 if (data.variable_values?.from_name) setFromName(data.variable_values.from_name)
                 if (data.variable_values?.from_email) setFromEmail(data.variable_values.from_email)
                 if (data.variable_values?.audience_context) setAudienceContext(data.variable_values.audience_context)
+
+                getCampaignDossier(data.id).then(d => setAiDossier(d))
             }
             setLoading(false)
         }
@@ -206,6 +210,7 @@ function DndEditorPageContent() {
                 fromName={fromName}
                 fromEmail={fromEmail}
                 audienceContext={audienceContext}
+                aiDossier={aiDossier}
                 onBlocksChange={setBlocks}
                 onAssetsChange={setAssets}
                 onSubjectChange={setSubjectLine}

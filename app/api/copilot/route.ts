@@ -33,7 +33,7 @@ async function urlToBase64(url: string) {
 
 export async function POST(req: Request) {
     try {
-        const { currentHtml, messages, model, audienceContext = "dreamplay" } = await req.json();
+        const { currentHtml, messages, model, audienceContext = "dreamplay", aiDossier = "" } = await req.json();
 
         // 1. FETCH AUDIENCE-DRIVEN CONTEXT ⚡️
         const payload = await getAllContextForAudience(audienceContext);
@@ -89,6 +89,10 @@ export async function POST(req: Request) {
     ### COMPANY CONTEXT:
     ${dynamicContext}
     ${defaultLinksBlock}
+${aiDossier ? `
+    ### AUDIENCE INTELLIGENCE:
+    ${aiDossier}
+` : ""}
     `;
 
         let rawResponse = "";

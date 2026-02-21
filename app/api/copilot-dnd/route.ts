@@ -52,7 +52,7 @@ RULES:
 
 export async function POST(req: Request) {
     try {
-        const { currentBlocks, messages, model, audienceContext = "dreamplay" } = await req.json();
+        const { currentBlocks, messages, model, audienceContext = "dreamplay", aiDossier = "" } = await req.json();
 
         // Fetch audience-driven context
         const payload = await getAllContextForAudience(audienceContext);
@@ -90,6 +90,10 @@ When modifying existing blocks:
 - Use the same IDs for unchanged blocks
 - Generate new IDs for new blocks
 When creating from scratch, build a complete email with appropriate sections.
+${aiDossier ? `
+### AUDIENCE INTELLIGENCE:
+${aiDossier}
+` : ""}
 `;
 
         let rawResponse = "";

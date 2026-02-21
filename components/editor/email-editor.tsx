@@ -22,6 +22,7 @@ interface EmailEditorProps {
     fromName: string
     fromEmail: string
     audienceContext: "dreamplay" | "musicalbasics" | "both"
+    aiDossier?: string
     onHtmlChange: (html: string) => void
     onAssetsChange: (assets: Record<string, string>) => void
     onSubjectChange: (value: string) => void
@@ -41,6 +42,7 @@ export function EmailEditor({
     fromName,
     fromEmail,
     audienceContext,
+    aiDossier,
     onHtmlChange,
     onAssetsChange,
     onSubjectChange,
@@ -387,7 +389,7 @@ export function EmailEditor({
                     )}
                 >
                     <div className="h-full overflow-hidden">
-                        <CopilotPane html={html} onHtmlChange={onHtmlChange} audienceContext={audienceContext} />
+                        <CopilotPane html={html} onHtmlChange={onHtmlChange} audienceContext={audienceContext} aiDossier={aiDossier} />
                     </div>
                 </Panel>
             </PanelGroup>

@@ -24,6 +24,7 @@ interface ModularEmailEditorProps {
     fromName: string
     fromEmail: string
     audienceContext: "dreamplay" | "musicalbasics" | "both"
+    aiDossier?: string
     onHtmlChange: (html: string) => void
     onAssetsChange: (assets: Record<string, string>) => void
     onSubjectChange: (value: string) => void
@@ -125,6 +126,7 @@ export function ModularEmailEditor({
     fromName,
     fromEmail,
     audienceContext,
+    aiDossier,
     onHtmlChange,
     onAssetsChange,
     onSubjectChange,
@@ -501,6 +503,7 @@ export function ModularEmailEditor({
                     html={fullHtml}
                     onHtmlChange={handleCopilotUpdate}
                     audienceContext={audienceContext}
+                    aiDossier={aiDossier}
                 />
             </div>
         </div >

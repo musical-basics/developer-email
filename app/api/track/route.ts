@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { inngest } from "@/inngest/client";
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -39,6 +40,16 @@ export async function POST(request: Request) {
             ip_address: ip,
             metadata: duration ? { duration_seconds: duration } : {}
         });
+
+        // 4. Browse Abandonment Triggers
+        if (type === "session_end" && duration > 10 && subscriber_id) {
+            if (url?.includes("/customize")) {
+                await inngest.send({
+                    name: "chain.abandon.customize",
+                    data: { subscriberId: subscriber_id, url, duration },
+                });
+            }
+        }
 
         return NextResponse.json({ success: true }, { headers: getCorsHeaders(request) });
 

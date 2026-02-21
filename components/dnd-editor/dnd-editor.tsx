@@ -23,6 +23,7 @@ interface DndEmailEditorProps {
     fromName: string
     fromEmail: string
     audienceContext: "dreamplay" | "musicalbasics" | "both"
+    aiDossier?: string
     onBlocksChange: (blocks: EmailDesign) => void
     onAssetsChange: (assets: Record<string, string>) => void
     onSubjectChange: (value: string) => void
@@ -42,6 +43,7 @@ export function DndEmailEditor({
     fromName,
     fromEmail,
     audienceContext,
+    aiDossier,
     onBlocksChange,
     onAssetsChange,
     onSubjectChange,
@@ -327,7 +329,7 @@ export function DndEmailEditor({
 
                 {/* Copilot (bottom half) */}
                 <div className="h-[45%] overflow-hidden">
-                    <DndCopilotPane blocks={blocks} onBlocksChange={handleCopilotUpdate} audienceContext={audienceContext} />
+                    <DndCopilotPane blocks={blocks} onBlocksChange={handleCopilotUpdate} audienceContext={audienceContext} aiDossier={aiDossier} />
                 </div>
             </div>
         </div>

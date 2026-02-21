@@ -174,6 +174,7 @@ export async function createCampaignForTag(tagName: string) {
                 status: "draft",
                 subject_line: `(Draft) Update for ${tagName}`,
                 html_content: "",
+                variable_values: { target_tag: tagName },
             },
         ])
         .select()

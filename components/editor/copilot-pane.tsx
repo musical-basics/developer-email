@@ -19,11 +19,12 @@ interface CopilotPaneProps {
     html: string
     onHtmlChange: (html: string, prompt: string) => void
     audienceContext?: "dreamplay" | "musicalbasics" | "both"
+    aiDossier?: string
 }
 
 import { getAnthropicModels } from "@/app/actions/ai-models"
 
-export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay" }: CopilotPaneProps) {
+export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay", aiDossier = "" }: CopilotPaneProps) {
     const [selectedModel, setSelectedModel] = useState("claude-3-5-sonnet-20240620")
     const [availableModels, setAvailableModels] = useState<string[]>([])
 
@@ -133,7 +134,8 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay" 
                     currentHtml: html,
                     messages: newHistory,
                     model: selectedModel,
-                    audienceContext
+                    audienceContext,
+                    aiDossier
                 }),
             })
 
