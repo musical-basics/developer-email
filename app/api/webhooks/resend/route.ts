@@ -59,7 +59,7 @@ export async function POST(request: Request) {
             }
 
             // ── CLICK ───────────────────────────────────────
-            else if (type === "email.link_clicked") {
+            else if (type === "email.clicked") {
                 const resolved = await resolveSubscriber(email);
                 if (resolved) {
                     await supabase.from("subscriber_events").insert({
