@@ -147,7 +147,10 @@ export async function duplicateCampaign(campaignId: string) {
                 status: "draft",
                 subject_line: original.subject_line,
                 html_content: original.html_content,
-                variable_values: original.variable_values,
+                variable_values: (() => {
+                    const { subscriber_id, ...rest } = original.variable_values || {};
+                    return rest;
+                })(),
                 parent_template_id: original.is_template ? original.id : (original.parent_template_id || null),
             },
         ])
