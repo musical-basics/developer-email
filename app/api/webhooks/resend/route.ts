@@ -35,11 +35,14 @@ async function resolveSubscriber(email: string) {
 export async function POST(request: Request) {
     try {
         const payload = await request.json();
+        console.log(`[Resend Webhook] Raw payload:`, JSON.stringify(payload).substring(0, 500));
+
         const events = Array.isArray(payload) ? payload : [payload];
 
         for (const event of events) {
             const { type, data } = event;
             const email = data?.to?.[0];
+            console.log(`[Resend Webhook] Event: ${type}, Email: ${email || 'MISSING'}`);
             if (!email) continue;
 
             // ── OPEN ────────────────────────────────────────
