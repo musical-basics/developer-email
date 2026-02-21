@@ -163,6 +163,14 @@ export async function POST(request: Request) {
                         return `href=${quote}${url}${sep}sid=${sub.id}&em=${encodeURIComponent(sub.email)}${quote}`;
                     });
 
+                    // Open tracking pixel (loaded from our own domain — no deliverability impact)
+                    const openPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+                    personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
+                    // Fallback: if no </body> tag, append at end
+                    if (!personalHtml.includes(openPixel)) {
+                        personalHtml += openPixel;
+                    }
+
                     // Send Email
                     const { data: sendData, error } = await resend.emails.send({
                         from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
