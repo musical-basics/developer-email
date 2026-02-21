@@ -13,7 +13,7 @@ export function CampaignsTabs({ campaigns }: CampaignsTabsProps) {
 
     const templates = campaigns.filter(c => c.is_template === true)
     const drafts = campaigns.filter(c => c.status === "draft" && !c.is_template && !c.variable_values?.subscriber_id)
-    const completed = campaigns.filter(c => ["sent", "completed", "active"].includes(c.status) && !c.is_template && !c.variable_values?.subscriber_id)
+    const completed = campaigns.filter(c => ["sent", "completed", "active"].includes(c.status) && !c.is_template)
 
     const tabs = [
         { key: "templates" as const, label: "Master Templates", count: templates.length },
