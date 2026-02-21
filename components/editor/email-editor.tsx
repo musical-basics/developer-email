@@ -21,10 +21,12 @@ interface EmailEditorProps {
     subjectLine: string
     fromName: string
     fromEmail: string
+    audienceContext: "dreamplay" | "musicalbasics" | "both"
     onHtmlChange: (html: string) => void
     onAssetsChange: (assets: Record<string, string>) => void
     onSubjectChange: (value: string) => void
     onSenderChange: (field: "name" | "email", value: string) => void
+    onAudienceChange: (value: "dreamplay" | "musicalbasics" | "both") => void
     campaignName: string
     onNameChange: (name: string) => void
     onSave?: () => void
@@ -38,10 +40,12 @@ export function EmailEditor({
     subjectLine,
     fromName,
     fromEmail,
+    audienceContext,
     onHtmlChange,
     onAssetsChange,
     onSubjectChange,
     onSenderChange,
+    onAudienceChange,
     campaignName,
     onNameChange,
     onSave,
@@ -174,6 +178,18 @@ export function EmailEditor({
                                         placeholder="lionel@..."
                                     />
                                 </div>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Target Audience</label>
+                                <select
+                                    value={audienceContext}
+                                    onChange={(e) => onAudienceChange(e.target.value as any)}
+                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary cursor-pointer"
+                                >
+                                    <option value="dreamplay">DreamPlay</option>
+                                    <option value="musicalbasics">MusicalBasics</option>
+                                    <option value="both">Both (Crossover)</option>
+                                </select>
                             </div>
                         </div>
 
@@ -371,7 +387,7 @@ export function EmailEditor({
                     )}
                 >
                     <div className="h-full overflow-hidden">
-                        <CopilotPane html={html} onHtmlChange={onHtmlChange} />
+                        <CopilotPane html={html} onHtmlChange={onHtmlChange} audienceContext={audienceContext} />
                     </div>
                 </Panel>
             </PanelGroup>

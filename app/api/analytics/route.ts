@@ -37,7 +37,7 @@ export async function GET() {
         // All campaigns
         const { data: allCampaigns } = await supabase
             .from('campaigns')
-            .select('id, name, is_template, parent_template_id, total_recipients')
+            .select('id, name, is_template, parent_template_id, total_recipients, variable_values')
 
         // All subscriber events
         const { data: allEvents } = await supabase
@@ -205,9 +205,28 @@ export async function GET() {
         // Sort: T3 desc → T2 → T1
         chainPerformance.sort((a, b) => b.t3 - a.t3 || b.t2 - a.t2 || b.t1 - a.t1)
 
+        // ─── GROUP BY AUDIENCE CONTEXT ──────────────────
+        type AudienceBucket = "dreamplay" | "musicalbasics" | "both"
+        const audienceBuckets: Record<AudienceBucket, { templates: PerformanceRow[]; chains: PerformanceRow[] }> = {
+            dreamplay: { templates: [], chains: [] },
+            musicalbasics: { templates: [], chains: [] },
+            both: { templates: [], chains: [] },
+        }
+
+        // Group templates by audience
+        for (const template of templates) {
+            const audience = (template as any).variable_values?.audience_context || "dreamplay"
+            const row = templatePerformance.find(r => r.name === template.name)
+            if (row) {
+                const bucket = audienceBuckets[audience as AudienceBucket] || audienceBuckets.dreamplay
+                bucket.templates.push(row)
+            }
+        }
+
         return NextResponse.json({
             templates: templatePerformance,
             chains: chainPerformance,
+            byAudience: audienceBuckets,
         })
 
     } catch (error) {

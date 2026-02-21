@@ -19,9 +19,10 @@ interface Message {
 interface DndCopilotPaneProps {
     blocks: EmailBlock[]
     onBlocksChange: (blocks: EmailBlock[], prompt: string) => void
+    audienceContext?: "dreamplay" | "musicalbasics" | "both"
 }
 
-export function DndCopilotPane({ blocks, onBlocksChange }: DndCopilotPaneProps) {
+export function DndCopilotPane({ blocks, onBlocksChange, audienceContext = "dreamplay" }: DndCopilotPaneProps) {
     const [messages, setMessages] = useState<Message[]>([])
     const [inputValue, setInputValue] = useState("")
     const [isLoading, setIsLoading] = useState(false)
@@ -90,6 +91,7 @@ export function DndCopilotPane({ blocks, onBlocksChange }: DndCopilotPaneProps) 
                         imageUrls: m.imageUrls,
                     })),
                     model,
+                    audienceContext,
                 }),
             })
 

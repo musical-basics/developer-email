@@ -18,11 +18,12 @@ interface Message {
 interface CopilotPaneProps {
     html: string
     onHtmlChange: (html: string, prompt: string) => void
+    audienceContext?: "dreamplay" | "musicalbasics" | "both"
 }
 
 import { getAnthropicModels } from "@/app/actions/ai-models"
 
-export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
+export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay" }: CopilotPaneProps) {
     const [selectedModel, setSelectedModel] = useState("claude-3-5-sonnet-20240620")
     const [availableModels, setAvailableModels] = useState<string[]>([])
 
@@ -130,8 +131,9 @@ export function CopilotPane({ html, onHtmlChange }: CopilotPaneProps) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     currentHtml: html,
-                    messages: newHistory, // We can safely send the whole history now!
-                    model: selectedModel
+                    messages: newHistory,
+                    model: selectedModel,
+                    audienceContext
                 }),
             })
 

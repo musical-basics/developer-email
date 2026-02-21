@@ -1,193 +1,293 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save, Brain, Loader2, Link2 } from "lucide-react"
+import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
-import { getCompanyContext, saveCompanyContext, getDefaultLinks, saveDefaultLinks, type DefaultLinks } from "@/app/actions/settings"
+import {
+    getCompanyContext, saveCompanyContext,
+    getDefaultLinks, saveDefaultLinks,
+    type DefaultLinks, type AudienceContext, type Brand
+} from "@/app/actions/settings"
+
+const LINK_LABELS: Record<keyof DefaultLinks, string> = {
+    unsubscribe_url: "Unsubscribe URL",
+    privacy_url: "Privacy Policy",
+    contact_url: "Contact Us",
+    about_url: "About Page",
+    shipping_url: "Shipping Info",
+    main_cta_url: "Main CTA URL",
+    crowdfunding_cta_url: "Crowdfunding CTA",
+    homepage_url: "Homepage URL",
+}
 
 export default function SettingsPage() {
-    const [context, setContext] = useState("")
-    const [links, setLinks] = useState<DefaultLinks>({
-        unsubscribe_url: "",
-        privacy_url: "",
-        contact_url: "",
-        about_url: "",
-        shipping_url: "",
-        main_cta_url: "",
-        crowdfunding_cta_url: "",
-        homepage_url: "",
+    // ─── Context State ──────────────────────────────
+    const [ctxMusicalBasics, setCtxMusicalBasics] = useState("")
+    const [ctxDreamPlay, setCtxDreamPlay] = useState("")
+    const [ctxCrossover, setCtxCrossover] = useState("")
+
+    // ─── Links State ────────────────────────────────
+    const [linksMB, setLinksMB] = useState<DefaultLinks>({
+        unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
+        shipping_url: "", main_cta_url: "", crowdfunding_cta_url: "", homepage_url: ""
     })
+    const [linksDP, setLinksDP] = useState<DefaultLinks>({
+        unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
+        shipping_url: "", main_cta_url: "", crowdfunding_cta_url: "", homepage_url: ""
+    })
+
     const [loading, setLoading] = useState(true)
-    const [saving, setSaving] = useState(false)
-    const [savingLinks, setSavingLinks] = useState(false)
+    const [savingContext, setSavingContext] = useState<string | null>(null)
+    const [savingLinks, setSavingLinks] = useState<string | null>(null)
     const { toast } = useToast()
 
+    // ─── Load ───────────────────────────────────────
     useEffect(() => {
-        Promise.all([getCompanyContext(), getDefaultLinks()]).then(([ctx, lnk]) => {
-            setContext(ctx)
-            setLinks(lnk)
-            setLoading(false)
-        })
+        async function loadAll() {
+            try {
+                const [mb, dp, cross, lMB, lDP] = await Promise.all([
+                    getCompanyContext("musicalbasics"),
+                    getCompanyContext("dreamplay"),
+                    getCompanyContext("crossover"),
+                    getDefaultLinks("musicalbasics"),
+                    getDefaultLinks("dreamplay"),
+                ])
+                setCtxMusicalBasics(mb)
+                setCtxDreamPlay(dp)
+                setCtxCrossover(cross)
+                setLinksMB(lMB)
+                setLinksDP(lDP)
+            } catch (e) {
+                console.error("Failed to load settings:", e)
+            } finally {
+                setLoading(false)
+            }
+        }
+        loadAll()
     }, [])
 
-    const handleSave = async () => {
-        setSaving(true)
+    // ─── Save Handlers ──────────────────────────────
+    const handleSaveContext = async (audience: AudienceContext) => {
+        setSavingContext(audience)
         try {
-            await saveCompanyContext(context)
-            toast({
-                title: "Brain Updated",
-                description: "Your AI copilot has been updated with the new context.",
-            })
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to save settings.",
-                variant: "destructive",
-            })
+            const text = audience === "musicalbasics" ? ctxMusicalBasics
+                : audience === "dreamplay" ? ctxDreamPlay : ctxCrossover
+            await saveCompanyContext(audience, text)
+            toast({ title: "Context Saved", description: `${audience} context updated.` })
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" })
         } finally {
-            setSaving(false)
+            setSavingContext(null)
         }
     }
 
-    const handleSaveLinks = async () => {
-        setSavingLinks(true)
+    const handleSaveLinks = async (brand: Brand) => {
+        setSavingLinks(brand)
         try {
-            await saveDefaultLinks(links)
-            toast({
-                title: "Links Saved",
-                description: "Default links updated. The AI copilot will use these in new templates.",
-            })
-        } catch (error) {
-            toast({
-                title: "Error",
-                description: "Failed to save links.",
-                variant: "destructive",
-            })
+            const links = brand === "musicalbasics" ? linksMB : linksDP
+            await saveDefaultLinks(brand, links)
+            toast({ title: "Links Saved", description: `${brand} links updated.` })
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" })
         } finally {
-            setSavingLinks(false)
+            setSavingLinks(null)
         }
     }
 
-    const updateLink = (key: keyof DefaultLinks, value: string) => {
-        setLinks((prev) => ({ ...prev, [key]: value }))
+    const updateLink = (brand: Brand, key: keyof DefaultLinks, value: string) => {
+        if (brand === "musicalbasics") {
+            setLinksMB(prev => ({ ...prev, [key]: value }))
+        } else {
+            setLinksDP(prev => ({ ...prev, [key]: value }))
+        }
     }
 
     if (loading) {
-        return <div className="p-8 flex items-center gap-2 text-muted-foreground"><Loader2 className="animate-spin" /> Loading settings...</div>
+        return (
+            <div className="flex h-96 items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+            </div>
+        )
     }
 
-    const linkFields: { key: keyof DefaultLinks; label: string; placeholder: string; group: "footer" | "cta" }[] = [
-        { key: "unsubscribe_url", label: "Unsubscribe", placeholder: "https://example.com/unsubscribe?id={{subscriber_id}}", group: "footer" },
-        { key: "privacy_url", label: "Privacy Policy", placeholder: "https://example.com/privacy", group: "footer" },
-        { key: "contact_url", label: "Contact Us", placeholder: "https://example.com/contact", group: "footer" },
-        { key: "about_url", label: "About Us", placeholder: "https://example.com/about", group: "footer" },
-        { key: "shipping_url", label: "Shipping", placeholder: "https://example.com/shipping", group: "footer" },
-        { key: "main_cta_url", label: "Main CTA", placeholder: "https://example.com/product", group: "cta" },
-        { key: "crowdfunding_cta_url", label: "Crowdfunding CTA", placeholder: "https://example.com/crowdfunding", group: "cta" },
-        { key: "homepage_url", label: "Homepage", placeholder: "https://example.com", group: "cta" },
-    ]
-
     return (
-        <div className="p-6 max-w-4xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
-                <p className="text-muted-foreground">Manage your global application configuration.</p>
+        <div className="p-6 max-w-4xl mx-auto">
+            <div className="mb-6">
+                <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+                <p className="text-sm text-muted-foreground mt-1">
+                    Configure AI context and default links per brand. The AI Copilot uses this data when generating email templates.
+                </p>
             </div>
 
-            {/* AI Company Context */}
-            <Card className="border-amber-500/20 bg-gradient-to-b from-amber-500/5 to-transparent">
-                <CardHeader>
-                    <div className="flex items-center gap-2">
-                        <Brain className="h-5 w-5 text-amber-500" />
-                        <CardTitle>AI Company Context</CardTitle>
-                    </div>
-                    <CardDescription>
-                        This is the "System Brain" for your AI Copilot. Anything you write here will be injected
-                        into every request, ensuring the AI knows your product, tone, and rules.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <Textarea
-                        value={context}
-                        onChange={(e) => setContext(e.target.value)}
-                        className="min-h-[300px] font-mono text-sm bg-background/50 leading-relaxed"
-                        placeholder="e.g. DreamPlay Pianos is a brand focused on..."
+            <Tabs defaultValue="dreamplay" className="space-y-6">
+                <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="dreamplay" className="flex items-center gap-2">
+                        <Piano className="w-4 h-4" />
+                        DreamPlay
+                    </TabsTrigger>
+                    <TabsTrigger value="musicalbasics" className="flex items-center gap-2">
+                        <Music className="w-4 h-4" />
+                        MusicalBasics
+                    </TabsTrigger>
+                    <TabsTrigger value="crossover" className="flex items-center gap-2">
+                        <ArrowRightLeft className="w-4 h-4" />
+                        Crossover
+                    </TabsTrigger>
+                </TabsList>
+
+                {/* ─── DreamPlay Tab ─── */}
+                <TabsContent value="dreamplay" className="space-y-6">
+                    <BrandContextCard
+                        title="DreamPlay Context"
+                        description="Company and product context for the DreamPlay brand."
+                        value={ctxDreamPlay}
+                        onChange={setCtxDreamPlay}
+                        onSave={() => handleSaveContext("dreamplay")}
+                        saving={savingContext === "dreamplay"}
                     />
+                    <BrandLinksCard
+                        title="DreamPlay Links"
+                        links={linksDP}
+                        onChange={(key, val) => updateLink("dreamplay", key, val)}
+                        onSave={() => handleSaveLinks("dreamplay")}
+                        saving={savingLinks === "dreamplay"}
+                    />
+                </TabsContent>
 
-                    <div className="flex justify-end">
-                        <Button onClick={handleSave} disabled={saving} className="gap-2 bg-amber-500 text-black hover:bg-amber-400">
-                            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                            {saving ? "Saving..." : "Save Context"}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+                {/* ─── MusicalBasics Tab ─── */}
+                <TabsContent value="musicalbasics" className="space-y-6">
+                    <BrandContextCard
+                        title="MusicalBasics Context"
+                        description="Company and product context for MusicalBasics."
+                        value={ctxMusicalBasics}
+                        onChange={setCtxMusicalBasics}
+                        onSave={() => handleSaveContext("musicalbasics")}
+                        saving={savingContext === "musicalbasics"}
+                    />
+                    <BrandLinksCard
+                        title="MusicalBasics Links"
+                        links={linksMB}
+                        onChange={(key, val) => updateLink("musicalbasics", key, val)}
+                        onSave={() => handleSaveLinks("musicalbasics")}
+                        saving={savingLinks === "musicalbasics"}
+                    />
+                </TabsContent>
 
-            {/* Default Links */}
-            <Card className="border-blue-500/20 bg-gradient-to-b from-blue-500/5 to-transparent">
-                <CardHeader>
-                    <div className="flex items-center gap-2">
-                        <Link2 className="h-5 w-5 text-blue-500" />
-                        <CardTitle>Default Links</CardTitle>
-                    </div>
-                    <CardDescription>
-                        Common links the AI copilot will auto-fill when generating new email templates.
-                        CTA links go into buttons and image links. Footer links go into the email footer.
-                        These are defaults — you can always override them per template.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                    {/* CTA Links */}
-                    <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-blue-400 uppercase tracking-wider">CTA & Image Links</h4>
-                        <div className="grid gap-3">
-                            {linkFields.filter(f => f.group === "cta").map((field) => (
-                                <div key={field.key} className="space-y-1">
-                                    <Label htmlFor={field.key} className="text-xs text-muted-foreground">{field.label}</Label>
-                                    <Input
-                                        id={field.key}
-                                        value={links[field.key]}
-                                        onChange={(e) => updateLink(field.key, e.target.value)}
-                                        placeholder={field.placeholder}
-                                        className="bg-background/50 text-sm"
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Footer Links */}
-                    <div className="space-y-3">
-                        <h4 className="text-sm font-medium text-blue-400 uppercase tracking-wider">Footer Links</h4>
-                        <div className="grid gap-3">
-                            {linkFields.filter(f => f.group === "footer").map((field) => (
-                                <div key={field.key} className="space-y-1">
-                                    <Label htmlFor={field.key} className="text-xs text-muted-foreground">{field.label}</Label>
-                                    <Input
-                                        id={field.key}
-                                        value={links[field.key]}
-                                        onChange={(e) => updateLink(field.key, e.target.value)}
-                                        placeholder={field.placeholder}
-                                        className="bg-background/50 text-sm"
-                                    />
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-
-                    <div className="flex justify-end">
-                        <Button onClick={handleSaveLinks} disabled={savingLinks} className="gap-2 bg-blue-500 text-white hover:bg-blue-400">
-                            {savingLinks ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                            {savingLinks ? "Saving..." : "Save Links"}
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
+                {/* ─── Crossover Tab ─── */}
+                <TabsContent value="crossover" className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <Brain className="w-5 h-5 text-purple-400" />
+                                Crossover Context
+                            </CardTitle>
+                            <CardDescription>
+                                This context is injected when the Target Audience is set to &ldquo;Both&rdquo;.
+                                Use it to explain to the AI how to bridge your two brands &mdash; for example:
+                                &ldquo;The reader originally subscribed for MusicalBasics content, but also has interest in DreamPlay.
+                                Focus 80% on music, 20% on the keyboard product. Introduce DreamPlay organically.&rdquo;
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Textarea
+                                value={ctxCrossover}
+                                onChange={(e) => setCtxCrossover(e.target.value)}
+                                placeholder="Describe the audience hierarchy and how to blend both brands..."
+                                rows={8}
+                            />
+                            <Button
+                                onClick={() => handleSaveContext("crossover")}
+                                disabled={savingContext === "crossover"}
+                            >
+                                {savingContext === "crossover" ? (
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                ) : (
+                                    <Save className="w-4 h-4 mr-2" />
+                                )}
+                                Save Crossover Context
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
         </div>
+    )
+}
+
+// ─── Sub-components ─────────────────────────────────────
+
+function BrandContextCard({
+    title, description, value, onChange, onSave, saving
+}: {
+    title: string; description: string; value: string
+    onChange: (v: string) => void; onSave: () => void; saving: boolean
+}) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Brain className="w-5 h-5 text-purple-400" />
+                    {title}
+                </CardTitle>
+                <CardDescription>{description}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <Textarea
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    placeholder="Describe your brand, products, tone, and any context the AI should know..."
+                    rows={6}
+                />
+                <Button onClick={onSave} disabled={saving}>
+                    {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    Save Context
+                </Button>
+            </CardContent>
+        </Card>
+    )
+}
+
+function BrandLinksCard({
+    title, links, onChange, onSave, saving
+}: {
+    title: string; links: DefaultLinks
+    onChange: (key: keyof DefaultLinks, value: string) => void
+    onSave: () => void; saving: boolean
+}) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-blue-400" />
+                    {title}
+                </CardTitle>
+                <CardDescription>
+                    Default URLs the AI Copilot uses when generating templates for this brand.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {(Object.keys(LINK_LABELS) as (keyof DefaultLinks)[]).map((key) => (
+                    <div key={key} className="grid grid-cols-3 gap-3 items-center">
+                        <Label className="text-sm text-muted-foreground">{LINK_LABELS[key]}</Label>
+                        <Input
+                            value={links[key]}
+                            onChange={(e) => onChange(key, e.target.value)}
+                            placeholder={`https://...`}
+                            className="col-span-2"
+                        />
+                    </div>
+                ))}
+                <Button onClick={onSave} disabled={saving} className="mt-2">
+                    {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    Save Links
+                </Button>
+            </CardContent>
+        </Card>
     )
 }

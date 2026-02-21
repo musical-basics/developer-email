@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { getAllContextForAudience, formatContextForPrompt } from "@/app/actions/settings";
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -51,25 +52,11 @@ RULES:
 
 export async function POST(req: Request) {
     try {
-        const { currentBlocks, messages, model } = await req.json();
+        const { currentBlocks, messages, model, audienceContext = "dreamplay" } = await req.json();
 
-        // Fetch context
-        const [{ data: setting }, { data: linksSetting }] = await Promise.all([
-            supabase.from('app_settings').select('value').eq('key', 'company_context').single(),
-            supabase.from('app_settings').select('value').eq('key', 'default_links').single(),
-        ]);
-
-        const dynamicContext = setting?.value || "Product: DreamPlay One. Feature: Narrow Keys.";
-        let defaultLinksBlock = "";
-        try {
-            const links = linksSetting?.value ? JSON.parse(linksSetting.value) : null;
-            if (links) {
-                const entries = Object.entries(links).filter(([_, v]) => v);
-                if (entries.length > 0) {
-                    defaultLinksBlock = `\n### DEFAULT LINKS:\nUse these URLs as defaults for button and link blocks. Use {{mustache}} variables that map to these.\n${entries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}\n`;
-                }
-            }
-        } catch { }
+        // Fetch audience-driven context
+        const payload = await getAllContextForAudience(audienceContext);
+        const { contextBlock: dynamicContext, linksBlock: defaultLinksBlock } = await formatContextForPrompt(payload, audienceContext);
 
         // Process images in messages
         const processedMessages = await Promise.all(messages.map(async (msg: any, index: number) => {

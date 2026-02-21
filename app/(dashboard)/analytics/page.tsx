@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import {
     BarChart3, Loader2, GitBranch, Sparkles, TrendingUp,
-    MousePointer2, Eye, UserMinus, UserPlus, ShoppingCart, Package
+    MousePointer2, Eye, UserMinus, UserPlus, ShoppingCart, Package, Music, Piano, ArrowRightLeft
 } from "lucide-react"
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow
@@ -102,8 +102,10 @@ function PerformanceTable({ data, sendsLabel }: { data: PerformanceRow[]; sendsL
 export default function AnalyticsPage() {
     const [templates, setTemplates] = useState<PerformanceRow[]>([])
     const [chains, setChains] = useState<PerformanceRow[]>([])
+    const [byAudience, setByAudience] = useState<Record<string, { templates: PerformanceRow[]; chains: PerformanceRow[] }>>({})
     const [loading, setLoading] = useState(true)
     const [activeTab, setActiveTab] = useState<"templates" | "chains">("templates")
+    const [audienceFilter, setAudienceFilter] = useState<"all" | "dreamplay" | "musicalbasics" | "both">("all")
 
     useEffect(() => {
         fetch("/api/analytics")
@@ -111,6 +113,7 @@ export default function AnalyticsPage() {
             .then(data => {
                 setTemplates(data.templates || [])
                 setChains(data.chains || [])
+                setByAudience(data.byAudience || {})
             })
             .catch(err => console.error("Analytics fetch error:", err))
             .finally(() => setLoading(false))
@@ -175,6 +178,33 @@ export default function AnalyticsPage() {
                 </Card>
             </div>
 
+            {/* Audience Filter */}
+            <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground font-medium">Audience:</span>
+                {(["all", "dreamplay", "musicalbasics", "both"] as const).map(f => {
+                    const labels: Record<string, { label: string; icon: React.ReactNode }> = {
+                        all: { label: "All", icon: null },
+                        dreamplay: { label: "DreamPlay", icon: <Piano className="h-3 w-3" /> },
+                        musicalbasics: { label: "MusicalBasics", icon: <Music className="h-3 w-3" /> },
+                        both: { label: "Crossover", icon: <ArrowRightLeft className="h-3 w-3" /> },
+                    }
+                    const { label, icon } = labels[f]
+                    return (
+                        <button
+                            key={f}
+                            onClick={() => setAudienceFilter(f)}
+                            className={`px-3 py-1.5 text-xs font-medium rounded-full border transition-colors flex items-center gap-1.5 ${audienceFilter === f
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-muted/50 text-muted-foreground border-border hover:text-foreground hover:bg-muted"
+                                }`}
+                        >
+                            {icon}
+                            {label}
+                        </button>
+                    )
+                })}
+            </div>
+
             {/* Tab Bar */}
             <div className="flex gap-1 border-b border-border">
                 <button
@@ -219,7 +249,10 @@ export default function AnalyticsPage() {
             ) : (
                 <>
                     {activeTab === "templates" && (
-                        <PerformanceTable data={templates} sendsLabel="Sends" />
+                        <PerformanceTable
+                            data={audienceFilter === "all" ? templates : (byAudience[audienceFilter]?.templates || [])}
+                            sendsLabel="Sends"
+                        />
                     )}
                     {activeTab === "chains" && (
                         <PerformanceTable data={chains} sendsLabel="Enrolled" />

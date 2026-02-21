@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { getAllContextForAudience, formatContextForPrompt } from "@/app/actions/settings";
 
 // Initialize Admin Client (Service Key) to bypass RLS if needed
 const supabase = createClient(
@@ -32,26 +33,11 @@ async function urlToBase64(url: string) {
 
 export async function POST(req: Request) {
     try {
-        const { currentHtml, messages, model } = await req.json();
+        const { currentHtml, messages, model, audienceContext = "dreamplay" } = await req.json();
 
-        // 1. FETCH CONTEXT FROM DB ⚡️
-        const [{ data: setting }, { data: linksSetting }] = await Promise.all([
-            supabase.from('app_settings').select('value').eq('key', 'company_context').single(),
-            supabase.from('app_settings').select('value').eq('key', 'default_links').single(),
-        ]);
-
-        // Fallback if DB is empty
-        const dynamicContext = setting?.value || "Product: DreamPlay One. Feature: Narrow Keys.";
-        let defaultLinksBlock = "";
-        try {
-            const links = linksSetting?.value ? JSON.parse(linksSetting.value) : null;
-            if (links) {
-                const entries = Object.entries(links).filter(([_, v]) => v);
-                if (entries.length > 0) {
-                    defaultLinksBlock = `\n### DEFAULT LINKS:\nWhen creating NEW templates, use these URLs as defaults. CTA links go into button hrefs and image link hrefs. Footer links go into the email footer. Users can still override these in the variable loader, so use {{mustache}} variables for CTA links but hardcode footer links directly.\n${entries.map(([k, v]) => `- ${k}: ${v}`).join("\n")}\n`;
-                }
-            }
-        } catch { }
+        // 1. FETCH AUDIENCE-DRIVEN CONTEXT ⚡️
+        const payload = await getAllContextForAudience(audienceContext);
+        const { contextBlock: dynamicContext, linksBlock: defaultLinksBlock } = await formatContextForPrompt(payload, audienceContext);
 
         // 2. Process History: Convert ALL image URLs to Base64
         // We do this server-side so we don't hit the 4MB payload limit from the client.

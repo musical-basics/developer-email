@@ -42,6 +42,7 @@ function ModularEditorPageContent() {
     const [subjectLine, setSubjectLine] = useState("")
     const [fromName, setFromName] = useState("Lionel Yu")
     const [fromEmail, setFromEmail] = useState("lionel@email.dreamplaypianos.com")
+    const [audienceContext, setAudienceContext] = useState<"dreamplay" | "musicalbasics" | "both">("dreamplay")
 
     const [loading, setLoading] = useState(!!id)
     const [saving, setSaving] = useState(false)
@@ -70,6 +71,7 @@ function ModularEditorPageContent() {
                 setSubjectLine(data.subject_line || "")
                 if (data.variable_values?.from_name) setFromName(data.variable_values.from_name)
                 if (data.variable_values?.from_email) setFromEmail(data.variable_values.from_email)
+                if (data.variable_values?.audience_context) setAudienceContext(data.variable_values.audience_context)
             }
             setLoading(false)
         }
@@ -87,7 +89,8 @@ function ModularEditorPageContent() {
             variable_values: {
                 ...assets,
                 from_name: fromName,
-                from_email: fromEmail
+                from_email: fromEmail,
+                audience_context: audienceContext
             },
             status: status,
         }
@@ -169,6 +172,7 @@ function ModularEditorPageContent() {
                 subjectLine={subjectLine}
                 fromName={fromName}
                 fromEmail={fromEmail}
+                audienceContext={audienceContext}
                 onHtmlChange={setHtml}
                 onAssetsChange={setAssets}
                 onSubjectChange={setSubjectLine}
@@ -176,6 +180,7 @@ function ModularEditorPageContent() {
                     if (field === "name") setFromName(value)
                     if (field === "email") setFromEmail(value)
                 }}
+                onAudienceChange={setAudienceContext}
                 campaignName={name}
                 onNameChange={setName}
                 onSave={handleSaveClick}
