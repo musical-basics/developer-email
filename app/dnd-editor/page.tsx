@@ -37,6 +37,7 @@ function DndEditorPageContent() {
     const [saving, setSaving] = useState(false)
     const [saveDialogOpen, setSaveDialogOpen] = useState(false)
     const [nameInput, setNameInput] = useState("")
+    const [saveMode, setSaveMode] = useState<'save' | 'saveAsNew'>('save')
 
     useEffect(() => {
         if (!id) return
@@ -135,13 +136,54 @@ function DndEditorPageContent() {
         setSaveDialogOpen(false)
     }
 
+    const executeSaveAsNew = async (campaignName: string) => {
+        setSaving(true)
+        const blocksJson = serializeBlocks(blocks)
+        const compiledHtml = compileBlocksToHtml(blocks)
+
+        const campaignData = {
+            name: campaignName,
+            subject_line: subjectLine,
+            html_content: blocksJson,
+            variable_values: {
+                ...assets,
+                from_name: fromName,
+                from_email: fromEmail,
+                _compiled_html: compiledHtml,
+            },
+            status: 'draft',
+        }
+
+        const { data, error } = await supabase
+            .from("campaigns")
+            .insert([campaignData])
+            .select()
+            .single()
+
+        if (error) {
+            toast({ title: "Error saving campaign", description: error.message, variant: "destructive" })
+        } else if (data) {
+            toast({ title: "Saved as new campaign", description: `"${campaignName}" created.` })
+            router.replace(`/dnd-editor?id=${data.id}`)
+        }
+        setSaving(false)
+        setSaveDialogOpen(false)
+    }
+
     const handleSaveClick = () => {
         if (name === "Untitled DnD Campaign" || !id) {
+            setSaveMode('save')
             setNameInput(name)
             setSaveDialogOpen(true)
         } else {
             executeSave(name)
         }
+    }
+
+    const handleSaveAsNew = () => {
+        setSaveMode('saveAsNew')
+        setNameInput(name + ' (Copy)')
+        setSaveDialogOpen(true)
     }
 
     if (loading) {
@@ -170,12 +212,14 @@ function DndEditorPageContent() {
                 campaignName={name}
                 onNameChange={setName}
                 onSave={handleSaveClick}
+                onSaveAsNew={handleSaveAsNew}
+                isExisting={!!id}
             />
 
             <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Save Campaign</DialogTitle>
+                        <DialogTitle>{saveMode === 'saveAsNew' ? 'Save as New Campaign' : 'Save Campaign'}</DialogTitle>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
@@ -190,8 +234,11 @@ function DndEditorPageContent() {
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setSaveDialogOpen(false)}>Cancel</Button>
-                        <Button onClick={() => executeSave(nameInput)} disabled={saving}>
-                            {saving ? "Saving..." : "Save"}
+                        <Button
+                            onClick={() => saveMode === 'saveAsNew' ? executeSaveAsNew(nameInput) : executeSave(nameInput)}
+                            disabled={saving}
+                        >
+                            {saving ? "Saving..." : saveMode === 'saveAsNew' ? 'Save as New' : 'Save'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

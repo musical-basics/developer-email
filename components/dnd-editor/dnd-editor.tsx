@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useMemo, useCallback } from "react"
-import { Monitor, Smartphone, ArrowLeft, Loader2, Check, Eye, Pencil } from "lucide-react"
+import { useState, useMemo, useCallback, useRef, useEffect } from "react"
+import { Monitor, Smartphone, ArrowLeft, Loader2, Check, Eye, Pencil, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { cn } from "@/lib/utils"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -29,6 +29,8 @@ interface DndEmailEditorProps {
     campaignName: string
     onNameChange: (name: string) => void
     onSave?: () => void
+    onSaveAsNew?: () => void
+    isExisting?: boolean
 }
 
 export function DndEmailEditor({
@@ -44,11 +46,26 @@ export function DndEmailEditor({
     campaignName,
     onNameChange,
     onSave,
+    onSaveAsNew,
+    isExisting,
 }: DndEmailEditorProps) {
     const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [mode, setMode] = useState<'edit' | 'preview'>('edit')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
+    const [saveDropdownOpen, setSaveDropdownOpen] = useState(false)
+    const saveDropdownRef = useRef<HTMLDivElement>(null)
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        const handleClick = (e: MouseEvent) => {
+            if (saveDropdownRef.current && !saveDropdownRef.current.contains(e.target as Node)) {
+                setSaveDropdownOpen(false)
+            }
+        }
+        if (saveDropdownOpen) document.addEventListener('mousedown', handleClick)
+        return () => document.removeEventListener('mousedown', handleClick)
+    }, [saveDropdownOpen])
 
     const selectedBlock = useMemo(
         () => blocks.find(b => b.id === selectedBlockId) || null,
@@ -209,11 +226,54 @@ export function DndEmailEditor({
                     <div className="flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">{blocks.length} blocks</span>
                         {onSave && (
-                            <button type="button" onClick={handleSaveClick} disabled={saveStatus === 'saving'} className={cn("px-4 py-1.5 rounded-md text-sm font-medium flex items-center gap-2", saveStatus === 'success' ? "bg-green-600 text-white" : "bg-primary text-primary-foreground")}>
-                                {saveStatus === 'saving' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                                {saveStatus === 'success' && <Check className="w-3.5 h-3.5" />}
-                                {saveStatus === 'idle' && "Save"}
-                            </button>
+                            <div className="relative" ref={saveDropdownRef}>
+                                <div className="flex">
+                                    {/* Main save button */}
+                                    <button
+                                        type="button"
+                                        onClick={handleSaveClick}
+                                        disabled={saveStatus === 'saving'}
+                                        className={cn(
+                                            "px-4 py-1.5 rounded-l-md text-sm font-medium flex items-center gap-2",
+                                            saveStatus === 'success' ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"
+                                        )}
+                                    >
+                                        {saveStatus === 'saving' && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                                        {saveStatus === 'success' && <Check className="w-3.5 h-3.5" />}
+                                        {saveStatus === 'idle' && (isExisting ? "Save" : "Save")}
+                                    </button>
+                                    {/* Dropdown chevron */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setSaveDropdownOpen(!saveDropdownOpen)}
+                                        className={cn(
+                                            "px-1.5 py-1.5 rounded-r-md border-l border-primary-foreground/20 text-sm",
+                                            saveStatus === 'success' ? "bg-green-600 text-white" : "bg-primary text-primary-foreground"
+                                        )}
+                                    >
+                                        <ChevronDown className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                                {/* Dropdown menu */}
+                                {saveDropdownOpen && (
+                                    <div className="absolute right-0 top-full mt-1 w-44 bg-card border border-border rounded-md shadow-lg z-50 py-1">
+                                        <button
+                                            onClick={() => { setSaveDropdownOpen(false); handleSaveClick() }}
+                                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                                        >
+                                            {isExisting ? 'Save (Overwrite)' : 'Save'}
+                                        </button>
+                                        {onSaveAsNew && (
+                                            <button
+                                                onClick={() => { setSaveDropdownOpen(false); onSaveAsNew() }}
+                                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted transition-colors"
+                                            >
+                                                Save as New
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>
