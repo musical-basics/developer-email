@@ -204,6 +204,13 @@ ${aiDossier ? `
     `;
 
         let rawResponse = "";
+        let usageMeta = { model: actualModel, inputTokens: 0, outputTokens: 0, cost: 0 };
+
+        // Pricing per million tokens
+        const PRICING: Record<string, { input: number; output: number }> = {
+            "claude-3-5-haiku-latest": { input: 0.80, output: 4.00 },
+            "claude-sonnet-4-20250514": { input: 3.00, output: 15.00 },
+        };
 
         // --- A. CLAUDE (Anthropic) ---
         if (actualModel.includes("claude")) {
@@ -252,6 +259,14 @@ ${aiDossier ? `
 
             const textBlock = msg.content[0];
             if (textBlock.type === 'text') rawResponse = textBlock.text;
+
+            // Track usage
+            if (msg.usage) {
+                usageMeta.inputTokens = msg.usage.input_tokens;
+                usageMeta.outputTokens = msg.usage.output_tokens;
+                const pricing = PRICING[actualModel] || { input: 3, output: 15 };
+                usageMeta.cost = (msg.usage.input_tokens / 1_000_000 * pricing.input) + (msg.usage.output_tokens / 1_000_000 * pricing.output);
+            }
         }
 
         // --- B. GEMINI (Google) ---
@@ -302,6 +317,8 @@ ${aiDossier ? `
         try {
             const cleaned = extractJson(rawResponse);
             const parsed = JSON.parse(cleaned);
+
+            parsed.meta = usageMeta;
 
             if (routingReason) {
                 parsed.explanation = `*(⚡️ ${routingReason})*\n\n` + (parsed.explanation || "");
