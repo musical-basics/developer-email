@@ -1,5 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { LockScreen } from "@/components/lock-screen"
 
 export default function DashboardLayout({
     children,
@@ -7,12 +8,14 @@ export default function DashboardLayout({
     children: React.ReactNode
 }) {
     return (
-        <div className="min-h-screen bg-background">
-            <AppSidebar />
-            <main className="pl-64">
-                <DashboardHeader />
-                {children}
-            </main>
-        </div>
+        <LockScreen>
+            <div className="min-h-screen bg-background">
+                <AppSidebar />
+                <main className="pl-64">
+                    <DashboardHeader />
+                    {children}
+                </main>
+            </div>
+        </LockScreen>
     )
 }
