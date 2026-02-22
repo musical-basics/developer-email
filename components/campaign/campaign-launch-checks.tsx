@@ -49,7 +49,9 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 email,
                 campaignId: campaign.id,
                 fromName,
-                fromEmail
+                fromEmail,
+                clickTracking: localStorage.getItem("mb_click_tracking") !== "false",
+                openTracking: localStorage.getItem("mb_open_tracking") !== "false",
             })
         })
 
@@ -85,7 +87,9 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 type: "broadcast",
                 campaignId: campaign.id,
                 fromName,
-                fromEmail
+                fromEmail,
+                clickTracking: localStorage.getItem("mb_click_tracking") !== "false",
+                openTracking: localStorage.getItem("mb_open_tracking") !== "false",
             })
         })
 

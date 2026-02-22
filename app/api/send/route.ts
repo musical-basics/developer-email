@@ -14,7 +14,7 @@ const supabaseAdmin = createClient(
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { campaignId, type, email, fromName, fromEmail } = body;
+        const { campaignId, type, email, fromName, fromEmail, clickTracking = true, openTracking = true } = body;
 
         // Fetch Campaign
         const { data: campaign, error: campaignError } = await supabaseAdmin
@@ -190,18 +190,29 @@ export async function POST(request: Request) {
                         .replace(/{{subscriber_id}}/g, sub.id);
 
                     // Click tracking: rewrite all links to go through our redirect tracker
-                    personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
-                        if (url.includes('/unsubscribe')) return match;
-                        if (url.includes('/api/track/')) return match; // already tracked
-                        const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${trackingCampaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
-                        return `href=${quote}${trackUrl}${quote}`;
-                    });
+                    if (clickTracking) {
+                        personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
+                            if (url.includes('/unsubscribe')) return match;
+                            if (url.includes('/api/track/')) return match; // already tracked
+                            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${trackingCampaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
+                            return `href=${quote}${trackUrl}${quote}`;
+                        });
+                    } else {
+                        // Fallback: just append sid+em inline (no redirect)
+                        personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
+                            if (url.includes('/unsubscribe')) return match;
+                            const sep = url.includes('?') ? '&' : '?';
+                            return `href=${quote}${url}${sep}sid=${sub.id}&em=${encodeURIComponent(sub.email)}${quote}`;
+                        });
+                    }
 
                     // Open tracking pixel (loaded from our own domain)
-                    const openPixel = `<img src="${baseUrl}/api/track/open?c=${trackingCampaignId}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
-                    personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
-                    if (!personalHtml.includes(openPixel)) {
-                        personalHtml += openPixel;
+                    if (openTracking) {
+                        const openPixel = `<img src="${baseUrl}/api/track/open?c=${trackingCampaignId}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+                        personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
+                        if (!personalHtml.includes(openPixel)) {
+                            personalHtml += openPixel;
+                        }
                     }
 
                     // Send Email (disable Resend's tracking — we use our own open pixel + click redirect)
