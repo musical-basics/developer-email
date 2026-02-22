@@ -17,6 +17,8 @@ export default function TagsPage() {
     const [editColor, setEditColor] = useState("")
     const [saving, setSaving] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [colorPickingId, setColorPickingId] = useState<string | null>(null)
+    const [pendingColor, setPendingColor] = useState<string>("")
 
     const fetchTags = useCallback(async () => {
         setLoading(true)
@@ -101,14 +103,27 @@ export default function TagsPage() {
         setDeletingId(null)
     }
 
-    const handleColorChange = async (tagId: string, color: string) => {
+    const startColorPick = (tag: TagDefinition) => {
+        setColorPickingId(tag.id)
+        setPendingColor(tag.color)
+    }
+
+    const cancelColorPick = () => {
+        setColorPickingId(null)
+        setPendingColor("")
+    }
+
+    const saveColor = async () => {
+        if (!colorPickingId) return
         setSaving(true)
-        const { error } = await updateTag(tagId, { color })
+        const { error } = await updateTag(colorPickingId, { color: pendingColor })
         if (error) {
             console.error("Error updating color:", error)
         } else {
             await fetchTags()
         }
+        setColorPickingId(null)
+        setPendingColor("")
         setSaving(false)
     }
 
@@ -261,14 +276,40 @@ export default function TagsPage() {
                                 ) : (
                                     /* ─── Display Mode ─── */
                                     <>
-                                        {/* Native color picker swatch */}
-                                        <input
-                                            type="color"
-                                            value={tag.color}
-                                            onChange={(e) => handleColorChange(tag.id, e.target.value)}
-                                            className="w-8 h-8 rounded-full border-2 border-transparent hover:border-border cursor-pointer bg-transparent p-0"
-                                            title="Change color"
-                                        />
+                                        {/* Color swatch — click to open picker, or show picker inline */}
+                                        {colorPickingId === tag.id ? (
+                                            <div className="flex items-center gap-1.5">
+                                                <input
+                                                    type="color"
+                                                    value={pendingColor}
+                                                    onChange={(e) => setPendingColor(e.target.value)}
+                                                    className="w-8 h-8 rounded-full border border-border cursor-pointer bg-transparent p-0"
+                                                    autoFocus
+                                                />
+                                                <button
+                                                    onClick={saveColor}
+                                                    disabled={saving}
+                                                    className="p-1 rounded-md text-emerald-400 hover:bg-emerald-500/10 disabled:opacity-50 transition-colors"
+                                                    title="Save color"
+                                                >
+                                                    {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                                                </button>
+                                                <button
+                                                    onClick={cancelColorPick}
+                                                    className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                                    title="Cancel"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button
+                                                onClick={() => startColorPick(tag)}
+                                                className="w-8 h-8 rounded-full border-2 border-transparent hover:border-border hover:scale-110 transition-all cursor-pointer"
+                                                style={{ backgroundColor: tag.color }}
+                                                title="Change color"
+                                            />
+                                        )}
 
                                         {/* Tag badge */}
                                         <div className="flex-1 min-w-0">
