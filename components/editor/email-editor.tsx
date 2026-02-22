@@ -389,7 +389,7 @@ export function EmailEditor({
                     )}
                 >
                     <div className="h-full overflow-hidden">
-                        <CopilotPane html={html} onHtmlChange={onHtmlChange} audienceContext={audienceContext} aiDossier={aiDossier} />
+                        <CopilotPane html={html} onHtmlChange={onHtmlChange} audienceContext={audienceContext} aiDossier={aiDossier} campaignId={campaignId} />
                     </div>
                 </Panel>
             </PanelGroup>

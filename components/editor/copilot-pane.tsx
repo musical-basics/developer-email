@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2, FileText } from "lucide-react"
+import { useState, useRef, useEffect, useCallback } from "react"
+import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2, FileText, History, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -20,13 +20,23 @@ interface CopilotPaneProps {
     onHtmlChange: (html: string, prompt: string) => void
     audienceContext?: "dreamplay" | "musicalbasics" | "both"
     aiDossier?: string
+    campaignId?: string | null
 }
+
+interface ChatSession {
+    id: string
+    startedAt: string
+    messages: Message[]
+}
+
+const MAX_SESSIONS = 5
+const STORAGE_PREFIX = "copilot_sessions_"
 
 import { getAnthropicModels } from "@/app/actions/ai-models"
 
 type ComputeTier = "low" | "medium" | "high"
 
-export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay", aiDossier = "" }: CopilotPaneProps) {
+export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay", aiDossier = "", campaignId }: CopilotPaneProps) {
     // ─── Model override (header dropdown) ───
     const [overrideModel, setOverrideModel] = useState<string | null>(null)
     const [availableModels, setAvailableModels] = useState<string[]>([])
@@ -64,7 +74,85 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         }
     }
 
-    // We keep a "real" history with full context for the API
+    // ─── Session Persistence ─────────────────────────
+    const [currentSessionId, setCurrentSessionId] = useState<string>(() => `s-${Date.now()}`)
+    const [sessions, setSessions] = useState<ChatSession[]>([])
+    const [sessionPickerOpen, setSessionPickerOpen] = useState(false)
+    const sessionPickerRef = useRef<HTMLDivElement>(null)
+
+    // Load sessions from localStorage on mount / campaignId change
+    useEffect(() => {
+        if (!campaignId) return
+        try {
+            const raw = localStorage.getItem(`${STORAGE_PREFIX}${campaignId}`)
+            if (raw) {
+                const saved: ChatSession[] = JSON.parse(raw)
+                setSessions(saved)
+                // Load the most recent session
+                if (saved.length > 0) {
+                    const latest = saved[0]
+                    setCurrentSessionId(latest.id)
+                    setMessages(latest.messages)
+                }
+            }
+        } catch (e) {
+            console.error("Failed to load copilot sessions:", e)
+        }
+    }, [campaignId])
+
+    // Save current session to localStorage
+    const saveCurrentSession = useCallback((msgs: Message[]) => {
+        if (!campaignId || msgs.length <= 1) return // Don't save empty/default sessions
+        try {
+            const raw = localStorage.getItem(`${STORAGE_PREFIX}${campaignId}`)
+            let allSessions: ChatSession[] = raw ? JSON.parse(raw) : []
+
+            const existingIdx = allSessions.findIndex(s => s.id === currentSessionId)
+            const session: ChatSession = {
+                id: currentSessionId,
+                startedAt: existingIdx >= 0 ? allSessions[existingIdx].startedAt : new Date().toISOString(),
+                messages: msgs,
+            }
+
+            if (existingIdx >= 0) {
+                allSessions[existingIdx] = session
+            } else {
+                allSessions.unshift(session)
+            }
+
+            // Cap at MAX_SESSIONS
+            allSessions = allSessions.slice(0, MAX_SESSIONS)
+            localStorage.setItem(`${STORAGE_PREFIX}${campaignId}`, JSON.stringify(allSessions))
+            setSessions(allSessions)
+        } catch (e) {
+            console.error("Failed to save copilot session:", e)
+        }
+    }, [campaignId, currentSessionId])
+
+    // Close session picker on outside click
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (sessionPickerRef.current && !sessionPickerRef.current.contains(e.target as Node)) {
+                setSessionPickerOpen(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
+
+    const handleNewSession = () => {
+        const newId = `s-${Date.now()}`
+        setCurrentSessionId(newId)
+        setMessages([{ role: "result", content: "I'm ready. Upload screenshots or reference images and I'll adapt the code." }])
+        setSessionPickerOpen(false)
+    }
+
+    const handleLoadSession = (session: ChatSession) => {
+        setCurrentSessionId(session.id)
+        setMessages(session.messages)
+        setSessionPickerOpen(false)
+    }
+
     const [messages, setMessages] = useState<Message[]>([
         { role: "result", content: "I'm ready. Upload screenshots or reference images and I'll adapt the code." },
     ])
@@ -82,6 +170,11 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight
         }
     }, [messages, isLoading, pendingAttachments])
+
+    // Auto-save session when messages change
+    useEffect(() => {
+        saveCurrentSession(messages)
+    }, [messages, saveCurrentSession])
 
     const uploadFile = async (file: File) => {
         setIsUploading(true)
@@ -219,6 +312,62 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                 <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-purple-400" />
                     <h2 className="text-sm font-semibold">Copilot Vision</h2>
+                    {/* Session Picker */}
+                    {campaignId && (
+                        <div className="relative" ref={sessionPickerRef}>
+                            <button
+                                onClick={() => setSessionPickerOpen(!sessionPickerOpen)}
+                                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                title="Chat Sessions"
+                            >
+                                <History className="w-3 h-3" />
+                                {sessions.length > 0 && <span>{sessions.length}</span>}
+                            </button>
+                            {sessionPickerOpen && (
+                                <div className="absolute top-full left-0 mt-1 w-56 bg-card border border-border rounded-lg shadow-xl z-50 overflow-hidden">
+                                    <div className="px-3 py-2 border-b border-border flex items-center justify-between">
+                                        <p className="text-[10px] font-semibold text-muted-foreground uppercase">Chat Sessions</p>
+                                        <button
+                                            onClick={handleNewSession}
+                                            className="flex items-center gap-1 text-[10px] text-primary hover:text-primary/80 transition-colors"
+                                        >
+                                            <Plus className="w-3 h-3" />
+                                            New
+                                        </button>
+                                    </div>
+                                    <div className="max-h-48 overflow-y-auto">
+                                        {sessions.map((session) => (
+                                            <button
+                                                key={session.id}
+                                                onClick={() => handleLoadSession(session)}
+                                                className={cn(
+                                                    "w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors border-b border-border/50 last:border-0",
+                                                    session.id === currentSessionId && "bg-primary/5 border-l-2 border-l-primary"
+                                                )}
+                                            >
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {new Date(session.startedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                                                        {new Date(session.startedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                                    </span>
+                                                    <span className="text-xs text-foreground truncate">
+                                                        {session.messages.filter(m => m.role === "user").slice(-1)[0]?.content?.slice(0, 40) || "Empty session"}
+                                                        {(session.messages.filter(m => m.role === "user").slice(-1)[0]?.content?.length || 0) > 40 ? "…" : ""}
+                                                    </span>
+                                                    <span className="text-[10px] text-muted-foreground">
+                                                        {session.messages.filter(m => m.role === "user").length} messages
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                        {sessions.length === 0 && (
+                                            <p className="text-xs text-muted-foreground text-center py-4">No saved sessions</p>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
                 <Select
                     value={overrideModel || "tier-default"}

@@ -504,6 +504,7 @@ export function ModularEmailEditor({
                     onHtmlChange={handleCopilotUpdate}
                     audienceContext={audienceContext}
                     aiDossier={aiDossier}
+                    campaignId={campaignId}
                 />
             </div>
         </div >
