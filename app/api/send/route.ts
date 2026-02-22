@@ -30,7 +30,7 @@ export async function POST(request: Request) {
         }
 
         // Render Global Template (exclude per-subscriber variables so they survive to per-recipient pass)
-        const subscriberVars = ["first_name", "last_name", "email", "unsubscribe_url"];
+        const subscriberVars = ["first_name", "last_name", "email", "unsubscribe_url", "unsubscribe_link_url"];
         const globalAssets = Object.fromEntries(
             Object.entries(campaign.variable_values || {}).filter(([key]) => !subscriberVars.includes(key))
         ) as Record<string, string>;
@@ -193,6 +193,7 @@ export async function POST(request: Request) {
                         .replace(/{{last_name}}/g, sub.last_name || "")
                         .replace(/{{email}}/g, sub.email)
                         .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
+                        .replace(/{{unsubscribe_link_url}}/g, unsubscribeUrl)
                         .replace(/{{subscriber_id}}/g, sub.id);
 
                     // Click tracking: rewrite all links to go through our redirect tracker
