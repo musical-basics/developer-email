@@ -24,14 +24,18 @@ interface CopilotPaneProps {
 
 import { getAnthropicModels } from "@/app/actions/ai-models"
 
+type ComputeTier = "low" | "medium" | "high"
+
 export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay", aiDossier = "" }: CopilotPaneProps) {
-    const [selectedModel, setSelectedModel] = useState(() => {
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("mb_default_model") || "auto"
-        }
-        return "auto"
-    })
+    // ─── Model override (header dropdown) ───
+    const [overrideModel, setOverrideModel] = useState<string | null>(null)
     const [availableModels, setAvailableModels] = useState<string[]>([])
+
+    // ─── Tier models from localStorage ───
+    const [modelLow, setModelLow] = useState("claude-haiku-4-5-20251001")
+    const [modelMedium, setModelMedium] = useState("claude-sonnet-4-6")
+    const [modelHigh, setModelHigh] = useState("claude-opus-4-6")
+    const [autoRouting, setAutoRouting] = useState(false)
 
     useEffect(() => {
         getAnthropicModels().then(models => {
@@ -39,7 +43,26 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                 setAvailableModels(models)
             }
         })
+
+        // Load tier settings
+        const low = localStorage.getItem("mb_model_low")
+        const med = localStorage.getItem("mb_model_medium")
+        const high = localStorage.getItem("mb_model_high")
+        const auto = localStorage.getItem("mb_auto_routing")
+        if (low) setModelLow(low)
+        if (med) setModelMedium(med)
+        if (high) setModelHigh(high)
+        if (auto === "true") setAutoRouting(true)
     }, [])
+
+    const getModelForTier = (tier: ComputeTier): string => {
+        if (overrideModel) return overrideModel
+        switch (tier) {
+            case "low": return modelLow
+            case "medium": return modelMedium
+            case "high": return modelHigh
+        }
+    }
 
     // We keep a "real" history with full context for the API
     const [messages, setMessages] = useState<Message[]>([
@@ -104,11 +127,20 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         }
     }
 
-    const handleSendMessage = async () => {
+    const handleSendMessage = async (tier?: ComputeTier) => {
         if ((!input.trim() && pendingAttachments.length === 0) || isLoading || isUploading) return
 
         const userMessage = input.trim()
         const attachments = [...pendingAttachments]
+
+        // Determine which model to use
+        let model: string
+        if (autoRouting && !tier) {
+            // Auto mode: send "auto" + tier model info so API can pick
+            model = "auto"
+        } else {
+            model = getModelForTier(tier || "medium")
+        }
 
         // Clear input immediately
         setInput("")
@@ -134,9 +166,12 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                 body: JSON.stringify({
                     currentHtml: html,
                     messages: newHistory,
-                    model: selectedModel,
+                    model,
                     audienceContext,
-                    aiDossier
+                    aiDossier,
+                    // Pass tier model preferences for auto-routing
+                    modelLow,
+                    modelMedium,
                 }),
             })
 
@@ -175,6 +210,8 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         }
     }
 
+    const canSend = !isLoading && (input.trim() || pendingAttachments.length > 0)
+
     return (
         <div className="flex flex-col h-full border-l border-border bg-card text-card-foreground">
             {/* Header */}
@@ -183,13 +220,15 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                     <Sparkles className="w-4 h-4 text-purple-400" />
                     <h2 className="text-sm font-semibold">Copilot Vision</h2>
                 </div>
-                <Select value={selectedModel} onValueChange={setSelectedModel}>
+                <Select
+                    value={overrideModel || "tier-default"}
+                    onValueChange={(val) => setOverrideModel(val === "tier-default" ? null : val)}
+                >
                     <SelectTrigger className="w-[180px] h-8 text-xs bg-muted/50 border-transparent hover:border-border">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        {/* Smart Auto-Router */}
-                        <SelectItem value="auto">✨ Auto (Smart Routing)</SelectItem>
+                        <SelectItem value="tier-default">🎛️ Use Tier Buttons</SelectItem>
 
                         {/* Dynamic Anthropic Models */}
                         {availableModels.map(model => (
@@ -296,7 +335,16 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                     <Input
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+                        onKeyDown={(e) => {
+                            if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault()
+                                if (autoRouting && !overrideModel) {
+                                    handleSendMessage()
+                                } else {
+                                    handleSendMessage("medium")
+                                }
+                            }
+                        }}
                         onPaste={handlePaste}
                         placeholder="Type a message..."
                         className="flex-1 min-h-[40px]"
@@ -304,14 +352,48 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                         autoFocus
                     />
 
-                    <Button
-                        size="icon"
-                        onClick={handleSendMessage}
-                        disabled={isLoading || (!input.trim() && pendingAttachments.length === 0)}
-                        className={cn(isLoading && "opacity-50")}
-                    >
-                        <Send className="w-4 h-4" />
-                    </Button>
+                    {/* Send buttons: 3 tiers or 1 auto */}
+                    {autoRouting && !overrideModel ? (
+                        <Button
+                            size="icon"
+                            onClick={() => handleSendMessage()}
+                            disabled={!canSend}
+                            className={cn("bg-amber-600 hover:bg-amber-500 text-white", isLoading && "opacity-50")}
+                            title="Auto-routed send"
+                        >
+                            <Send className="w-4 h-4" />
+                        </Button>
+                    ) : (
+                        <div className="flex gap-1">
+                            <Button
+                                size="icon"
+                                onClick={() => handleSendMessage("low")}
+                                disabled={!canSend}
+                                className="bg-green-600 hover:bg-green-500 text-white h-9 w-9"
+                                title={`Low: ${overrideModel || modelLow}`}
+                            >
+                                <Send className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                                size="icon"
+                                onClick={() => handleSendMessage("medium")}
+                                disabled={!canSend}
+                                className="bg-amber-600 hover:bg-amber-500 text-white h-9 w-9"
+                                title={`Medium: ${overrideModel || modelMedium} (Enter)`}
+                            >
+                                <Send className="w-3.5 h-3.5" />
+                            </Button>
+                            <Button
+                                size="icon"
+                                onClick={() => handleSendMessage("high")}
+                                disabled={!canSend}
+                                className="bg-red-600 hover:bg-red-500 text-white h-9 w-9"
+                                title={`High: ${overrideModel || modelHigh}`}
+                            >
+                                <Send className="w-3.5 h-3.5" />
+                            </Button>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

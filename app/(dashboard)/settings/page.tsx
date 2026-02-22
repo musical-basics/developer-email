@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot } from "lucide-react"
+import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot, Zap, Flame, Cpu } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -47,7 +47,12 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true)
     const [savingContext, setSavingContext] = useState<string | null>(null)
     const [savingLinks, setSavingLinks] = useState<string | null>(null)
-    const [defaultModel, setDefaultModel] = useState("auto")
+
+    // ─── Tier Model State ────────────────────────────
+    const [modelLow, setModelLow] = useState("claude-haiku-4-5-20251001")
+    const [modelMedium, setModelMedium] = useState("claude-sonnet-4-6")
+    const [modelHigh, setModelHigh] = useState("claude-opus-4-6")
+    const [autoRouting, setAutoRouting] = useState(false)
     const [availableModels, setAvailableModels] = useState<string[]>([])
     const { toast } = useToast()
 
@@ -75,9 +80,15 @@ export default function SettingsPage() {
         }
         loadAll()
 
-        // Load default model from localStorage
-        const saved = localStorage.getItem("mb_default_model")
-        if (saved) setDefaultModel(saved)
+        // Load tier models from localStorage
+        const savedLow = localStorage.getItem("mb_model_low")
+        const savedMed = localStorage.getItem("mb_model_medium")
+        const savedHigh = localStorage.getItem("mb_model_high")
+        const savedAuto = localStorage.getItem("mb_auto_routing")
+        if (savedLow) setModelLow(savedLow)
+        if (savedMed) setModelMedium(savedMed)
+        if (savedHigh) setModelHigh(savedHigh)
+        if (savedAuto === "true") setAutoRouting(true)
 
         // Fetch available models
         getAnthropicModels().then(models => {
@@ -137,37 +148,78 @@ export default function SettingsPage() {
                     Configure AI context and default links per brand. The AI Copilot uses this data when generating email templates.
                 </p>
             </div>
-            {/* ─── Default Model Card ─── */}
+            {/* ─── Copilot Model Tiers Card ─── */}
             <Card className="mb-6">
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Bot className="w-5 h-5 text-amber-500" />
-                        Default Copilot Model
+                        Copilot Model Tiers
                     </CardTitle>
                     <CardDescription>
-                        This model loads by default every time you open the editor copilot.
+                        Assign a model to each compute tier. In the editor, you&apos;ll see 3 colored send buttons (🟢 🟡 🔴) to pick the tier per message.
                     </CardDescription>
                 </CardHeader>
-                <CardContent>
-                    <Select
-                        value={defaultModel}
-                        onValueChange={(val) => {
-                            setDefaultModel(val)
-                            localStorage.setItem("mb_default_model", val)
-                            toast({ title: "Default model updated", description: `Copilot will now default to ${val}` })
-                        }}
-                    >
-                        <SelectTrigger className="w-full max-w-md">
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="auto">✨ Auto (Smart Routing)</SelectItem>
-                            {availableModels.map(model => (
-                                <SelectItem key={model} value={model}>{model}</SelectItem>
-                            ))}
-                            <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
-                        </SelectContent>
-                    </Select>
+                <CardContent className="space-y-5">
+                    {/* Auto-Routing Toggle */}
+                    <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/30">
+                        <div className="flex items-center gap-3">
+                            <Zap className="w-5 h-5 text-amber-400" />
+                            <div>
+                                <p className="text-sm font-medium text-foreground">Auto Smart Routing</p>
+                                <p className="text-xs text-muted-foreground">
+                                    When ON, the copilot shows 1 button and automatically picks Low or Medium based on prompt complexity.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => {
+                                const next = !autoRouting
+                                setAutoRouting(next)
+                                localStorage.setItem("mb_auto_routing", String(next))
+                                toast({ title: next ? "Auto-Routing ON" : "Auto-Routing OFF", description: next ? "Copilot will auto-pick between your Low and Medium models." : "You'll see 3 send buttons to manually pick the tier." })
+                            }}
+                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${autoRouting ? "bg-primary" : "bg-muted-foreground/30"}`}
+                        >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoRouting ? "translate-x-6" : "translate-x-1"}`} />
+                        </button>
+                    </div>
+
+                    {/* Tier Dropdowns */}
+                    {([
+                        { key: "low" as const, label: "Low Compute", icon: <Cpu className="w-4 h-4" />, color: "text-green-400", state: modelLow, setter: setModelLow, storageKey: "mb_model_low" },
+                        { key: "medium" as const, label: "Medium Compute", icon: <Flame className="w-4 h-4" />, color: "text-amber-400", state: modelMedium, setter: setModelMedium, storageKey: "mb_model_medium" },
+                        { key: "high" as const, label: "High Compute", icon: <Zap className="w-4 h-4" />, color: "text-red-400", state: modelHigh, setter: setModelHigh, storageKey: "mb_model_high" },
+                    ]).map(tier => (
+                        <div key={tier.key} className="grid grid-cols-3 gap-3 items-center">
+                            <Label className={`text-sm font-medium flex items-center gap-2 ${tier.color}`}>
+                                {tier.icon}
+                                {tier.label}
+                            </Label>
+                            <div className="col-span-2">
+                                <Select
+                                    value={tier.state}
+                                    onValueChange={(val) => {
+                                        tier.setter(val)
+                                        localStorage.setItem(tier.storageKey, val)
+                                        toast({ title: `${tier.label} updated`, description: val })
+                                    }}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableModels.map(model => (
+                                            <SelectItem key={model} value={model}>{model}</SelectItem>
+                                        ))}
+                                        {availableModels.length === 0 && (
+                                            <SelectItem value="claude-3-5-sonnet-20240620">Claude 3.5 Sonnet (Legacy)</SelectItem>
+                                        )}
+                                        <SelectItem value="gemini-1.5-pro">Gemini 1.5 Pro</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                    ))}
                 </CardContent>
             </Card>
 

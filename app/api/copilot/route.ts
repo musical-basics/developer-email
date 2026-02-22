@@ -76,7 +76,11 @@ async function urlToBase64(url: string) {
 
 export async function POST(req: Request) {
     try {
-        const { currentHtml, messages, model, audienceContext = "dreamplay", aiDossier = "" } = await req.json();
+        const { currentHtml, messages, model, audienceContext = "dreamplay", aiDossier = "", modelLow, modelMedium } = await req.json();
+
+        // User-designated tier models (fallback to defaults)
+        const tierLow = modelLow || "claude-haiku-4-5-20251001";
+        const tierMedium = modelMedium || "claude-sonnet-4-6";
 
         // --- SMART ROUTER LOGIC ---
         let actualModel = model;
@@ -88,14 +92,13 @@ export async function POST(req: Request) {
             const isEmpty = !currentHtml || currentHtml.trim() === "";
 
             if (isEmpty) {
-                // Empty canvas always needs Sonnet (building from scratch)
-                actualModel = "claude-sonnet-4-6";
-                routingReason = "New template from scratch → Sonnet.";
+                // Empty canvas always needs the stronger model (building from scratch)
+                actualModel = tierMedium;
+                routingReason = `New template from scratch → Medium (${tierMedium}).`;
             } else if (hasImages) {
-                // Images present — still classify the TEXT prompt to pick the right model
-                // but always use Sonnet since vision tasks need the stronger model
-                actualModel = "claude-sonnet-4-6";
-                routingReason = "Vision task (screenshot reference) → Sonnet.";
+                // Images present — vision tasks need the stronger model
+                actualModel = tierMedium;
+                routingReason = `Vision task (screenshot reference) → Medium (${tierMedium}).`;
             } else {
                 // Text-only: fast classification using Gemini Flash
                 try {
@@ -115,15 +118,15 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
                     const intent = routerResult.response.text().trim().toUpperCase();
 
                     if (intent.includes("COMPLEX")) {
-                        actualModel = "claude-sonnet-4-6";
-                        routingReason = "Complex structural edit → Sonnet.";
+                        actualModel = tierMedium;
+                        routingReason = `Complex structural edit → Medium (${tierMedium}).`;
                     } else {
-                        actualModel = "claude-haiku-4-5-20251001";
-                        routingReason = "Simple text/style edit → Haiku.";
+                        actualModel = tierLow;
+                        routingReason = `Simple text/style edit → Low (${tierLow}).`;
                     }
                 } catch (e) {
-                    actualModel = "claude-sonnet-4-6";
-                    routingReason = "Router fallback → Sonnet.";
+                    actualModel = tierMedium;
+                    routingReason = `Router fallback → Medium (${tierMedium}).`;
                 }
             }
             console.log(`[Smart Router] ${routingReason} (model: ${actualModel})`);
