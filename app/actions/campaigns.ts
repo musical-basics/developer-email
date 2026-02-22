@@ -112,7 +112,7 @@ export async function getCampaignList() {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, created_at, is_template")
+        .select("id, name, status, created_at, is_template, is_ready")
         .order("created_at", { ascending: false })
 
     if (error) {

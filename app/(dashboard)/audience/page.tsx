@@ -1068,6 +1068,14 @@ export default function AudienceManagerPage() {
                                                     >
                                                         {campaign.is_template ? "template" : campaign.status}
                                                     </Badge>
+                                                    {campaign.is_ready && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-xs shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                                        >
+                                                            ready
+                                                        </Badge>
+                                                    )}
                                                 </div>
                                             </div>
                                             <p className="text-[10px] text-muted-foreground mt-2">
