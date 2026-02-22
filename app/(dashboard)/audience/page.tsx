@@ -789,7 +789,12 @@ export default function AudienceManagerPage() {
                                                 {subscriber.status.charAt(0).toUpperCase() + subscriber.status.slice(1)}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground">{formatDate(subscriber.created_at)}</TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            <div>{formatDate(subscriber.created_at)}</div>
+                                            <div className="text-[10px] text-muted-foreground/60">
+                                                {new Date(subscriber.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                                            </div>
+                                        </TableCell>
                                         <TableCell onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-2">
                                                 <DropdownMenu>
