@@ -81,21 +81,10 @@ import { createClient } from "@/lib/supabase/client"
 import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
+import { getTags, type TagDefinition } from "@/app/actions/tags"
 import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
-
-const allTags = ["Admin", "Piano", "Student", "Theory", "VIP", "Beginner", "Advanced"]
-
-const tagColors: Record<string, string> = {
-    Admin: "bg-red-500/20 text-red-400 border-red-500/30",
-    Piano: "bg-blue-500/20 text-blue-400 border-blue-500/30",
-    Student: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
-    Theory: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-    VIP: "bg-amber-500/20 text-amber-400 border-amber-500/30",
-    Beginner: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
-    Advanced: "bg-orange-500/20 text-orange-400 border-orange-500/30",
-}
 
 const statusStyles: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -129,6 +118,7 @@ export default function AudienceManagerPage() {
     const [subscriberToDelete, setSubscriberToDelete] = useState<string | null>(null)
     const [viewMode, setViewMode] = useState<"list" | "tags">("list")
     const [tagComboboxOpen, setTagComboboxOpen] = useState(false)
+    const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([])
 
     // Send Existing Campaign State
     const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
@@ -201,8 +191,14 @@ export default function AudienceManagerPage() {
         setLoading(false)
     }
 
+    const fetchTagDefinitions = async () => {
+        const { tags: defs } = await getTags()
+        setTagDefinitions(defs)
+    }
+
     useEffect(() => {
         fetchSubscribers()
+        fetchTagDefinitions()
     }, [])
 
     // Stats
@@ -228,14 +224,27 @@ export default function AudienceManagerPage() {
         })
     }, [subscribers, searchQuery, selectedTags])
 
-    // Derived unique tags for the dropdown
+    // Build tagColors lookup from tag_definitions DB (hex colors)
+    const tagColors = useMemo(() => {
+        const colors: Record<string, string> = {}
+        tagDefinitions.forEach(td => {
+            colors[td.name] = td.color
+        })
+        return colors
+    }, [tagDefinitions])
+
+    // Derived unique tags — merge subscriber tags + tag_definitions
+    const allTags = useMemo(() => {
+        return tagDefinitions.map(td => td.name)
+    }, [tagDefinitions])
+
     const availableTags = useMemo(() => {
         const subscriberTags = new Set<string>()
         subscribers.forEach(sub => sub.tags?.forEach(t => subscriberTags.add(t)))
-        // Add defaults
+        // Add all defined tags (from tag_definitions table)
         allTags.forEach(t => subscriberTags.add(t))
         return Array.from(subscriberTags).sort()
-    }, [subscribers])
+    }, [subscribers, allTags])
 
     const handleTagToggle = (tag: string) => {
         setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
@@ -753,15 +762,23 @@ export default function AudienceManagerPage() {
                                         <TableCell>
                                             <div className="flex flex-wrap gap-1.5">
                                                 {(subscriber.tags || []).length > 0 ? (
-                                                    (subscriber.tags || []).map((tag) => (
-                                                        <Badge
-                                                            key={tag}
-                                                            variant="outline"
-                                                            className={tagColors[tag] || "bg-muted text-muted-foreground"}
-                                                        >
-                                                            {tag}
-                                                        </Badge>
-                                                    ))
+                                                    (subscriber.tags || []).map((tag) => {
+                                                        const hex = tagColors[tag]
+                                                        return (
+                                                            <Badge
+                                                                key={tag}
+                                                                variant="outline"
+                                                                className="text-xs"
+                                                                style={hex ? {
+                                                                    backgroundColor: `${hex}20`,
+                                                                    color: hex,
+                                                                    borderColor: `${hex}50`,
+                                                                } : undefined}
+                                                            >
+                                                                {tag}
+                                                            </Badge>
+                                                        )
+                                                    })
                                                 ) : (
                                                     <span className="text-xs text-muted-foreground">-</span>
                                                 )}
@@ -963,22 +980,31 @@ export default function AudienceManagerPage() {
 
                             <div className="flex flex-wrap gap-2">
                                 {(formData.tags || []).length > 0 ? (
-                                    (formData.tags || []).map((tag) => (
-                                        <Badge
-                                            key={tag}
-                                            variant="outline"
-                                            className={`${tagColors[tag] || "bg-muted text-muted-foreground"} pr-1`}
-                                        >
-                                            {tag}
-                                            <button
-                                                onClick={() => handleRemoveTag(tag)}
-                                                className="ml-1 rounded-full p-0.5 hover:bg-foreground/10"
+                                    (formData.tags || []).map((tag) => {
+                                        const hex = tagColors[tag]
+                                        return (
+                                            <Badge
+                                                key={tag}
+                                                variant="outline"
+                                                className="text-xs pr-1"
+                                                style={hex ? {
+                                                    backgroundColor: `${hex}20`,
+                                                    color: hex,
+                                                    borderColor: `${hex}50`,
+                                                } : undefined}
                                             >
-                                                <X className="h-3 w-3" />
-                                                <span className="sr-only">Remove {tag} tag</span>
-                                            </button>
-                                        </Badge>
-                                    ))
+                                                {tag}
+                                                <button
+                                                    onClick={() => handleRemoveTag(tag)}
+                                                    className="ml-1 rounded-full p-0.5 hover:bg-foreground/10"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                    <span className="sr-only">Remove {tag} tag</span>
+                                                </button>
+                                            </Badge>
+                                        )
+                                    })
+
                                 ) : (
                                     <p className="text-sm text-muted-foreground">No tags added yet</p>
                                 )}
