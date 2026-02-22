@@ -59,10 +59,24 @@ export async function GET() {
             .from('email_chains')
             .select('id, name')
 
+        // All subscribers tagged "Test Account" — exclude from stats
+        const { data: testSubscribers } = await supabase
+            .from('subscribers')
+            .select('id')
+            .contains('tags', ['Test Account'])
+
+        const testSubIds = new Set((testSubscribers || []).map(s => s.id))
+
+        // Sent history for accurate per-campaign send counts excluding test accounts
+        const { data: allSentHistory } = await supabase
+            .from('sent_history')
+            .select('campaign_id, subscriber_id')
+
         const campaigns = allCampaigns || []
-        const events = allEvents || []
-        const processes = allProcesses || []
+        const events = (allEvents || []).filter(e => !testSubIds.has(e.subscriber_id))
+        const processes = (allProcesses || []).filter(p => !testSubIds.has(p.subscriber_id))
         const chains = allChains || []
+        const sentHistory = (allSentHistory || []).filter(s => !testSubIds.has(s.subscriber_id))
 
         // ─── A. MASTER TEMPLATES ───────────────────────
 
@@ -74,9 +88,8 @@ export async function GET() {
             const children = campaigns.filter(c => c.parent_template_id === template.id)
             const familyIds = new Set([template.id, ...children.map(c => c.id)])
 
-            // Total sends across template + all children
-            const sends = (template.total_recipients || 0) +
-                children.reduce((sum, c) => sum + (c.total_recipients || 0), 0)
+            // Total sends (from sent_history, excluding test accounts)
+            const sends = sentHistory.filter(s => familyIds.has(s.campaign_id)).length
 
             // Count unique subscribers per event type across the family
             const eventCounts: Record<EventType, Set<string>> = {
