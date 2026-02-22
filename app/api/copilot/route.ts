@@ -173,6 +173,7 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
     3. **VARIABLES:** Preserve {{mustache_vars}}.
     4. **IMAGE VARIABLES:** When adding images with {{mustache}} variables, the variable name MUST end with one of these suffixes: _src, _bg, _logo, _icon, _img — or contain the word "image" or "url". For example: {{hero_src}}, {{product_bg}}, {{banner_img}}. This ensures the Asset Loader recognizes them as images and shows the upload button. Additionally, ALWAYS wrap the image in a clickable link using a corresponding _link_url variable. For example: <a href="{{hero_link_url}}"><img src="{{hero_src}}" /></a>. This lets the user set the link destination in the Asset Loader.
     5. **NO EM-DASHES:** Never use em-dashes (—) in any copy or text you write. Use commas, periods, or semicolons instead.
+    6. **READABLE COPY FORMATTING:** When writing or editing paragraph text/copy, add sparse inline formatting to improve scannability. Use \`<strong>\` to bold 1-2 key value propositions or outcomes per paragraph (the phrases you want the reader to remember). Use \`<u>\` to underline one supporting detail or benefit phrase per paragraph. Don't overdo it: most sentences should remain unformatted. The goal is to let a skimming reader grasp the main points from the bold text alone.
     
     ### TEMPLATE CREATION DEFAULTS:
     When asked to create a NEW email template from scratch or from a reference image:
