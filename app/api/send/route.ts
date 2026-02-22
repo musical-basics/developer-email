@@ -189,11 +189,12 @@ export async function POST(request: Request) {
                         .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
                         .replace(/{{subscriber_id}}/g, sub.id);
 
-                    // Auto-append sid and em to all links (no click redirect)
+                    // Click tracking: rewrite all links to go through our redirect tracker
                     personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                         if (url.includes('/unsubscribe')) return match;
-                        const sep = url.includes('?') ? '&' : '?';
-                        return `href=${quote}${url}${sep}sid=${sub.id}&em=${encodeURIComponent(sub.email)}${quote}`;
+                        if (url.includes('/api/track/')) return match; // already tracked
+                        const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${trackingCampaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
+                        return `href=${quote}${trackUrl}${quote}`;
                     });
 
                     // Open tracking pixel (loaded from our own domain)
@@ -203,7 +204,7 @@ export async function POST(request: Request) {
                         personalHtml += openPixel;
                     }
 
-                    // Send Email
+                    // Send Email (disable Resend's tracking — we use our own open pixel + click redirect)
                     const { data: sendData, error } = await resend.emails.send({
                         from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                         to: sub.email,
@@ -212,8 +213,8 @@ export async function POST(request: Request) {
                         headers: {
                             "List-Unsubscribe": `<${unsubscribeUrl}>`,
                             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
-                        }
-                    });
+                        },
+                    } as any);
 
                     if (error) {
                         console.error(`Failed to send to ${sub.email}:`, error);

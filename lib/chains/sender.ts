@@ -59,14 +59,15 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     // Replace subscriber_id placeholder if present in links
     finalHtml = finalHtml.replace(/{{subscriber_id}}/g, subscriberId);
 
-    // Auto-append sid and em to all links
+    // Click tracking: rewrite all links to go through our redirect tracker
     finalHtml = finalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
         if (url.includes('/unsubscribe')) return match;
-        const sep = url.includes('?') ? '&' : '?';
-        return `href=${quote}${url}${sep}sid=${subscriberId}&em=${encodeURIComponent(email)}${quote}`;
+        if (url.includes('/api/track/')) return match;
+        const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${subscriberId}&em=${encodeURIComponent(email)}`;
+        return `href=${quote}${trackUrl}${quote}`;
     });
 
-    // Send Email
+    // Send Email (disable Resend's tracking — we use our own click redirect)
     await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "Lionel Yu <lionel@musicalbasics.com>",
         to: email,
@@ -76,7 +77,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
         }
-    });
+    } as any);
 
     return { success: true, campaignId };
 }
@@ -137,7 +138,7 @@ ${emailBody.split("\n").filter((l: string) => l.trim()).map((p: string) => `<p s
 </body>
 </html>`;
 
-    // 4. Send via Resend
+    // 4. Send via Resend (disable Resend's tracking — we use our own)
     const sendResult = await resend.emails.send({
         from: "Lionel Yu <lionel@email.dreamplaypianos.com>",
         to: subscriber.email,
@@ -147,7 +148,7 @@ ${emailBody.split("\n").filter((l: string) => l.trim()).map((p: string) => `<p s
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
-    });
+    } as any);
 
     if (sendResult.error) {
         console.error("JIT send error:", sendResult.error);

@@ -101,17 +101,19 @@ export const sendCampaign = inngest.createFunction(
                             }
                         );
 
-                        // Auto-append sid and em to all links
+                        // Click tracking: rewrite all links to go through our redirect tracker
                         personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                             if (url.includes('/unsubscribe')) return match;
-                            const sep = url.includes('?') ? '&' : '?';
-                            return `href=${quote}${url}${sep}sid=${sub.id}&em=${encodeURIComponent(sub.email)}${quote}`;
+                            if (url.includes('/api/track/')) return match;
+                            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
+                            return `href=${quote}${trackUrl}${quote}`;
                         });
 
                         // Send Email
                         const fromName = campaign.variable_values?.from_name;
                         const fromEmail = campaign.variable_values?.from_email;
 
+                        // Send Email (disable Resend's tracking — we use our own)
                         const { error } = await resend.emails.send({
                             from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                             to: sub.email,
@@ -120,8 +122,8 @@ export const sendCampaign = inngest.createFunction(
                             headers: {
                                 "List-Unsubscribe": `<${unsubscribeUrl}>`,
                                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
-                            }
-                        });
+                            },
+                        } as any);
 
                         if (error) {
                             console.error(`Failed to send to ${sub.email}:`, error);
