@@ -55,9 +55,12 @@ export default function SettingsPage() {
     const [autoRouting, setAutoRouting] = useState(false)
     const [availableModels, setAvailableModels] = useState<string[]>([])
 
-    // ─── Tracking Toggles ────────────────────────────
-    const [clickTracking, setClickTracking] = useState(true)
-    const [openTracking, setOpenTracking] = useState(true)
+    // ─── Per-Sender Tracking Toggles ─────────────────────
+    const senderEmails = ["lionel@musicalbasics.com", "lionel@email.dreamplaypianos.com"] as const
+    const [trackingSettings, setTrackingSettings] = useState<Record<string, { click: boolean; open: boolean }>>({
+        "lionel@musicalbasics.com": { click: true, open: true },
+        "lionel@email.dreamplaypianos.com": { click: true, open: true },
+    })
     const { toast } = useToast()
 
     // ─── Load ───────────────────────────────────────
@@ -94,11 +97,17 @@ export default function SettingsPage() {
         if (savedHigh) setModelHigh(savedHigh)
         if (savedAuto === "true") setAutoRouting(true)
 
-        // Load tracking toggles
-        const savedClick = localStorage.getItem("mb_click_tracking")
-        const savedOpen = localStorage.getItem("mb_open_tracking")
-        if (savedClick !== null) setClickTracking(savedClick === "true")
-        if (savedOpen !== null) setOpenTracking(savedOpen === "true")
+        // Load per-sender tracking toggles
+        const loaded: Record<string, { click: boolean; open: boolean }> = {}
+        for (const email of ["lionel@musicalbasics.com", "lionel@email.dreamplaypianos.com"]) {
+            const savedClick = localStorage.getItem(`mb_click_tracking_${email}`)
+            const savedOpen = localStorage.getItem(`mb_open_tracking_${email}`)
+            loaded[email] = {
+                click: savedClick !== null ? savedClick === "true" : true,
+                open: savedOpen !== null ? savedOpen === "true" : true,
+            }
+        }
+        setTrackingSettings(loaded)
 
         // Fetch available models
         getAnthropicModels().then(models => {
@@ -244,54 +253,59 @@ export default function SettingsPage() {
                         Control which tracking mechanisms are active in outgoing emails.
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                    {/* Click Tracking Toggle */}
-                    <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/30">
-                        <div className="flex items-center gap-3">
-                            <MousePointerClick className="w-5 h-5 text-blue-400" />
-                            <div>
-                                <p className="text-sm font-medium text-foreground">Click Tracking</p>
-                                <p className="text-xs text-muted-foreground">
-                                    Rewrites links to go through <code className="text-xs">/api/track/click</code> redirect for click analytics.
-                                </p>
+                <CardContent className="space-y-6">
+                    {senderEmails.map(email => {
+                        const label = email.includes("musicalbasics") ? "Musical Basics" : "DreamPlay Pianos"
+                        const settings = trackingSettings[email] || { click: true, open: true }
+                        const toggleSetting = (field: "click" | "open") => {
+                            const next = !settings[field]
+                            const newSettings = { ...trackingSettings, [email]: { ...settings, [field]: next } }
+                            setTrackingSettings(newSettings)
+                            localStorage.setItem(`mb_${field}_tracking_${email}`, String(next))
+                            toast({ title: `${field === "click" ? "Click" : "Open"} Tracking ${next ? "ON" : "OFF"} for ${label}` })
+                        }
+                        return (
+                            <div key={email} className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <div className={`w-2 h-2 rounded-full ${email.includes("musicalbasics") ? "bg-amber-400" : "bg-blue-400"}`} />
+                                    <p className="text-sm font-semibold text-foreground">{label}</p>
+                                    <span className="text-[10px] text-muted-foreground font-mono">{email}</span>
+                                </div>
+                                {/* Click Tracking */}
+                                <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/30 ml-4">
+                                    <div className="flex items-center gap-3">
+                                        <MousePointerClick className="w-4 h-4 text-blue-400" />
+                                        <div>
+                                            <p className="text-sm font-medium text-foreground">Click Tracking</p>
+                                            <p className="text-xs text-muted-foreground">Rewrite links through <code className="text-xs">/api/track/click</code></p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => toggleSetting("click")}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.click ? "bg-primary" : "bg-muted-foreground/30"}`}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.click ? "translate-x-6" : "translate-x-1"}`} />
+                                    </button>
+                                </div>
+                                {/* Open Tracking */}
+                                <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/30 ml-4">
+                                    <div className="flex items-center gap-3">
+                                        <Eye className="w-4 h-4 text-purple-400" />
+                                        <div>
+                                            <p className="text-sm font-medium text-foreground">Open Tracking</p>
+                                            <p className="text-xs text-muted-foreground">Inject a 1×1 tracking pixel for open detection</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => toggleSetting("open")}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.open ? "bg-primary" : "bg-muted-foreground/30"}`}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.open ? "translate-x-6" : "translate-x-1"}`} />
+                                    </button>
+                                </div>
                             </div>
-                        </div>
-                        <button
-                            onClick={() => {
-                                const next = !clickTracking
-                                setClickTracking(next)
-                                localStorage.setItem("mb_click_tracking", String(next))
-                                toast({ title: next ? "Click Tracking ON" : "Click Tracking OFF" })
-                            }}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${clickTracking ? "bg-primary" : "bg-muted-foreground/30"}`}
-                        >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${clickTracking ? "translate-x-6" : "translate-x-1"}`} />
-                        </button>
-                    </div>
-
-                    {/* Open Tracking Toggle */}
-                    <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/30">
-                        <div className="flex items-center gap-3">
-                            <Eye className="w-5 h-5 text-purple-400" />
-                            <div>
-                                <p className="text-sm font-medium text-foreground">Open Tracking</p>
-                                <p className="text-xs text-muted-foreground">
-                                    Injects a 1×1 tracking pixel to record email opens.
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => {
-                                const next = !openTracking
-                                setOpenTracking(next)
-                                localStorage.setItem("mb_open_tracking", String(next))
-                                toast({ title: next ? "Open Tracking ON" : "Open Tracking OFF" })
-                            }}
-                            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${openTracking ? "bg-primary" : "bg-muted-foreground/30"}`}
-                        >
-                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${openTracking ? "translate-x-6" : "translate-x-1"}`} />
-                        </button>
-                    </div>
+                        )
+                    })}
                 </CardContent>
             </Card>
 

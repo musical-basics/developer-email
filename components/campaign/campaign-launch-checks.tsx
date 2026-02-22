@@ -50,8 +50,8 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 campaignId: campaign.id,
                 fromName,
                 fromEmail,
-                clickTracking: localStorage.getItem("mb_click_tracking") !== "false",
-                openTracking: localStorage.getItem("mb_open_tracking") !== "false",
+                clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
+                openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
             })
         })
 
@@ -88,8 +88,8 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 campaignId: campaign.id,
                 fromName,
                 fromEmail,
-                clickTracking: localStorage.getItem("mb_click_tracking") !== "false",
-                openTracking: localStorage.getItem("mb_open_tracking") !== "false",
+                clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
+                openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
             })
         })
 
