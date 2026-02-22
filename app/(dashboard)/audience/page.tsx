@@ -1059,12 +1059,14 @@ export default function AudienceManagerPage() {
                                                         variant="outline"
                                                         className={cn(
                                                             "text-xs shrink-0",
-                                                            campaign.status === 'draft' && "bg-zinc-500/10 text-zinc-400 border-zinc-500/30",
-                                                            campaign.status === 'active' && "bg-blue-500/10 text-blue-400 border-blue-500/30",
-                                                            campaign.status === 'completed' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                                            campaign.is_template
+                                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                                                : campaign.status === 'draft' && "bg-zinc-500/10 text-zinc-400 border-zinc-500/30",
+                                                            !campaign.is_template && campaign.status === 'active' && "bg-blue-500/10 text-blue-400 border-blue-500/30",
+                                                            !campaign.is_template && campaign.status === 'completed' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
                                                         )}
                                                     >
-                                                        {campaign.status}
+                                                        {campaign.is_template ? "template" : campaign.status}
                                                     </Badge>
                                                 </div>
                                             </div>
