@@ -59,13 +59,25 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
     }
 
     // Find the matching link variable for an image variable
+    // Handles: "lifestyle_img" + "lifestyle_link_url", "video_thumbnail_src" + "video_link_url"
     const findPairedLinkVar = (imageVar: string): string | null => {
-        // Extract prefix: "lifestyle_img" → "lifestyle", "hero_src" → "hero"
-        const prefix = imageVar.replace(/(_img|_src|_bg|_logo|_icon|_image)$/i, "")
+        // Extract prefix: "lifestyle_img" → "lifestyle", "hero_src" → "hero", "video_thumbnail_src" → "video_thumbnail"
+        const prefix = imageVar.replace(/(_img|_src|_bg|_logo|_icon|_image|_thumbnail_src|_thumbnail)$/i, "")
         if (!prefix || prefix === imageVar) return null
-        return variables.find(v => {
+
+        // Look for exact match first: e.g. lifestyle → lifestyle_link_url
+        const exactMatch = variables.find(v => {
             const lower = v.toLowerCase()
             return lower === `${prefix.toLowerCase()}_link_url` || lower === `${prefix.toLowerCase()}link_url`
+        })
+        if (exactMatch) return exactMatch
+
+        // Fallback: check if any link var's prefix is a prefix of the image var
+        // e.g. video_link_url → prefix "video" is a prefix of "video_thumbnail_src"
+        return variables.find(v => {
+            if (!isLinkVariable(v)) return false
+            const linkPrefix = v.replace(/_?link_url$/i, "").toLowerCase()
+            return linkPrefix && prefix.toLowerCase().startsWith(linkPrefix)
         }) || null
     }
 
@@ -126,7 +138,7 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
                         if (isImageVariable(variable)) {
                             const pairedLink = findPairedLinkVar(variable)
                             return (
-                                <div key={variable} className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                                <div key={variable} className="rounded-lg border-l-4 border-l-primary/60 border border-border bg-muted/50 p-3 space-y-3">
                                     {/* Image source */}
                                     <div className="space-y-1.5">
                                         <Label htmlFor={variable} className="text-xs font-mono text-muted-foreground">
