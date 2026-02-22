@@ -1038,7 +1038,7 @@ export default function AudienceManagerPage() {
                         ) : (
                             <ScrollArea className="h-[300px] pr-4">
                                 <div className="space-y-2">
-                                    {existingCampaigns.map(campaign => (
+                                    {[...existingCampaigns].sort((a, b) => (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)).map(campaign => (
                                         <div
                                             key={campaign.id}
                                             onClick={() => !duplicating && handleSelectCampaign(campaign)}
@@ -1047,14 +1047,12 @@ export default function AudienceManagerPage() {
                                                 duplicating && "opacity-50 pointer-events-none"
                                             )}
                                         >
-                                            <div className="space-y-2">
+                                            <div className="space-y-1">
                                                 <h4 className="font-medium text-sm text-foreground line-clamp-2 break-words">{campaign.name}</h4>
+                                                {campaign.subject_line && (
+                                                    <p className="text-xs text-muted-foreground/70 italic line-clamp-1">{campaign.subject_line}</p>
+                                                )}
                                                 <div className="flex items-center gap-2 flex-wrap">
-                                                    {campaign.subject_line && (
-                                                        <Badge variant="secondary" className="text-xs max-w-[200px] truncate font-normal">
-                                                            {campaign.subject_line}
-                                                        </Badge>
-                                                    )}
                                                     <Badge
                                                         variant="outline"
                                                         className={cn(
