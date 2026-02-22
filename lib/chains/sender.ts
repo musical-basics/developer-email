@@ -46,6 +46,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         campaignId = dbTemplate.id;
     }
 
+
     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${campaignId}`;
 
     const unsubscribeFooter = `

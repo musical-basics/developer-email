@@ -35,6 +35,7 @@ export async function POST(request: Request) {
             Object.entries(campaign.variable_values || {}).filter(([key]) => !subscriberVars.includes(key))
         ) as Record<string, string>;
         const globalHtmlContent = renderTemplate(campaign.html_content || "", globalAssets);
+        // Snapshot email-asset images for broadcast sends (test sends skip this)
         let htmlContent = globalHtmlContent;
 
         if (type === "test") {

@@ -4,16 +4,17 @@ import type React from "react"
 import { useState, useCallback, useEffect } from "react"
 import { X, Upload, ImageIcon, Loader2, Trash2, FolderPlus, Folder, ChevronRight, LayoutGrid, List, Home, FolderInput, CheckSquare, Square } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
-import { deleteAsset, deleteAssets, createFolder, deleteFolder, moveAsset, moveAssets } from "@/app/actions/assets"
+import { deleteAsset, deleteAssets, createFolder, deleteFolder, moveAsset, moveAssets, getAssets, getFolders, getSubFolders, uploadHashedAsset } from "@/app/actions/assets"
 import { ImageCropper } from "./image-cropper"
 
 interface Asset {
     id: string
-    name: string
-    url: string
+    filename: string
+    folder_path: string
+    storage_hash: string
+    public_url: string
     size?: number
-    updatedAt?: string
+    created_at?: string
 }
 
 interface FolderItem {
@@ -52,51 +53,31 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     const [showMoveDialog, setShowMoveDialog] = useState(false)
     const [allFolders, setAllFolders] = useState<string[]>([])
 
-    const supabase = createClient()
-
     const isMultiSelectMode = multiSelectedIds.size > 0
 
+    // ─── Fetch assets from DB ───
     const fetchAssets = useCallback(async () => {
         setLoading(true)
         setSelectedAsset(null)
 
-        const { data, error } = await supabase.storage.from("email-assets").list(currentFolder || "", {
-            limit: 200,
-            sortBy: { column: "name", order: "asc" },
-        })
+        // Fetch assets in the current folder
+        const { assets: dbAssets } = await getAssets(currentFolder)
+        const fileItems: Asset[] = (dbAssets || []).filter((a: Asset) => a.filename !== ".folder")
+        setAssets(fileItems)
 
-        if (error) {
-            console.error("Error fetching assets:", error)
-            setLoading(false)
-            return
+        // Fetch subfolders
+        let folderItems: FolderItem[] = []
+        if (currentFolder) {
+            const { folders: subFolders } = await getSubFolders(currentFolder)
+            folderItems = subFolders.map((name: string) => ({ name }))
+        } else {
+            const { folders: rootFolders } = await getFolders()
+            folderItems = rootFolders.map((name: string) => ({ name }))
         }
+        setFolders(folderItems)
 
-        if (data) {
-            const folderItems: FolderItem[] = []
-            const fileItems: Asset[] = []
-
-            for (const item of data) {
-                // Folders have id === null in Supabase Storage
-                if (item.id === null) {
-                    folderItems.push({ name: item.name })
-                } else if (item.name !== ".folder") {
-                    // Skip the placeholder files
-                    const path = currentFolder ? `${currentFolder}/${item.name}` : item.name
-                    fileItems.push({
-                        id: item.id,
-                        name: item.name,
-                        url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${encodeURIComponent(path)}`,
-                        size: (item.metadata as any)?.size,
-                        updatedAt: item.updated_at,
-                    })
-                }
-            }
-
-            setFolders(folderItems)
-            setAssets(fileItems)
-        }
         setLoading(false)
-    }, [supabase, currentFolder])
+    }, [currentFolder])
 
     useEffect(() => {
         if (isOpen) {
@@ -123,15 +104,9 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
 
     // ─── Fetch all root folders for "Move to" dialog ───
     const fetchAllFolders = useCallback(async () => {
-        const { data, error } = await supabase.storage.from("email-assets").list("", {
-            limit: 200,
-            sortBy: { column: "name", order: "asc" },
-        })
-        if (!error && data) {
-            const folderNames = data.filter(item => item.id === null).map(item => item.name)
-            setAllFolders(folderNames)
-        }
-    }, [supabase])
+        const { folders: rootFolders } = await getFolders()
+        setAllFolders(rootFolders)
+    }, [])
 
     // ─── Multi-Select Handlers ───
     const toggleMultiSelect = (assetId: string, e?: React.MouseEvent) => {
@@ -160,11 +135,11 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     const handleBulkDelete = async () => {
         const selected = getSelectedAssets()
         if (selected.length === 0) return
-        if (!confirm(`Delete ${selected.length} asset${selected.length > 1 ? "s" : ""}? This cannot be undone.`)) return
+        if (!confirm(`Delete ${selected.length} asset${selected.length > 1 ? "s" : ""}? They will be hidden from the library.`)) return
 
         setBulkDeleting(true)
-        const filePaths = selected.map(a => currentFolder ? `${currentFolder}/${a.name}` : a.name)
-        const result = await deleteAssets(filePaths)
+        const ids = selected.map(a => a.id)
+        const result = await deleteAssets(ids)
 
         if (!result.success) {
             console.error("Error bulk deleting:", result.error)
@@ -183,12 +158,8 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
         if (selected.length === 0) return
 
         setBulkMoving(true)
-        const moves = selected.map(a => ({
-            oldPath: currentFolder ? `${currentFolder}/${a.name}` : a.name,
-            newPath: `${targetFolder}/${a.name}`,
-        }))
-
-        const result = await moveAssets(moves)
+        const ids = selected.map(a => a.id)
+        const result = await moveAssets(ids, targetFolder)
 
         if (!result.success) {
             console.error("Error bulk moving:", result.error)
@@ -268,13 +239,13 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                 fileToUpload = await compressImage(file)
             }
 
-            const fileName = `${Date.now()}-${fileToUpload.name}`
-            const uploadPath = currentFolder ? `${currentFolder}/${fileName}` : fileName
+            const formData = new FormData()
+            formData.append("file", fileToUpload)
 
-            const { error } = await supabase.storage.from("email-assets").upload(uploadPath, fileToUpload)
+            const result = await uploadHashedAsset(formData, currentFolder)
 
-            if (error) {
-                console.error("Error uploading file:", error)
+            if (!result.success) {
+                console.error("Error uploading file:", result.error)
             } else {
                 await fetchAssets()
             }
@@ -322,17 +293,18 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
         setUploading(true)
 
         try {
-            const fileName = `cropped-${Date.now()}-${croppingAsset.name}`
-            const uploadPath = currentFolder ? `${currentFolder}/${fileName}` : fileName
+            const fileName = `cropped-${Date.now()}-${croppingAsset.filename}`
             const file = new File([blob], fileName, { type: "image/jpeg" })
 
-            const { error } = await supabase.storage.from("email-assets").upload(uploadPath, file)
+            const formData = new FormData()
+            formData.append("file", file)
 
-            if (error) {
-                console.error("Error uploading cropped asset:", error)
-            } else {
-                const publicUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${encodeURIComponent(uploadPath)}`
-                onSelect(publicUrl)
+            const result = await uploadHashedAsset(formData, currentFolder)
+
+            if (!result.success) {
+                console.error("Error uploading cropped asset:", result.error)
+            } else if (result.asset) {
+                onSelect(result.asset.public_url)
                 onClose()
             }
         } catch (e) {
@@ -344,18 +316,17 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
 
     const handleSkipCrop = () => {
         if (croppingAsset) {
-            onSelect(croppingAsset.url)
+            onSelect(croppingAsset.public_url)
             onClose()
         }
     }
 
     const handleDeleteAsset = async (e: React.MouseEvent, asset: Asset) => {
         e.stopPropagation()
-        if (!confirm(`Delete "${asset.name}"? This cannot be undone.`)) return
+        if (!confirm(`Delete "${asset.filename}"? It will be hidden but existing email links stay intact.`)) return
 
         setDeleting(asset.id)
-        const filePath = currentFolder ? `${currentFolder}/${asset.name}` : asset.name
-        const result = await deleteAsset(filePath)
+        const result = await deleteAsset(asset.id)
 
         if (!result.success) {
             console.error("Error deleting asset:", result.error)
@@ -372,7 +343,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
 
     const handleDeleteFolder = async (e: React.MouseEvent, folderName: string) => {
         e.stopPropagation()
-        if (!confirm(`Delete folder "${folderName}" and ALL its contents? This cannot be undone.`)) return
+        if (!confirm(`Delete folder "${folderName}" and hide all its contents?`)) return
 
         setDeleting(folderName)
         const fullPath = currentFolder ? `${currentFolder}/${folderName}` : folderName
@@ -426,9 +397,9 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
 
     // ─── Drag & Drop: Move assets into folders ───
     const handleAssetDragStart = (e: React.DragEvent, asset: Asset) => {
-        e.dataTransfer.setData("text/plain", asset.name)
+        e.dataTransfer.setData("text/plain", asset.id)
         e.dataTransfer.effectAllowed = "move"
-        setMovingAsset(asset.name)
+        setMovingAsset(asset.id)
     }
 
     const handleAssetDragEnd = () => {
@@ -450,14 +421,13 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
     const handleFolderDrop = async (e: React.DragEvent, folderName: string) => {
         e.preventDefault()
         setDropTargetFolder(null)
-        const assetName = e.dataTransfer.getData("text/plain")
-        if (!assetName) return
+        const assetId = e.dataTransfer.getData("text/plain")
+        if (!assetId) return
 
-        setMovingAsset(assetName)
-        const oldPath = currentFolder ? `${currentFolder}/${assetName}` : assetName
-        const newPath = currentFolder ? `${currentFolder}/${folderName}/${assetName}` : `${folderName}/${assetName}`
+        setMovingAsset(assetId)
+        const targetPath = currentFolder ? `${currentFolder}/${folderName}` : folderName
 
-        const result = await moveAsset(oldPath, newPath)
+        const result = await moveAsset(assetId, targetPath)
         if (!result.success) {
             console.error("Error moving asset:", result.error)
         } else {
@@ -536,7 +506,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                     {croppingAsset ? (
                         <div className="flex-1 p-6 overflow-hidden">
                             <ImageCropper
-                                src={croppingAsset.url}
+                                src={croppingAsset.public_url}
                                 onCropComplete={handleCropComplete}
                                 onCancel={() => setCroppingAsset(null)}
                                 onSkip={handleSkipCrop}
@@ -748,17 +718,17 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                                             : selectedAsset?.id === asset.id && !isMultiSelectMode
                                                                 ? "border-amber-500 ring-2 ring-amber-500/30"
                                                                 : "border-transparent hover:border-neutral-600",
-                                                        movingAsset === asset.name && "opacity-40",
+                                                        movingAsset === asset.id && "opacity-40",
                                                     )}
                                                 >
                                                     <img
-                                                        src={asset.url || "/placeholder.svg"}
-                                                        alt={asset.name}
+                                                        src={asset.public_url || "/placeholder.svg"}
+                                                        alt={asset.filename}
                                                         loading="lazy"
                                                         className="w-full h-full object-cover"
                                                     />
                                                     <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
-                                                        <p className="text-xs text-neutral-300 truncate">{asset.name}</p>
+                                                        <p className="text-xs text-neutral-300 truncate">{asset.filename}</p>
                                                     </div>
                                                     {/* Multi-select checkbox */}
                                                     <button
@@ -862,7 +832,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                                             : selectedAsset?.id === asset.id && !isMultiSelectMode
                                                                 ? "bg-amber-500/10 ring-1 ring-amber-500/30"
                                                                 : "hover:bg-neutral-800/70",
-                                                        movingAsset === asset.name && "opacity-40",
+                                                        movingAsset === asset.id && "opacity-40",
                                                     )}
                                                 >
                                                     {/* Checkbox */}
@@ -883,14 +853,14 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                                                     </button>
                                                     <div className="w-12 h-12 rounded overflow-hidden bg-neutral-900 flex-shrink-0">
                                                         <img
-                                                            src={asset.url || "/placeholder.svg"}
-                                                            alt={asset.name}
+                                                            src={asset.public_url || "/placeholder.svg"}
+                                                            alt={asset.filename}
                                                             loading="lazy"
                                                             className="w-full h-full object-cover"
                                                         />
                                                     </div>
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm text-neutral-200 truncate">{asset.name}</p>
+                                                        <p className="text-sm text-neutral-200 truncate">{asset.filename}</p>
                                                         <p className="text-xs text-neutral-500">{formatFileSize(asset.size)}</p>
                                                     </div>
                                                     {!isMultiSelectMode && (

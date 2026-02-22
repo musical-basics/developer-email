@@ -3,14 +3,15 @@
 import { useState, useCallback, useEffect } from "react"
 import { Upload, ImageIcon, Loader2, Trash2, Folder, Home, ChevronRight, LayoutGrid, List, CheckSquare, Square, FolderInput } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { deleteAsset, deleteAssets, moveAsset, moveAssets } from "@/app/actions/assets"
+import { deleteAsset, deleteAssets, moveAsset, moveAssets, getAssets, getFolders, getSubFolders, uploadHashedAsset, createFolder, deleteFolder } from "@/app/actions/assets"
 
 interface Asset {
     id: string
-    name: string
-    url: string
+    filename: string
+    folder_path: string
+    storage_hash: string
+    public_url: string
     size?: number
     created_at?: string
 }
@@ -42,42 +43,31 @@ export default function AssetsPage() {
     const [movingAsset, setMovingAsset] = useState<string | null>(null)
     const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null)
 
-    const supabase = createClient()
     const isMultiSelectMode = multiSelectedIds.size > 0
 
+    // ─── Fetch assets from DB ───
     const fetchAssets = useCallback(async () => {
         setLoading(true)
-        const { data, error } = await supabase.storage.from("email-assets").list(currentFolder || "", {
-            limit: 200,
-            sortBy: { column: "name", order: "asc" },
-        })
 
-        if (error) {
-            console.error("Error fetching assets:", error)
-        } else if (data) {
-            const folderItems: FolderItem[] = []
-            const fileItems: Asset[] = []
+        // Fetch assets in the current folder
+        const { assets: dbAssets } = await getAssets(currentFolder)
+        // Filter out sentinel .folder records
+        const fileItems: Asset[] = (dbAssets || []).filter((a: Asset) => a.filename !== ".folder")
+        setAssets(fileItems)
 
-            for (const item of data) {
-                if (item.id === null) {
-                    folderItems.push({ name: item.name })
-                } else if (item.name !== ".folder") {
-                    const path = currentFolder ? `${currentFolder}/${item.name}` : item.name
-                    fileItems.push({
-                        id: item.id,
-                        name: item.name,
-                        url: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/email-assets/${encodeURIComponent(path)}`,
-                        size: (item.metadata as any)?.size,
-                        created_at: item.created_at,
-                    })
-                }
-            }
-
-            setFolders(folderItems)
-            setAssets(fileItems)
+        // Fetch subfolders
+        let folderItems: FolderItem[] = []
+        if (currentFolder) {
+            const { folders: subFolders } = await getSubFolders(currentFolder)
+            folderItems = subFolders.map((name: string) => ({ name }))
+        } else {
+            const { folders: rootFolders } = await getFolders()
+            folderItems = rootFolders.map((name: string) => ({ name }))
         }
+        setFolders(folderItems)
+
         setLoading(false)
-    }, [supabase, currentFolder])
+    }, [currentFolder])
 
     useEffect(() => {
         fetchAssets()
@@ -90,15 +80,9 @@ export default function AssetsPage() {
 
     // ─── Fetch all root folders for "Move to" dialog ───
     const fetchAllFolders = useCallback(async () => {
-        const { data, error } = await supabase.storage.from("email-assets").list("", {
-            limit: 200,
-            sortBy: { column: "name", order: "asc" },
-        })
-        if (!error && data) {
-            const folderNames = data.filter(item => item.id === null).map(item => item.name)
-            setAllFolders(folderNames)
-        }
-    }, [supabase])
+        const { folders: rootFolders } = await getFolders()
+        setAllFolders(rootFolders)
+    }, [])
 
     // ─── Multi-Select Handlers ───
     const toggleMultiSelect = (assetId: string, e?: React.MouseEvent) => {
@@ -127,11 +111,11 @@ export default function AssetsPage() {
     const handleBulkDelete = async () => {
         const selected = getSelectedAssets()
         if (selected.length === 0) return
-        if (!confirm(`Delete ${selected.length} asset${selected.length > 1 ? "s" : ""}? This cannot be undone.`)) return
+        if (!confirm(`Delete ${selected.length} asset${selected.length > 1 ? "s" : ""}? This will hide them from the library.`)) return
 
         setBulkDeleting(true)
-        const filePaths = selected.map(a => currentFolder ? `${currentFolder}/${a.name}` : a.name)
-        const result = await deleteAssets(filePaths)
+        const ids = selected.map(a => a.id)
+        const result = await deleteAssets(ids)
 
         if (!result.success) {
             console.error("Error bulk deleting:", result.error)
@@ -147,12 +131,8 @@ export default function AssetsPage() {
         if (selected.length === 0) return
 
         setBulkMoving(true)
-        const moves = selected.map(a => ({
-            oldPath: currentFolder ? `${currentFolder}/${a.name}` : a.name,
-            newPath: `${targetFolder}/${a.name}`,
-        }))
-
-        const result = await moveAssets(moves)
+        const ids = selected.map(a => a.id)
+        const result = await moveAssets(ids, targetFolder)
 
         if (!result.success) {
             console.error("Error bulk moving:", result.error)
@@ -233,12 +213,13 @@ export default function AssetsPage() {
                 fileToUpload = await compressImage(file)
             }
 
-            const fileName = `${Date.now()}-${fileToUpload.name}`
-            const uploadPath = currentFolder ? `${currentFolder}/${fileName}` : fileName
-            const { error } = await supabase.storage.from("email-assets").upload(uploadPath, fileToUpload)
+            const formData = new FormData()
+            formData.append("file", fileToUpload)
 
-            if (error) {
-                console.error("Error uploading file:", error)
+            const result = await uploadHashedAsset(formData, currentFolder)
+
+            if (!result.success) {
+                console.error("Error uploading file:", result.error)
             } else {
                 await fetchAssets()
             }
@@ -249,11 +230,10 @@ export default function AssetsPage() {
     }
 
     const handleDelete = async (asset: Asset) => {
-        if (!confirm(`Delete "${asset.name}"? This cannot be undone.`)) return
+        if (!confirm(`Delete "${asset.filename}"? It will be hidden from the library but existing email links stay intact.`)) return
 
         setDeleting(asset.id)
-        const filePath = currentFolder ? `${currentFolder}/${asset.name}` : asset.name
-        const result = await deleteAsset(filePath)
+        const result = await deleteAsset(asset.id)
 
         if (!result.success) {
             console.error("Error deleting asset:", result.error)
@@ -267,9 +247,9 @@ export default function AssetsPage() {
 
     // ─── Drag & Drop: Move assets into folders ───
     const handleAssetDragStart = (e: React.DragEvent, asset: Asset) => {
-        e.dataTransfer.setData("text/plain", asset.name)
+        e.dataTransfer.setData("text/plain", asset.id)
         e.dataTransfer.effectAllowed = "move"
-        setMovingAsset(asset.name)
+        setMovingAsset(asset.id)
     }
 
     const handleAssetDragEnd = () => {
@@ -291,14 +271,13 @@ export default function AssetsPage() {
     const handleFolderDrop = async (e: React.DragEvent, folderName: string) => {
         e.preventDefault()
         setDropTargetFolder(null)
-        const assetName = e.dataTransfer.getData("text/plain")
-        if (!assetName) return
+        const assetId = e.dataTransfer.getData("text/plain")
+        if (!assetId) return
 
-        setMovingAsset(assetName)
-        const oldPath = currentFolder ? `${currentFolder}/${assetName}` : assetName
-        const newPath = currentFolder ? `${currentFolder}/${folderName}/${assetName}` : `${folderName}/${assetName}`
+        setMovingAsset(assetId)
+        const targetPath = currentFolder ? `${currentFolder}/${folderName}` : folderName
 
-        const result = await moveAsset(oldPath, newPath)
+        const result = await moveAsset(assetId, targetPath)
         if (!result.success) {
             console.error("Error moving asset:", result.error)
         } else {
@@ -580,17 +559,17 @@ export default function AssetsPage() {
                                             isSelected
                                                 ? "border-primary ring-2 ring-primary/30"
                                                 : "border-border hover:border-muted-foreground/50",
-                                            movingAsset === asset.name && "opacity-40",
+                                            movingAsset === asset.id && "opacity-40",
                                         )}
                                         onClick={() => toggleMultiSelect(asset.id)}
                                     >
                                         <img
-                                            src={asset.url || "/placeholder.svg"}
-                                            alt={asset.name}
+                                            src={asset.public_url || "/placeholder.svg"}
+                                            alt={asset.filename}
                                             className="w-full h-full object-cover"
                                         />
                                         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent px-2 py-2">
-                                            <p className="text-xs text-white truncate">{asset.name}</p>
+                                            <p className="text-xs text-white truncate">{asset.filename}</p>
                                             <p className="text-xs text-white/60">{formatFileSize(asset.size)}</p>
                                         </div>
                                         {/* Checkbox */}
@@ -670,7 +649,7 @@ export default function AssetsPage() {
                                             "flex items-center gap-4 px-4 py-3 transition-colors",
                                             isMultiSelectMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
                                             isSelected ? "bg-primary/5" : "hover:bg-muted/50",
-                                            movingAsset === asset.name && "opacity-40",
+                                            movingAsset === asset.id && "opacity-40",
                                         )}
                                         onClick={() => toggleMultiSelect(asset.id)}
                                     >
@@ -692,14 +671,14 @@ export default function AssetsPage() {
                                         {/* Thumbnail */}
                                         <div className="w-12 h-12 rounded-md overflow-hidden bg-muted flex-shrink-0">
                                             <img
-                                                src={asset.url || "/placeholder.svg"}
-                                                alt={asset.name}
+                                                src={asset.public_url || "/placeholder.svg"}
+                                                alt={asset.filename}
                                                 className="w-full h-full object-cover"
                                             />
                                         </div>
                                         {/* Info */}
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-medium text-foreground truncate">{asset.name}</p>
+                                            <p className="text-sm font-medium text-foreground truncate">{asset.filename}</p>
                                             <p className="text-xs text-muted-foreground">{formatFileSize(asset.size)}</p>
                                         </div>
                                         {/* Delete */}
