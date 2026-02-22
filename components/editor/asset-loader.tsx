@@ -15,7 +15,7 @@ import {
 import Link from "next/link"
 import { Upload, ImageIcon, ArrowLeft, Bookmark } from "lucide-react"
 import { AssetPickerModal } from "./asset-picker-modal"
-import { getDefaultLinks, type DefaultLinks } from "@/app/actions/settings"
+import { getDefaultLinks, getCustomLinks, type DefaultLinks, type CustomLink } from "@/app/actions/settings"
 
 interface AssetLoaderProps {
     variables: string[]
@@ -27,17 +27,29 @@ interface AssetLoaderProps {
 export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton = true }: AssetLoaderProps) {
     const [activeVariable, setActiveVariable] = useState<string | null>(null)
     const [savedLinks, setSavedLinks] = useState<DefaultLinks | null>(null)
+    const [customLinks, setCustomLinks] = useState<CustomLink[]>([])
 
     useEffect(() => {
-        getDefaultLinks("dreamplay").then(setSavedLinks)
+        Promise.all([
+            getDefaultLinks("dreamplay"),
+            getCustomLinks("dreamplay"),
+        ]).then(([defaults, custom]) => {
+            setSavedLinks(defaults)
+            setCustomLinks(custom)
+        })
     }, [])
 
-    // Build non-empty saved links for the dropdown
-    const linkEntries = savedLinks
-        ? Object.entries(savedLinks)
-            .filter(([_, v]) => v && v.trim() !== "")
-            .map(([key, url]) => ({ label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), url }))
-        : []
+    // Build non-empty saved links for the dropdown (default + custom)
+    const linkEntries = [
+        ...(savedLinks
+            ? Object.entries(savedLinks)
+                .filter(([_, v]) => v && v.trim() !== "")
+                .map(([key, url]) => ({ label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), url }))
+            : []),
+        ...customLinks
+            .filter(cl => cl.label && cl.url)
+            .map(cl => ({ label: cl.label, url: cl.url })),
+    ]
 
     const isImageVariable = (variable: string) => {
         const lower = variable.toLowerCase()

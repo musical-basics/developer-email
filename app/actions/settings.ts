@@ -129,6 +129,50 @@ export async function saveDefaultLinks(brand: Brand, links: DefaultLinks) {
     return { success: true }
 }
 
+// ─── Custom Links (user-defined, per brand) ─────────────
+
+export interface CustomLink {
+    label: string
+    url: string
+}
+
+function customLinksKey(brand: Brand): string {
+    return `custom_links_${brand}`
+}
+
+export async function getCustomLinks(brand: Brand = "dreamplay"): Promise<CustomLink[]> {
+    const supabase = await createClient()
+
+    const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", customLinksKey(brand))
+        .single()
+
+    if (data?.value) {
+        try { return JSON.parse(data.value) } catch { }
+    }
+
+    return []
+}
+
+export async function saveCustomLinks(brand: Brand, links: CustomLink[]) {
+    const supabase = await createClient()
+
+    const { error } = await supabase
+        .from("app_settings")
+        .upsert({
+            key: customLinksKey(brand),
+            value: JSON.stringify(links),
+            updated_at: new Date().toISOString()
+        })
+
+    if (error) throw new Error(error.message)
+
+    revalidatePath("/settings")
+    return { success: true }
+}
+
 // ─── Composite helper for Copilot routes ────────────────
 
 export interface AudiencePayload {

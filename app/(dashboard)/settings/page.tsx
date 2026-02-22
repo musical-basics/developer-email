@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot, Zap, Flame, Cpu, MousePointerClick, Eye } from "lucide-react"
+import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot, Zap, Flame, Cpu, MousePointerClick, Eye, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -14,7 +14,8 @@ import { getAnthropicModels } from "@/app/actions/ai-models"
 import {
     getCompanyContext, saveCompanyContext,
     getDefaultLinks, saveDefaultLinks,
-    type DefaultLinks, type AudienceContext, type Brand
+    getCustomLinks, saveCustomLinks,
+    type DefaultLinks, type AudienceContext, type Brand, type CustomLink
 } from "@/app/actions/settings"
 
 const LINK_LABELS: Record<keyof DefaultLinks, string> = {
@@ -48,6 +49,11 @@ export default function SettingsPage() {
     const [savingContext, setSavingContext] = useState<string | null>(null)
     const [savingLinks, setSavingLinks] = useState<string | null>(null)
 
+    // ─── Custom Links State ──────────────────────────
+    const [customLinksDP, setCustomLinksDP] = useState<CustomLink[]>([])
+    const [customLinksMB, setCustomLinksMB] = useState<CustomLink[]>([])
+    const [savingCustomLinks, setSavingCustomLinks] = useState<string | null>(null)
+
     // ─── Tier Model State ────────────────────────────
     const [modelLow, setModelLow] = useState("claude-haiku-4-5-20251001")
     const [modelMedium, setModelMedium] = useState("claude-sonnet-4-6")
@@ -67,18 +73,22 @@ export default function SettingsPage() {
     useEffect(() => {
         async function loadAll() {
             try {
-                const [mb, dp, cross, lMB, lDP] = await Promise.all([
+                const [mb, dp, cross, lMB, lDP, clDP, clMB] = await Promise.all([
                     getCompanyContext("musicalbasics"),
                     getCompanyContext("dreamplay"),
                     getCompanyContext("crossover"),
                     getDefaultLinks("musicalbasics"),
                     getDefaultLinks("dreamplay"),
+                    getCustomLinks("dreamplay"),
+                    getCustomLinks("musicalbasics"),
                 ])
                 setCtxMusicalBasics(mb)
                 setCtxDreamPlay(dp)
                 setCtxCrossover(cross)
                 setLinksMB(lMB)
                 setLinksDP(lDP)
+                setCustomLinksDP(clDP)
+                setCustomLinksMB(clMB)
             } catch (e) {
                 console.error("Failed to load settings:", e)
             } finally {
@@ -148,6 +158,27 @@ export default function SettingsPage() {
             setLinksMB(prev => ({ ...prev, [key]: value }))
         } else {
             setLinksDP(prev => ({ ...prev, [key]: value }))
+        }
+    }
+
+    const handleSaveCustomLinks = async (brand: Brand) => {
+        setSavingCustomLinks(brand)
+        try {
+            const links = brand === "musicalbasics" ? customLinksMB : customLinksDP
+            await saveCustomLinks(brand, links)
+            toast({ title: "Custom Links Saved", description: `${brand} custom links updated.` })
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" })
+        } finally {
+            setSavingCustomLinks(null)
+        }
+    }
+
+    const updateCustomLinks = (brand: Brand, links: CustomLink[]) => {
+        if (brand === "musicalbasics") {
+            setCustomLinksMB(links)
+        } else {
+            setCustomLinksDP(links)
         }
     }
 
@@ -342,6 +373,13 @@ export default function SettingsPage() {
                         onSave={() => handleSaveLinks("dreamplay")}
                         saving={savingLinks === "dreamplay"}
                     />
+                    <CustomLinksCard
+                        title="DreamPlay Custom Links"
+                        links={customLinksDP}
+                        onChange={(links) => updateCustomLinks("dreamplay", links)}
+                        onSave={() => handleSaveCustomLinks("dreamplay")}
+                        saving={savingCustomLinks === "dreamplay"}
+                    />
                 </TabsContent>
 
                 {/* ─── MusicalBasics Tab ─── */}
@@ -360,6 +398,13 @@ export default function SettingsPage() {
                         onChange={(key, val) => updateLink("musicalbasics", key, val)}
                         onSave={() => handleSaveLinks("musicalbasics")}
                         saving={savingLinks === "musicalbasics"}
+                    />
+                    <CustomLinksCard
+                        title="MusicalBasics Custom Links"
+                        links={customLinksMB}
+                        onChange={(links) => updateCustomLinks("musicalbasics", links)}
+                        onSave={() => handleSaveCustomLinks("musicalbasics")}
+                        saving={savingCustomLinks === "musicalbasics"}
                     />
                 </TabsContent>
 
@@ -471,6 +516,79 @@ function BrandLinksCard({
                     {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
                     Save Links
                 </Button>
+            </CardContent>
+        </Card>
+    )
+}
+
+function CustomLinksCard({
+    title, links, onChange, onSave, saving
+}: {
+    title: string; links: CustomLink[]
+    onChange: (links: CustomLink[]) => void
+    onSave: () => void; saving: boolean
+}) {
+    const addLink = () => {
+        onChange([...links, { label: "", url: "" }])
+    }
+
+    const removeLink = (index: number) => {
+        onChange(links.filter((_, i) => i !== index))
+    }
+
+    const updateEntry = (index: number, field: "label" | "url", value: string) => {
+        const updated = [...links]
+        updated[index] = { ...updated[index], [field]: value }
+        onChange(updated)
+    }
+
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-emerald-400" />
+                    {title}
+                </CardTitle>
+                <CardDescription>
+                    Custom links that appear in the asset loader dropdown. Add frequently used URLs here.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {links.map((link, i) => (
+                    <div key={i} className="flex gap-2 items-center">
+                        <Input
+                            value={link.label}
+                            onChange={(e) => updateEntry(i, "label", e.target.value)}
+                            placeholder="Label (e.g. Product Page)"
+                            className="w-[180px] flex-shrink-0"
+                        />
+                        <Input
+                            value={link.url}
+                            onChange={(e) => updateEntry(i, "url", e.target.value)}
+                            placeholder="https://..."
+                            className="flex-1"
+                        />
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="flex-shrink-0 text-muted-foreground hover:text-red-400"
+                            onClick={() => removeLink(i)}
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </Button>
+                    </div>
+                ))}
+
+                <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={addLink} className="gap-1">
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Link
+                    </Button>
+                    <Button size="sm" onClick={onSave} disabled={saving}>
+                        {saving ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                        Save Custom Links
+                    </Button>
+                </div>
             </CardContent>
         </Card>
     )
