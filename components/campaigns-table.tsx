@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import { createClient } from "@/lib/supabase/client"
@@ -219,6 +219,12 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                         {/* New Metrics Columns */}
                         {showAnalytics && (
                             <>
+                                <TableHead className="text-center w-[120px]">
+                                    <div className="flex items-center justify-center gap-1">
+                                        <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                                        From
+                                    </div>
+                                </TableHead>
                                 <TableHead className="text-right">
                                     <div className="flex items-center justify-end gap-1">
                                         <Eye className="h-3.5 w-3.5 text-muted-foreground" />
@@ -251,7 +257,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={(showAnalytics ? 7 : 3) + (enableBulkDelete ? 1 : 0)} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={(showAnalytics ? 8 : 3) + (enableBulkDelete ? 1 : 0)} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
@@ -316,6 +322,20 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                     {/* METRICS */}
                                     {showAnalytics && (
                                         <>
+                                            <TableCell className="text-center">
+                                                {(() => {
+                                                    const fromEmail = campaign.variable_values?.from_email || "";
+                                                    const isMusicalBasics = fromEmail.toLowerCase().includes("musicalbasics");
+                                                    return (
+                                                        <Badge variant="outline" className={`text-xs ${isMusicalBasics
+                                                            ? "text-violet-400 border-violet-500/50 bg-violet-500/10"
+                                                            : "text-amber-400 border-amber-500/50 bg-amber-500/10"
+                                                            }`}>
+                                                            {isMusicalBasics ? "MusicalBasics" : "DreamPlay"}
+                                                        </Badge>
+                                                    );
+                                                })()}
+                                            </TableCell>
                                             <TableCell className="text-right font-mono">
                                                 {recipients > 0 ? (
                                                     <span className={openRate > 20 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
