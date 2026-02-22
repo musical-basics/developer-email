@@ -263,7 +263,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                             </TableCell>
                         </TableRow>
                     ) : (
-                        campaigns.map((campaign) => {
+                        [...campaigns].sort((a, b) => (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)).map((campaign) => {
                             const recipients = campaign.total_recipients || 0
                             const openRate = recipients > 0 ? Math.round((campaign.total_opens / recipients) * 100) : 0
                             const clickRate = recipients > 0 ? Math.round((campaign.total_clicks / recipients) * 100) : 0
