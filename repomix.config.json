@@ -35,7 +35,13 @@
     "customPatterns": [
       "_legacy_v0_code/**",
       "**/*.local",
-      "*repomix*"
+      "*repomix*",
+      "components/ui/**",
+      "scripts/**",
+      "all_campaigns.json",
+      "campaign_record.json",
+      "campaign_updated.json",
+      "recent_files.json"
     ]
   },
   "security": {

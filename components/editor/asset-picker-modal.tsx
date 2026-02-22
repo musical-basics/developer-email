@@ -220,8 +220,8 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                 const ctx = canvas.getContext("2d")
                 if (!ctx) return reject(new Error("Canvas context failed"))
 
-                const MAX_WIDTH = 1200
-                const MAX_HEIGHT = 1200
+                const MAX_WIDTH = 1600
+                const MAX_HEIGHT = 1600
                 let width = img.width
                 let height = img.height
 
@@ -251,7 +251,7 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
                         resolve(compressedFile)
                     },
                     "image/jpeg",
-                    0.8,
+                    0.9,
                 )
             }
 
