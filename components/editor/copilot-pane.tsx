@@ -341,7 +341,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                                 if (autoRouting && !overrideModel) {
                                     handleSendMessage()
                                 } else {
-                                    handleSendMessage("medium")
+                                    handleSendMessage("low")
                                 }
                             }
                         }}
@@ -370,7 +370,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                                 onClick={() => handleSendMessage("low")}
                                 disabled={!canSend}
                                 className="bg-green-600 hover:bg-green-500 text-white h-9 w-9"
-                                title={`Low: ${overrideModel || modelLow}`}
+                                title={`Low: ${overrideModel || modelLow} (Enter)`}
                             >
                                 <Send className="w-3.5 h-3.5" />
                             </Button>
@@ -379,7 +379,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                                 onClick={() => handleSendMessage("medium")}
                                 disabled={!canSend}
                                 className="bg-amber-600 hover:bg-amber-500 text-white h-9 w-9"
-                                title={`Medium: ${overrideModel || modelMedium} (Enter)`}
+                                title={`Medium: ${overrideModel || modelMedium}`}
                             >
                                 <Send className="w-3.5 h-3.5" />
                             </Button>
