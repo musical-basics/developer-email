@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
+import { addPlayButtonsToVideoThumbnails } from "@/lib/video-overlay";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -171,6 +172,9 @@ export async function POST(request: Request) {
 `;
             const htmlWithFooter = htmlContent + unsubscribeFooter;
 
+            // Composite play button overlay on video-linked thumbnails (once for all recipients)
+            const htmlWithVideoOverlay = await addPlayButtonsToVideoThumbnails(htmlWithFooter);
+
             let successCount = 0;
             let failureCount = 0;
             let firstResendEmailId: string | null = null;
@@ -182,7 +186,7 @@ export async function POST(request: Request) {
                     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${trackingCampaignId}`;
 
                     // Personalize content
-                    let personalHtml = htmlWithFooter
+                    let personalHtml = htmlWithVideoOverlay
                         .replace(/{{first_name}}/g, sub.first_name || "Musical Family")
                         .replace(/{{last_name}}/g, sub.last_name || "")
                         .replace(/{{email}}/g, sub.email)
