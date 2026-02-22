@@ -1,10 +1,13 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2, FileText, History, Plus } from "lucide-react"
+import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2, FileText, History, Plus, LayoutTemplate } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 
 
@@ -33,6 +36,8 @@ const MAX_SESSIONS = 5
 const STORAGE_PREFIX = "copilot_sessions_"
 
 import { getAnthropicModels } from "@/app/actions/ai-models"
+import { getTemplateList, getCampaignHtml } from "@/app/actions/campaigns"
+import { renderTemplate } from "@/lib/render-template"
 
 type ComputeTier = "low" | "medium" | "high"
 
@@ -164,6 +169,15 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
     const scrollRef = useRef<HTMLDivElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
 
+    // ─── Reference Template ──────────────────────────
+    const [isRefPickerOpen, setIsRefPickerOpen] = useState(false)
+    const [refTemplates, setRefTemplates] = useState<{ id: string; name: string; created_at: string }[]>([])
+    const [loadingTemplates, setLoadingTemplates] = useState(false)
+    const [capturingRef, setCapturingRef] = useState(false)
+    const [referenceCSS, setReferenceCSS] = useState<string | null>(null)
+    const [refTemplateName, setRefTemplateName] = useState<string | null>(null)
+    const refIframeRef = useRef<HTMLIFrameElement>(null)
+
     // Auto-scroll to bottom
     useEffect(() => {
         if (scrollRef.current) {
@@ -220,11 +234,103 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         }
     }
 
+    // ─── Reference Template Handlers ─────────────────
+    const handleOpenRefPicker = async () => {
+        setIsRefPickerOpen(true)
+        setLoadingTemplates(true)
+        try {
+            const templates = await getTemplateList()
+            setRefTemplates(templates)
+        } catch (e) {
+            console.error("Failed to load templates", e)
+        } finally {
+            setLoadingTemplates(false)
+        }
+    }
+
+    const handleSelectRefTemplate = async (template: { id: string; name: string }) => {
+        setIsRefPickerOpen(false)
+        setCapturingRef(true)
+        setRefTemplateName(template.name)
+
+        try {
+            // 1. Fetch HTML
+            const campaignData = await getCampaignHtml(template.id)
+            if (!campaignData?.html_content) {
+                throw new Error("No HTML content found")
+            }
+
+            // Render template variables for accurate preview
+            const renderedHtml = renderTemplate(campaignData.html_content, campaignData.variable_values || {})
+
+            // 2. Extract <style> block
+            const styleMatch = renderedHtml.match(/<style[^>]*>[\s\S]*?<\/style>/gi)
+            const extractedCSS = styleMatch ? styleMatch.join("\n") : ""
+            setReferenceCSS(extractedCSS || null)
+
+            // 3. Render in hidden iframe and capture screenshot
+            const iframe = refIframeRef.current
+            if (iframe) {
+                const doc = iframe.contentDocument
+                if (doc) {
+                    doc.open()
+                    doc.write(renderedHtml)
+                    doc.close()
+
+                    // Wait for images to load
+                    await new Promise(resolve => setTimeout(resolve, 1500))
+
+                    // Capture with html2canvas
+                    const html2canvas = (await import("html2canvas")).default
+                    const canvas = await html2canvas(doc.body, {
+                        width: 600,
+                        backgroundColor: "#ffffff",
+                        useCORS: true,
+                        logging: false,
+                    })
+
+                    // Convert to blob and upload
+                    const blob = await new Promise<Blob>((resolve) =>
+                        canvas.toBlob((b) => resolve(b!), "image/png", 0.9)
+                    )
+
+                    const formData = new FormData()
+                    formData.append("file", blob, `ref-${template.id}.png`)
+                    const uploadRes = await fetch("/api/upload", { method: "POST", body: formData })
+                    const uploadData = await uploadRes.json()
+
+                    if (uploadRes.ok && uploadData.url) {
+                        setPendingAttachments(prev => [...prev, uploadData.url])
+                    }
+                }
+            }
+        } catch (e: any) {
+            console.error("Failed to capture reference template:", e)
+            setRefTemplateName(null)
+            setReferenceCSS(null)
+        } finally {
+            setCapturingRef(false)
+        }
+    }
+
+    const clearReference = () => {
+        setReferenceCSS(null)
+        setRefTemplateName(null)
+    }
+
     const handleSendMessage = async (tier?: ComputeTier) => {
         if ((!input.trim() && pendingAttachments.length === 0) || isLoading || isUploading) return
 
         const userMessage = input.trim()
         const attachments = [...pendingAttachments]
+
+        // Prepend reference CSS context if present
+        let fullMessage = userMessage
+        if (referenceCSS) {
+            fullMessage = `[Reference template style attached. Match this CSS for fonts, colors, and spacing:]\n${referenceCSS}\n\n${userMessage}`
+            setReferenceCSS(null)
+            setRefTemplateName(null)
+        }
 
         // Determine which model to use
         let model: string
@@ -239,15 +345,24 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         setInput("")
         setPendingAttachments([])
 
-        // 1. Add to UI state
+        // 1. Add to UI state (show clean message, not the CSS-prepended one)
         const newMessage: Message = {
             role: "user",
             content: userMessage,
             imageUrls: attachments
         }
 
-        // Append to local history
+        // Build the API message with full CSS context
+        const apiMessage: Message = {
+            role: "user",
+            content: fullMessage,
+            imageUrls: attachments
+        }
+
+        // Append to local history (UI-clean version)
         const newHistory = [...messages, newMessage]
+        // Build API history (last message has CSS context)
+        const apiHistory = [...messages, apiMessage]
         setMessages(newHistory)
         setIsLoading(true)
 
@@ -258,7 +373,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     currentHtml: html,
-                    messages: newHistory,
+                    messages: apiHistory,
                     model,
                     audienceContext,
                     aiDossier,
@@ -307,6 +422,11 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
 
     return (
         <div className="flex flex-col h-full border-l border-border bg-card text-card-foreground">
+            {/* Hidden iframe for screenshot capture */}
+            <iframe
+                ref={refIframeRef}
+                style={{ position: "absolute", left: "-9999px", top: "-9999px", width: "600px", height: "2000px", border: "none" }}
+            />
             {/* Header */}
             <div className="h-14 border-b border-border flex items-center px-4 gap-2 justify-between shrink-0 bg-background/50 backdrop-blur">
                 <div className="flex items-center gap-2">
@@ -434,29 +554,53 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
 
             {/* Input Area */}
             <div className="p-4 border-t border-border mt-auto shrink-0 bg-background/50 backdrop-blur">
-                {/* Pending Uploads */}
-                {(pendingAttachments.length > 0 || isUploading) && (
-                    <div className="flex gap-2 overflow-x-auto pb-3">
-                        {pendingAttachments.map((url, i) => (
-                            <div key={i} className="relative group shrink-0">
-                                {url.toLowerCase().endsWith('.pdf') ? (
-                                    <div className="h-14 w-14 rounded-md border border-border bg-muted flex items-center justify-center">
-                                        <FileText className="w-6 h-6 text-muted-foreground" />
-                                    </div>
-                                ) : (
-                                    <img src={url} className="h-14 w-14 rounded-md object-cover border border-border" />
+                {/* Pending Uploads + Reference Badge */}
+                {(pendingAttachments.length > 0 || isUploading || refTemplateName || capturingRef) && (
+                    <div className="space-y-2 pb-3">
+                        {/* Reference Badge */}
+                        {(refTemplateName || capturingRef) && (
+                            <div className="flex items-center gap-2">
+                                {capturingRef ? (
+                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 gap-1">
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                        Capturing reference...
+                                    </Badge>
+                                ) : refTemplateName && (
+                                    <Badge variant="outline" className="bg-purple-500/10 text-purple-400 border-purple-500/30 gap-1 pr-1">
+                                        <LayoutTemplate className="w-3 h-3" />
+                                        Ref: {refTemplateName}
+                                        <button onClick={clearReference} className="ml-1 rounded-full p-0.5 hover:bg-purple-500/20">
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </Badge>
                                 )}
-                                <button
-                                    onClick={() => setPendingAttachments(prev => prev.filter((_, idx) => idx !== i))}
-                                    className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                    <X className="w-3 h-3" />
-                                </button>
                             </div>
-                        ))}
-                        {isUploading && (
-                            <div className="h-14 w-14 rounded-md border border-dashed border-muted-foreground/50 flex items-center justify-center bg-muted/20">
-                                <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                        )}
+                        {/* Attachment previews */}
+                        {(pendingAttachments.length > 0 || isUploading) && (
+                            <div className="flex gap-2 overflow-x-auto">
+                                {pendingAttachments.map((url, i) => (
+                                    <div key={i} className="relative group shrink-0">
+                                        {url.toLowerCase().endsWith('.pdf') ? (
+                                            <div className="h-14 w-14 rounded-md border border-border bg-muted flex items-center justify-center">
+                                                <FileText className="w-6 h-6 text-muted-foreground" />
+                                            </div>
+                                        ) : (
+                                            <img src={url} className="h-14 w-14 rounded-md object-cover border border-border" />
+                                        )}
+                                        <button
+                                            onClick={() => setPendingAttachments(prev => prev.filter((_, idx) => idx !== i))}
+                                            className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <X className="w-3 h-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {isUploading && (
+                                    <div className="h-14 w-14 rounded-md border border-dashed border-muted-foreground/50 flex items-center justify-center bg-muted/20">
+                                        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
@@ -479,6 +623,19 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                         disabled={isUploading || isLoading}
                     >
                         <Paperclip className="w-5 h-5" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                            "shrink-0 hover:text-foreground",
+                            refTemplateName ? "text-purple-400" : "text-muted-foreground"
+                        )}
+                        onClick={handleOpenRefPicker}
+                        disabled={isUploading || isLoading || capturingRef}
+                        title="Reference a template style"
+                    >
+                        <LayoutTemplate className="w-5 h-5" />
                     </Button>
 
                     <Input
@@ -545,6 +702,42 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                     )}
                 </div>
             </div>
+
+            {/* Reference Template Picker Dialog */}
+            <Dialog open={isRefPickerOpen} onOpenChange={setIsRefPickerOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Reference Template</DialogTitle>
+                        <DialogDescription>Select a master template to use as a style reference. A screenshot and CSS will be attached to your next prompt.</DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        {loadingTemplates ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : refTemplates.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-8">No master templates found.</p>
+                        ) : (
+                            <ScrollArea className="h-[300px] pr-4">
+                                <div className="space-y-2">
+                                    {refTemplates.map(t => (
+                                        <button
+                                            key={t.id}
+                                            onClick={() => handleSelectRefTemplate(t)}
+                                            className="w-full text-left p-3 rounded-lg border border-border hover:bg-accent transition-colors"
+                                        >
+                                            <h4 className="font-medium text-sm text-foreground">{t.name}</h4>
+                                            <p className="text-[10px] text-muted-foreground mt-1">
+                                                Created: {new Date(t.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

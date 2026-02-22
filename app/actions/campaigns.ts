@@ -123,6 +123,38 @@ export async function getCampaignList() {
     return data || []
 }
 
+export async function getTemplateList() {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from("campaigns")
+        .select("id, name, created_at")
+        .eq("is_template", true)
+        .order("created_at", { ascending: false })
+
+    if (error) {
+        console.error("Error fetching template list:", error)
+        return []
+    }
+
+    return data || []
+}
+
+export async function getCampaignHtml(campaignId: string) {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from("campaigns")
+        .select("html_content, variable_values")
+        .eq("id", campaignId)
+        .single()
+
+    if (error) {
+        console.error("Error fetching campaign HTML:", error)
+        return null
+    }
+
+    return data
+}
+
 export async function duplicateCampaign(campaignId: string) {
     const supabase = await createClient()
 
