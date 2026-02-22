@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -13,8 +13,9 @@ import {
     SelectValue,
 } from "@/components/ui/select"
 import Link from "next/link"
-import { Upload, ImageIcon, ArrowLeft } from "lucide-react"
+import { Upload, ImageIcon, ArrowLeft, Bookmark } from "lucide-react"
 import { AssetPickerModal } from "./asset-picker-modal"
+import { getDefaultLinks, type DefaultLinks } from "@/app/actions/settings"
 
 interface AssetLoaderProps {
     variables: string[]
@@ -25,6 +26,18 @@ interface AssetLoaderProps {
 
 export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton = true }: AssetLoaderProps) {
     const [activeVariable, setActiveVariable] = useState<string | null>(null)
+    const [savedLinks, setSavedLinks] = useState<DefaultLinks | null>(null)
+
+    useEffect(() => {
+        getDefaultLinks("dreamplay").then(setSavedLinks)
+    }, [])
+
+    // Build non-empty saved links for the dropdown
+    const linkEntries = savedLinks
+        ? Object.entries(savedLinks)
+            .filter(([_, v]) => v && v.trim() !== "")
+            .map(([key, url]) => ({ label: key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), url }))
+        : []
 
     const isImageVariable = (variable: string) => {
         const lower = variable.toLowerCase()
@@ -193,13 +206,29 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
                                             <Label htmlFor={pairedLink} className="text-xs font-mono text-muted-foreground">
                                                 {`{{${pairedLink}}}`}
                                             </Label>
-                                            <Input
-                                                id={pairedLink}
-                                                value={assets[pairedLink] || ""}
-                                                onChange={(e) => onUpdateAsset(pairedLink, e.target.value)}
-                                                placeholder="Link destination URL"
-                                                className="text-sm bg-muted border-border font-mono"
-                                            />
+                                            <div className="flex gap-1">
+                                                <Input
+                                                    id={pairedLink}
+                                                    value={assets[pairedLink] || ""}
+                                                    onChange={(e) => onUpdateAsset(pairedLink, e.target.value)}
+                                                    placeholder="Link destination URL"
+                                                    className="flex-1 text-sm bg-muted border-border font-mono"
+                                                />
+                                                {linkEntries.length > 0 && (
+                                                    <Select onValueChange={(url) => onUpdateAsset(pairedLink, url)}>
+                                                        <SelectTrigger className="w-9 h-9 p-0 flex-shrink-0" title="Insert saved link">
+                                                            <Bookmark className="w-3.5 h-3.5" />
+                                                        </SelectTrigger>
+                                                        <SelectContent align="end">
+                                                            {linkEntries.map(({ label, url }) => (
+                                                                <SelectItem key={label} value={url}>
+                                                                    <span className="text-xs">{label}</span>
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
@@ -232,13 +261,29 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
                                     <Label htmlFor={variable} className="text-xs font-mono text-muted-foreground">
                                         {`{{${variable}}}`}
                                     </Label>
-                                    <Input
-                                        id={variable}
-                                        value={assets[variable] || ""}
-                                        onChange={(e) => onUpdateAsset(variable, e.target.value)}
-                                        placeholder="Link destination URL"
-                                        className="text-sm bg-muted border-border font-mono"
-                                    />
+                                    <div className="flex gap-1">
+                                        <Input
+                                            id={variable}
+                                            value={assets[variable] || ""}
+                                            onChange={(e) => onUpdateAsset(variable, e.target.value)}
+                                            placeholder="Link destination URL"
+                                            className="flex-1 text-sm bg-muted border-border font-mono"
+                                        />
+                                        {linkEntries.length > 0 && (
+                                            <Select onValueChange={(url) => onUpdateAsset(variable, url)}>
+                                                <SelectTrigger className="w-9 h-9 p-0 flex-shrink-0" title="Insert saved link">
+                                                    <Bookmark className="w-3.5 h-3.5" />
+                                                </SelectTrigger>
+                                                <SelectContent align="end">
+                                                    {linkEntries.map(({ label, url }) => (
+                                                        <SelectItem key={label} value={url}>
+                                                            <span className="text-xs">{label}</span>
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                    </div>
                                 </div>
                             )
                         }
