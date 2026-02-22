@@ -30,6 +30,10 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
         const lower = variable.toLowerCase()
         if (lower.endsWith("_fit")) return false
         if (lower.endsWith("_link_url") || lower.includes("link_url")) return false
+        // Exclude known page/action link variables
+        if (lower === "unsubscribe_url" || lower === "privacy_url" || lower === "contact_url" ||
+            lower === "about_url" || lower === "homepage_url" || lower === "shipping_url" ||
+            lower === "main_cta_url" || lower === "crowdfunding_cta_url") return false
         return lower.includes("image") || lower.includes("url") || lower.endsWith("_src") || lower.endsWith("_bg") || lower.endsWith("_logo") || lower.endsWith("_icon") || lower.endsWith("_img")
     }
 
