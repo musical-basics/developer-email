@@ -19,6 +19,7 @@ export interface Campaign {
     resend_email_id?: string | null
     is_template?: boolean
     is_ready?: boolean
+    sent_from_email?: string | null
     parent_template_id?: string | null
 }
 

@@ -330,7 +330,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                         <>
                                             <TableCell className="text-center">
                                                 {(() => {
-                                                    const fromEmail = campaign.variable_values?.from_email || "";
+                                                    const fromEmail = campaign.sent_from_email || campaign.variable_values?.from_email || "";
                                                     const isMusicalBasics = fromEmail.toLowerCase().includes("musicalbasics");
                                                     return (
                                                         <Badge variant="outline" className={`text-xs ${isMusicalBasics

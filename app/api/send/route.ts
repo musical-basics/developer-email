@@ -265,7 +265,8 @@ export async function POST(request: Request) {
             // Update the tracking campaign (child or original) to completed
             const updateData: any = {
                 status: "completed",
-                total_recipients: recipients.length
+                total_recipients: recipients.length,
+                sent_from_email: fromEmail || null,
             };
             if (firstResendEmailId) {
                 updateData.resend_email_id = firstResendEmailId;
