@@ -10,11 +10,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2 } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import { createClient } from "@/lib/supabase/client"
-import { duplicateCampaign, deleteCampaign, toggleTemplateStatus } from "@/app/actions/campaigns"
+import { duplicateCampaign, deleteCampaign, toggleTemplateStatus, toggleReadyStatus } from "@/app/actions/campaigns"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -48,6 +48,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [renaming, setRenaming] = useState(false)
     const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
     const [togglingTemplateId, setTogglingTemplateId] = useState<string | null>(null)
+    const [togglingReadyId, setTogglingReadyId] = useState<string | null>(null)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [bulkDeleting, setBulkDeleting] = useState(false)
 
@@ -317,6 +318,11 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                         `}>
                                             {campaign.is_template ? 'Master Template' : campaign.status}
                                         </Badge>
+                                        {campaign.is_template && campaign.is_ready && (
+                                            <Badge variant="outline" className="ml-1 text-emerald-400 border-emerald-500/50 bg-emerald-500/10">
+                                                Ready
+                                            </Badge>
+                                        )}
                                     </TableCell>
 
                                     {/* METRICS */}
@@ -388,6 +394,26 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                             >
                                                 <Star className={`w-4 h-4 ${campaign.is_template ? "fill-current" : ""}`} />
                                             </Button>
+                                            {campaign.is_template && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={async () => {
+                                                        setTogglingReadyId(campaign.id)
+                                                        await toggleReadyStatus(campaign.id, !campaign.is_ready)
+                                                        router.refresh()
+                                                        setTogglingReadyId(null)
+                                                    }}
+                                                    disabled={togglingReadyId === campaign.id}
+                                                    className={`h-8 w-8 ${campaign.is_ready
+                                                        ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                                                        : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
+                                                        }`}
+                                                    title={campaign.is_ready ? "Mark as Not Ready" : "Mark as Ready"}
+                                                >
+                                                    <CheckCircle2 className={`w-4 h-4 ${campaign.is_ready ? "fill-current" : ""}`} />
+                                                </Button>
+                                            )}
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

@@ -39,7 +39,7 @@ export async function getCampaigns() {
     // Fetch campaigns
     const { data: campaigns, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, variable_values")
+        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values")
         .order("created_at", { ascending: false })
 
     if (error) {
@@ -326,6 +326,22 @@ export async function toggleTemplateStatus(campaignId: string, isTemplate: boole
 
     if (error) {
         console.error("Error toggling template status:", error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { success: true }
+}
+
+export async function toggleReadyStatus(campaignId: string, isReady: boolean) {
+    const supabase = await createClient()
+    const { error } = await supabase
+        .from("campaigns")
+        .update({ is_ready: isReady })
+        .eq("id", campaignId)
+
+    if (error) {
+        console.error("Error toggling ready status:", error)
         return { success: false, error: error.message }
     }
 

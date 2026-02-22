@@ -18,6 +18,7 @@ export interface Campaign {
     average_read_time: number
     resend_email_id?: string | null
     is_template?: boolean
+    is_ready?: boolean
     parent_template_id?: string | null
 }
 
