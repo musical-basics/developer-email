@@ -606,7 +606,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                     </div>
                 )}
 
-                <div className="flex gap-2 items-end">
+                <div className="space-y-2">
                     <input
                         type="file"
                         multiple
@@ -615,29 +615,8 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                         ref={fileInputRef}
                         onChange={handleFileSelect}
                     />
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 text-muted-foreground hover:text-foreground"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isUploading || isLoading}
-                    >
-                        <Paperclip className="w-5 h-5" />
-                    </Button>
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className={cn(
-                            "shrink-0 hover:text-foreground",
-                            refTemplateName ? "text-purple-400" : "text-muted-foreground"
-                        )}
-                        onClick={handleOpenRefPicker}
-                        disabled={isUploading || isLoading || capturingRef}
-                        title="Reference a template style"
-                    >
-                        <LayoutTemplate className="w-5 h-5" />
-                    </Button>
 
+                    {/* Input row */}
                     <Input
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
@@ -653,53 +632,82 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
                         }}
                         onPaste={handlePaste}
                         placeholder="Type a message..."
-                        className="flex-1 min-h-[40px]"
+                        className="w-full min-h-[40px]"
                         disabled={isLoading}
                         autoFocus
                     />
 
-                    {/* Send buttons: 3 tiers or 1 auto */}
-                    {autoRouting && !overrideModel ? (
-                        <Button
-                            size="icon"
-                            onClick={() => handleSendMessage()}
-                            disabled={!canSend}
-                            className={cn("bg-amber-600 hover:bg-amber-500 text-white", isLoading && "opacity-50")}
-                            title="Auto-routed send"
-                        >
-                            <Send className="w-4 h-4" />
-                        </Button>
-                    ) : (
-                        <div className="flex gap-1">
+                    {/* Actions row */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1">
                             <Button
+                                variant="ghost"
                                 size="icon"
-                                onClick={() => handleSendMessage("low")}
-                                disabled={!canSend}
-                                className="bg-green-600 hover:bg-green-500 text-white h-9 w-9"
-                                title={`Low: ${overrideModel || modelLow} (Enter)`}
+                                className="shrink-0 text-muted-foreground hover:text-foreground h-8 w-8"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={isUploading || isLoading}
+                                title="Attach image"
                             >
-                                <Send className="w-3.5 h-3.5" />
+                                <Paperclip className="w-4 h-4" />
                             </Button>
                             <Button
+                                variant="ghost"
                                 size="icon"
-                                onClick={() => handleSendMessage("medium")}
-                                disabled={!canSend}
-                                className="bg-amber-600 hover:bg-amber-500 text-white h-9 w-9"
-                                title={`Medium: ${overrideModel || modelMedium}`}
+                                className={cn(
+                                    "shrink-0 hover:text-foreground h-8 w-8",
+                                    refTemplateName ? "text-purple-400" : "text-muted-foreground"
+                                )}
+                                onClick={handleOpenRefPicker}
+                                disabled={isUploading || isLoading || capturingRef}
+                                title="Reference a template style"
                             >
-                                <Send className="w-3.5 h-3.5" />
-                            </Button>
-                            <Button
-                                size="icon"
-                                onClick={() => handleSendMessage("high")}
-                                disabled={!canSend}
-                                className="bg-red-600 hover:bg-red-500 text-white h-9 w-9"
-                                title={`High: ${overrideModel || modelHigh}`}
-                            >
-                                <Send className="w-3.5 h-3.5" />
+                                <LayoutTemplate className="w-4 h-4" />
                             </Button>
                         </div>
-                    )}
+
+                        {/* Send buttons: 3 tiers or 1 auto */}
+                        {autoRouting && !overrideModel ? (
+                            <Button
+                                size="icon"
+                                onClick={() => handleSendMessage()}
+                                disabled={!canSend}
+                                className={cn("bg-amber-600 hover:bg-amber-500 text-white h-8 w-8", isLoading && "opacity-50")}
+                                title="Auto-routed send"
+                            >
+                                <Send className="w-3.5 h-3.5" />
+                            </Button>
+                        ) : (
+                            <div className="flex gap-1">
+                                <Button
+                                    size="icon"
+                                    onClick={() => handleSendMessage("low")}
+                                    disabled={!canSend}
+                                    className="bg-green-600 hover:bg-green-500 text-white h-8 w-8"
+                                    title={`Low: ${overrideModel || modelLow} (Enter)`}
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    onClick={() => handleSendMessage("medium")}
+                                    disabled={!canSend}
+                                    className="bg-amber-600 hover:bg-amber-500 text-white h-8 w-8"
+                                    title={`Medium: ${overrideModel || modelMedium}`}
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    onClick={() => handleSendMessage("high")}
+                                    disabled={!canSend}
+                                    className="bg-red-600 hover:bg-red-500 text-white h-8 w-8"
+                                    title={`High: ${overrideModel || modelHigh}`}
+                                >
+                                    <Send className="w-3.5 h-3.5" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
 
