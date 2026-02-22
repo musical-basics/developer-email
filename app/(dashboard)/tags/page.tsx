@@ -1,28 +1,9 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Plus, Pencil, Trash2, Loader2, Tag, Users, X, Check, Palette } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, Tag, Users, X, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getTags, createTag, updateTag, deleteTag, TagDefinition } from "@/app/actions/tags"
-
-const PRESET_COLORS = [
-    "#ef4444", // red
-    "#f97316", // orange
-    "#f59e0b", // amber
-    "#eab308", // yellow
-    "#84cc16", // lime
-    "#22c55e", // green
-    "#14b8a6", // teal
-    "#06b6d4", // cyan
-    "#3b82f6", // blue
-    "#6366f1", // indigo
-    "#8b5cf6", // violet
-    "#a855f7", // purple
-    "#d946ef", // fuchsia
-    "#ec4899", // pink
-    "#f43f5e", // rose
-    "#6b7280", // gray
-]
 
 export default function TagsPage() {
     const [tags, setTags] = useState<TagDefinition[]>([])
@@ -36,7 +17,6 @@ export default function TagsPage() {
     const [editColor, setEditColor] = useState("")
     const [saving, setSaving] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
-    const [showColorPicker, setShowColorPicker] = useState<string | null>(null)
 
     const fetchTags = useCallback(async () => {
         setLoading(true)
@@ -76,7 +56,6 @@ export default function TagsPage() {
         setEditingId(null)
         setEditName("")
         setEditColor("")
-        setShowColorPicker(null)
     }
 
     const handleSaveEdit = async () => {
@@ -123,7 +102,6 @@ export default function TagsPage() {
     }
 
     const handleColorChange = async (tagId: string, color: string) => {
-        // Inline color change (no edit mode needed)
         setSaving(true)
         const { error } = await updateTag(tagId, { color })
         if (error) {
@@ -131,7 +109,6 @@ export default function TagsPage() {
         } else {
             await fetchTags()
         }
-        setShowColorPicker(null)
         setSaving(false)
     }
 
@@ -177,21 +154,12 @@ export default function TagsPage() {
                         </div>
                         <div>
                             <label className="text-xs text-muted-foreground block mb-1.5">Color</label>
-                            <div className="flex flex-wrap gap-1.5">
-                                {PRESET_COLORS.map(c => (
-                                    <button
-                                        key={c}
-                                        onClick={() => setNewTagColor(c)}
-                                        className={cn(
-                                            "w-6 h-6 rounded-full transition-all",
-                                            newTagColor === c
-                                                ? "ring-2 ring-offset-2 ring-offset-background ring-white scale-110"
-                                                : "hover:scale-110",
-                                        )}
-                                        style={{ backgroundColor: c }}
-                                    />
-                                ))}
-                            </div>
+                            <input
+                                type="color"
+                                value={newTagColor}
+                                onChange={(e) => setNewTagColor(e.target.value)}
+                                className="w-10 h-10 rounded-lg border border-border cursor-pointer bg-transparent p-0.5"
+                            />
                         </div>
                     </div>
                     {/* Preview */}
@@ -256,29 +224,12 @@ export default function TagsPage() {
                                 {editingId === tag.id ? (
                                     /* ─── Edit Mode ─── */
                                     <>
-                                        {/* Color swatch + inline picker */}
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => setShowColorPicker(showColorPicker === tag.id ? null : tag.id)}
-                                                className="w-8 h-8 rounded-full border-2 border-border hover:scale-110 transition-transform"
-                                                style={{ backgroundColor: editColor }}
-                                            />
-                                            {showColorPicker === tag.id && (
-                                                <div className="absolute top-10 left-0 z-20 p-2 rounded-lg bg-popover border border-border shadow-xl grid grid-cols-4 gap-1.5">
-                                                    {PRESET_COLORS.map(c => (
-                                                        <button
-                                                            key={c}
-                                                            onClick={() => { setEditColor(c); setShowColorPicker(null) }}
-                                                            className={cn(
-                                                                "w-7 h-7 rounded-full transition-all hover:scale-110",
-                                                                editColor === c && "ring-2 ring-offset-2 ring-offset-popover ring-white",
-                                                            )}
-                                                            style={{ backgroundColor: c }}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
+                                        <input
+                                            type="color"
+                                            value={editColor}
+                                            onChange={(e) => setEditColor(e.target.value)}
+                                            className="w-8 h-8 rounded-full border border-border cursor-pointer bg-transparent p-0"
+                                        />
                                         <input
                                             autoFocus
                                             value={editName}
@@ -310,30 +261,14 @@ export default function TagsPage() {
                                 ) : (
                                     /* ─── Display Mode ─── */
                                     <>
-                                        {/* Color swatch with click-to-change */}
-                                        <div className="relative">
-                                            <button
-                                                onClick={() => setShowColorPicker(showColorPicker === tag.id ? null : tag.id)}
-                                                className="w-8 h-8 rounded-full border-2 border-transparent hover:border-border hover:scale-110 transition-all cursor-pointer"
-                                                style={{ backgroundColor: tag.color }}
-                                                title="Change color"
-                                            />
-                                            {showColorPicker === tag.id && (
-                                                <div className="absolute top-10 left-0 z-20 p-2 rounded-lg bg-popover border border-border shadow-xl grid grid-cols-4 gap-1.5">
-                                                    {PRESET_COLORS.map(c => (
-                                                        <button
-                                                            key={c}
-                                                            onClick={() => handleColorChange(tag.id, c)}
-                                                            className={cn(
-                                                                "w-7 h-7 rounded-full transition-all hover:scale-110",
-                                                                tag.color === c && "ring-2 ring-offset-2 ring-offset-popover ring-white",
-                                                            )}
-                                                            style={{ backgroundColor: c }}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
+                                        {/* Native color picker swatch */}
+                                        <input
+                                            type="color"
+                                            value={tag.color}
+                                            onChange={(e) => handleColorChange(tag.id, e.target.value)}
+                                            className="w-8 h-8 rounded-full border-2 border-transparent hover:border-border cursor-pointer bg-transparent p-0"
+                                            title="Change color"
+                                        />
 
                                         {/* Tag badge */}
                                         <div className="flex-1 min-w-0">
