@@ -112,6 +112,7 @@ export async function POST(request: Request) {
 
         else if (type === "broadcast") {
             console.log(`🚀 Starting broadcast for campaign ${campaignId}`);
+            console.log(`📊 Tracking flags — click: ${clickTracking}, open: ${openTracking}, fromEmail: ${fromEmail}`);
 
             // If broadcasting from a template, create a child campaign for tracking
             let trackingCampaignId = campaignId;
