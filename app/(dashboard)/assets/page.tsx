@@ -5,7 +5,7 @@ import { Upload, ImageIcon, Loader2, Trash2, Folder, Home, ChevronRight, LayoutG
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { deleteAsset, deleteAssets, moveAssets } from "@/app/actions/assets"
+import { deleteAsset, deleteAssets, moveAsset, moveAssets } from "@/app/actions/assets"
 
 interface Asset {
     id: string
@@ -37,6 +37,10 @@ export default function AssetsPage() {
     const [bulkMoving, setBulkMoving] = useState(false)
     const [showMoveDialog, setShowMoveDialog] = useState(false)
     const [allFolders, setAllFolders] = useState<string[]>([])
+
+    // ─── Drag-to-Folder State ───
+    const [movingAsset, setMovingAsset] = useState<string | null>(null)
+    const [dropTargetFolder, setDropTargetFolder] = useState<string | null>(null)
 
     const supabase = createClient()
     const isMultiSelectMode = multiSelectedIds.size > 0
@@ -259,6 +263,48 @@ export default function AssetsPage() {
             await fetchAssets()
         }
         setDeleting(null)
+    }
+
+    // ─── Drag & Drop: Move assets into folders ───
+    const handleAssetDragStart = (e: React.DragEvent, asset: Asset) => {
+        e.dataTransfer.setData("text/plain", asset.name)
+        e.dataTransfer.effectAllowed = "move"
+        setMovingAsset(asset.name)
+    }
+
+    const handleAssetDragEnd = () => {
+        setMovingAsset(null)
+        setDropTargetFolder(null)
+    }
+
+    const handleFolderDragOver = (e: React.DragEvent, folderName: string) => {
+        if (!movingAsset) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "move"
+        setDropTargetFolder(folderName)
+    }
+
+    const handleFolderDragLeave = () => {
+        setDropTargetFolder(null)
+    }
+
+    const handleFolderDrop = async (e: React.DragEvent, folderName: string) => {
+        e.preventDefault()
+        setDropTargetFolder(null)
+        const assetName = e.dataTransfer.getData("text/plain")
+        if (!assetName) return
+
+        setMovingAsset(assetName)
+        const oldPath = currentFolder ? `${currentFolder}/${assetName}` : assetName
+        const newPath = currentFolder ? `${currentFolder}/${folderName}/${assetName}` : `${folderName}/${assetName}`
+
+        const result = await moveAsset(oldPath, newPath)
+        if (!result.success) {
+            console.error("Error moving asset:", result.error)
+        } else {
+            await fetchAssets()
+        }
+        setMovingAsset(null)
     }
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -504,9 +550,17 @@ export default function AssetsPage() {
                                 <button
                                     key={`folder-${folder.name}`}
                                     onClick={() => navigateToFolder(folder.name)}
-                                    className="group relative aspect-square rounded-lg overflow-hidden bg-muted border border-border hover:border-primary/50 transition-colors flex flex-col items-center justify-center gap-2"
+                                    onDragOver={(e) => handleFolderDragOver(e, folder.name)}
+                                    onDragLeave={handleFolderDragLeave}
+                                    onDrop={(e) => handleFolderDrop(e, folder.name)}
+                                    className={cn(
+                                        "group relative aspect-square rounded-lg overflow-hidden bg-muted border-2 transition-all flex flex-col items-center justify-center gap-2",
+                                        dropTargetFolder === folder.name
+                                            ? "border-primary bg-primary/10 scale-105"
+                                            : "border-border hover:border-primary/50",
+                                    )}
                                 >
-                                    <Folder className="w-12 h-12 text-primary/70" />
+                                    <Folder className={cn("w-12 h-12", dropTargetFolder === folder.name ? "text-primary" : "text-primary/70")} />
                                     <p className="text-sm text-foreground truncate px-2 max-w-full">{folder.name}</p>
                                 </button>
                             ))}
@@ -517,11 +571,16 @@ export default function AssetsPage() {
                                 return (
                                     <div
                                         key={asset.id}
+                                        draggable={!isMultiSelectMode}
+                                        onDragStart={(e) => handleAssetDragStart(e, asset)}
+                                        onDragEnd={handleAssetDragEnd}
                                         className={cn(
-                                            "group relative aspect-square rounded-lg overflow-hidden bg-muted border-2 transition-all cursor-pointer",
+                                            "group relative aspect-square rounded-lg overflow-hidden bg-muted border-2 transition-all",
+                                            isMultiSelectMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
                                             isSelected
                                                 ? "border-primary ring-2 ring-primary/30"
                                                 : "border-border hover:border-muted-foreground/50",
+                                            movingAsset === asset.name && "opacity-40",
                                         )}
                                         onClick={() => toggleMultiSelect(asset.id)}
                                     >
@@ -579,9 +638,17 @@ export default function AssetsPage() {
                                 <button
                                     key={`folder-${folder.name}`}
                                     onClick={() => navigateToFolder(folder.name)}
-                                    className="w-full flex items-center gap-4 px-4 py-3 hover:bg-muted/50 transition-colors text-left"
+                                    onDragOver={(e) => handleFolderDragOver(e, folder.name)}
+                                    onDragLeave={handleFolderDragLeave}
+                                    onDrop={(e) => handleFolderDrop(e, folder.name)}
+                                    className={cn(
+                                        "w-full flex items-center gap-4 px-4 py-3 transition-colors text-left",
+                                        dropTargetFolder === folder.name
+                                            ? "bg-primary/10 border-l-2 border-primary"
+                                            : "hover:bg-muted/50",
+                                    )}
                                 >
-                                    <Folder className="w-8 h-8 text-primary/70 flex-shrink-0" />
+                                    <Folder className={cn("w-8 h-8 flex-shrink-0", dropTargetFolder === folder.name ? "text-primary" : "text-primary/70")} />
                                     <div className="flex-1 min-w-0">
                                         <p className="text-sm font-medium text-foreground truncate">{folder.name}</p>
                                         <p className="text-xs text-muted-foreground">Folder</p>
@@ -596,9 +663,14 @@ export default function AssetsPage() {
                                 return (
                                     <div
                                         key={asset.id}
+                                        draggable={!isMultiSelectMode}
+                                        onDragStart={(e) => handleAssetDragStart(e, asset)}
+                                        onDragEnd={handleAssetDragEnd}
                                         className={cn(
-                                            "flex items-center gap-4 px-4 py-3 transition-colors cursor-pointer",
+                                            "flex items-center gap-4 px-4 py-3 transition-colors",
+                                            isMultiSelectMode ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
                                             isSelected ? "bg-primary/5" : "hover:bg-muted/50",
+                                            movingAsset === asset.name && "opacity-40",
                                         )}
                                         onClick={() => toggleMultiSelect(asset.id)}
                                     >
