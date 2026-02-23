@@ -5,6 +5,9 @@ import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createClient } from "@supabase/supabase-js"
 import { convertMailchimpToEmail, AssetMapping } from "@/lib/ai/email-generator"
 import { parseMailchimpHtml, generateContentSummary } from "@/lib/parsers/mailchimp-parser"
+import { convertMailchimpToBlocks } from "@/lib/parsers/mailchimp-to-blocks"
+import { serializeBlocks } from "@/lib/dnd-blocks/types"
+import { compileBlocksToHtml } from "@/lib/dnd-blocks/compiler"
 
 // Admin client that bypasses RLS for asset uploads
 function getAdminClient() {
@@ -182,5 +185,93 @@ export async function analyzeMailchimpFile(htmlContent: string): Promise<{
         blockCount: parsed.blocks.length,
         linkCount: parsed.links.length,
         summary,
+    }
+}
+
+/**
+ * Migration pipeline for DnD block editor (no AI needed):
+ * 1. Upload all images with hash dedup
+ * 2. Parse Mailchimp HTML → EmailBlock[] deterministically
+ * 3. Merge uploaded asset URLs into the block assets
+ * 4. Insert as DnD-format campaign
+ */
+export async function processMigrationToDnd(formData: FormData): Promise<{
+    success: boolean
+    campaignId?: string
+    error?: string
+}> {
+    try {
+        const htmlFile = formData.get("htmlFile") as File
+        const templateName = (formData.get("templateName") as string) || "Untitled Migration"
+
+        if (!htmlFile) {
+            return { success: false, error: "No HTML file provided" }
+        }
+
+        // Collect image files from the form
+        const imageFiles: File[] = []
+        for (const [key, value] of formData.entries()) {
+            if (key.startsWith("asset_") && value instanceof File) {
+                imageFiles.push(value)
+            }
+        }
+
+        // Step 1: Upload all images concurrently with hash dedup
+        const assetMappings = await Promise.all(
+            imageFiles.map((file) => uploadHashedAsset(file))
+        )
+
+        // Step 2: Parse Mailchimp HTML → DnD blocks (deterministic, no AI)
+        const htmlContent = await htmlFile.text()
+        const result = convertMailchimpToBlocks(htmlContent)
+
+        // Step 3: Merge uploaded asset URLs into the block asset map
+        // Match uploaded files to parser-generated variable names by filename
+        const variableValues: Record<string, string> = { ...result.assets }
+        for (const mapping of assetMappings) {
+            // The parser creates vars like "filename_png_src", the uploader creates the same
+            variableValues[mapping.variableName] = mapping.url
+
+            // Also try to match against parser-generated vars by partial filename match
+            const cleanName = mapping.originalName.toLowerCase().replace(/[^a-z0-9]/g, "_")
+            for (const key of Object.keys(variableValues)) {
+                if (key.includes(cleanName.split("_")[0]) && key.endsWith("_src") && !variableValues[key]) {
+                    variableValues[key] = mapping.url
+                }
+            }
+        }
+
+        // Step 4: Serialize blocks and compile HTML backup
+        const blocksJson = serializeBlocks(result.blocks)
+        const compiledHtml = compileBlocksToHtml(result.blocks)
+
+        // Step 5: Insert campaign using admin client
+        const admin = getAdminClient()
+        const { data, error } = await admin
+            .from("campaigns")
+            .insert([{
+                name: templateName,
+                status: "draft",
+                is_template: true,
+                subject_line: result.title || templateName,
+                html_content: blocksJson,
+                variable_values: {
+                    ...variableValues,
+                    _compiled_html: compiledHtml,
+                },
+            }])
+            .select()
+            .single()
+
+        if (error) {
+            console.error("Insert campaign error:", error)
+            return { success: false, error: error.message }
+        }
+
+        return { success: true, campaignId: data.id }
+    } catch (err) {
+        const message = err instanceof Error ? err.message : "Unknown migration error"
+        console.error("DnD Migration error:", message)
+        return { success: false, error: message }
     }
 }

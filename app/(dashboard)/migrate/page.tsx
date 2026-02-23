@@ -14,7 +14,7 @@ import {
     Cpu,
     ChevronDown,
 } from "lucide-react"
-import { processMigration, analyzeMailchimpFile } from "@/app/actions/migrations"
+import { processMigration, processMigrationToDnd, analyzeMailchimpFile } from "@/app/actions/migrations"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -32,6 +32,7 @@ interface AnalysisResult {
 }
 
 type AiMode = "both" | "gemini" | "claude"
+type ImportMode = "ai" | "dnd"
 
 interface ModelInfo {
     id: string
@@ -51,6 +52,7 @@ export default function MigratePage() {
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [aiMode, setAiMode] = useState<AiMode>("both")
+    const [importMode, setImportMode] = useState<ImportMode>("dnd")
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
     const [selectedGeminiModel, setSelectedGeminiModel] = useState("")
     const [selectedClaudeModel, setSelectedClaudeModel] = useState("")
@@ -159,16 +161,30 @@ export default function MigratePage() {
             formData.append("claudeModel", selectedClaudeModel)
             assetFiles.forEach((f, i) => formData.append(`asset_${i}`, f))
 
-            const result = await processMigration(formData)
-
-            if (result.success && result.campaignId) {
-                toast({
-                    title: "Migration Complete",
-                    description: `"${templateName}" has been created as a Master Template.`,
-                })
-                router.push(`/editor?id=${result.campaignId}`)
+            if (importMode === "dnd") {
+                // DnD block import — deterministic, no AI
+                const result = await processMigrationToDnd(formData)
+                if (result.success && result.campaignId) {
+                    toast({
+                        title: "Import Complete",
+                        description: `"${templateName}" has been imported as DnD blocks.`,
+                    })
+                    router.push(`/dnd-editor?id=${result.campaignId}`)
+                } else {
+                    setError(result.error || "Import failed")
+                }
             } else {
-                setError(result.error || "Conversion failed")
+                // AI template import
+                const result = await processMigration(formData)
+                if (result.success && result.campaignId) {
+                    toast({
+                        title: "Migration Complete",
+                        description: `"${templateName}" has been created as a Master Template.`,
+                    })
+                    router.push(`/editor?id=${result.campaignId}`)
+                } else {
+                    setError(result.error || "Conversion failed")
+                }
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Conversion failed")
@@ -307,83 +323,115 @@ export default function MigratePage() {
                             </CardContent>
                         </Card>
 
-                        {/* AI Pipeline */}
+                        {/* Import Mode */}
                         <Card>
                             <CardHeader className="pb-3">
                                 <CardTitle className="text-sm flex items-center gap-2">
                                     <Cpu className="w-4 h-4 text-primary" />
-                                    AI Pipeline
+                                    Import Mode
                                 </CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-3">
-                                {/* Mode toggle */}
+                                {/* Import mode toggle */}
                                 <div className="flex gap-1 p-1 rounded-lg bg-muted/50">
-                                    {(["both", "gemini", "claude"] as const).map((mode) => (
-                                        <button
-                                            key={mode}
-                                            onClick={() => setAiMode(mode)}
-                                            className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
-                                                ${aiMode === mode
-                                                    ? "bg-primary text-primary-foreground"
-                                                    : "text-muted-foreground hover:text-foreground"}`}
-                                        >
-                                            {mode === "both" ? "Both" : mode === "gemini" ? "Gemini" : "Claude"}
-                                        </button>
-                                    ))}
+                                    <button
+                                        onClick={() => setImportMode("dnd")}
+                                        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                                            ${importMode === "dnd"
+                                                ? "bg-primary text-primary-foreground"
+                                                : "text-muted-foreground hover:text-foreground"}`}
+                                    >
+                                        DnD Blocks
+                                    </button>
+                                    <button
+                                        onClick={() => setImportMode("ai")}
+                                        className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                                            ${importMode === "ai"
+                                                ? "bg-primary text-primary-foreground"
+                                                : "text-muted-foreground hover:text-foreground"}`}
+                                    >
+                                        AI Template
+                                    </button>
                                 </div>
+                                <p className="text-[10px] text-muted-foreground">
+                                    {importMode === "dnd"
+                                        ? "Converts directly to editable blocks. Fast, no AI needed."
+                                        : "Uses AI to generate clean HTML template. Takes 30-60s."}
+                                </p>
 
-                                {/* Gemini model dropdown */}
-                                {(aiMode === "both" || aiMode === "gemini") && (
-                                    <div>
-                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
-                                            {aiMode === "both" ? "Analysis Model (Gemini)" : "Gemini Model"}
-                                        </Label>
-                                        <div className="relative">
-                                            <select
-                                                value={selectedGeminiModel}
-                                                onChange={(e) => setSelectedGeminiModel(e.target.value)}
-                                                className="w-full appearance-none px-3 py-2 pr-8 rounded-md bg-muted/50 border border-border text-sm text-foreground focus:outline-none focus:border-primary cursor-pointer"
-                                            >
-                                                {loadingModels ? (
-                                                    <option>Loading models...</option>
-                                                ) : geminiModels.length === 0 ? (
-                                                    <option>No Gemini models — check API key</option>
-                                                ) : (
-                                                    geminiModels.map((m) => (
-                                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                                    ))
-                                                )}
-                                            </select>
-                                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                {/* AI options — only shown for AI mode */}
+                                {importMode === "ai" && (
+                                    <>
+                                        {/* AI Pipeline mode */}
+                                        <div className="flex gap-1 p-1 rounded-lg bg-muted/50">
+                                            {(["both", "gemini", "claude"] as const).map((mode) => (
+                                                <button
+                                                    key={mode}
+                                                    onClick={() => setAiMode(mode)}
+                                                    className={`flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors
+                                                        ${aiMode === mode
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "text-muted-foreground hover:text-foreground"}`}
+                                                >
+                                                    {mode === "both" ? "Both" : mode === "gemini" ? "Gemini" : "Claude"}
+                                                </button>
+                                            ))}
                                         </div>
-                                    </div>
-                                )}
 
-                                {/* Claude model dropdown */}
-                                {(aiMode === "both" || aiMode === "claude") && (
-                                    <div>
-                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
-                                            {aiMode === "both" ? "Generation Model (Claude)" : "Claude Model"}
-                                        </Label>
-                                        <div className="relative">
-                                            <select
-                                                value={selectedClaudeModel}
-                                                onChange={(e) => setSelectedClaudeModel(e.target.value)}
-                                                className="w-full appearance-none px-3 py-2 pr-8 rounded-md bg-muted/50 border border-border text-sm text-foreground focus:outline-none focus:border-primary cursor-pointer"
-                                            >
-                                                {loadingModels ? (
-                                                    <option>Loading models...</option>
-                                                ) : claudeModels.length === 0 ? (
-                                                    <option>No Claude models — check API key</option>
-                                                ) : (
-                                                    claudeModels.map((m) => (
-                                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                                    ))
-                                                )}
-                                            </select>
-                                            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                                        </div>
-                                    </div>
+                                        {/* Gemini model dropdown */}
+                                        {(aiMode === "both" || aiMode === "gemini") && (
+                                            <div>
+                                                <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
+                                                    {aiMode === "both" ? "Analysis Model (Gemini)" : "Gemini Model"}
+                                                </Label>
+                                                <div className="relative">
+                                                    <select
+                                                        value={selectedGeminiModel}
+                                                        onChange={(e) => setSelectedGeminiModel(e.target.value)}
+                                                        className="w-full appearance-none px-3 py-2 pr-8 rounded-md bg-muted/50 border border-border text-sm text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                                                    >
+                                                        {loadingModels ? (
+                                                            <option>Loading models...</option>
+                                                        ) : geminiModels.length === 0 ? (
+                                                            <option>No Gemini models — check API key</option>
+                                                        ) : (
+                                                            geminiModels.map((m) => (
+                                                                <option key={m.id} value={m.id}>{m.name}</option>
+                                                            ))
+                                                        )}
+                                                    </select>
+                                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Claude model dropdown */}
+                                        {(aiMode === "both" || aiMode === "claude") && (
+                                            <div>
+                                                <Label className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 block">
+                                                    {aiMode === "both" ? "Generation Model (Claude)" : "Claude Model"}
+                                                </Label>
+                                                <div className="relative">
+                                                    <select
+                                                        value={selectedClaudeModel}
+                                                        onChange={(e) => setSelectedClaudeModel(e.target.value)}
+                                                        className="w-full appearance-none px-3 py-2 pr-8 rounded-md bg-muted/50 border border-border text-sm text-foreground focus:outline-none focus:border-primary cursor-pointer"
+                                                    >
+                                                        {loadingModels ? (
+                                                            <option>Loading models...</option>
+                                                        ) : claudeModels.length === 0 ? (
+                                                            <option>No Claude models — check API key</option>
+                                                        ) : (
+                                                            claudeModels.map((m) => (
+                                                                <option key={m.id} value={m.id}>{m.name}</option>
+                                                            ))
+                                                        )}
+                                                    </select>
+                                                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </CardContent>
                         </Card>
@@ -455,19 +503,21 @@ export default function MigratePage() {
                             {isConverting ? (
                                 <>
                                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                    Converting with AI...
+                                    {importMode === "dnd" ? "Importing Blocks..." : "Converting with AI..."}
                                 </>
                             ) : (
                                 <>
                                     <Sparkles className="w-5 h-5 mr-2" />
-                                    Convert & Save as Template
+                                    {importMode === "dnd" ? "Import as DnD Blocks" : "Convert & Save as Template"}
                                 </>
                             )}
                         </Button>
 
                         {isConverting && (
                             <p className="text-xs text-muted-foreground text-center">
-                                Uploading images, analyzing structure, and generating HTML. This may take 30–60 seconds.
+                                {importMode === "dnd"
+                                    ? "Parsing structure and uploading images..."
+                                    : "Uploading images, analyzing structure, and generating HTML. This may take 30–60 seconds."}
                             </p>
                         )}
                     </div>
