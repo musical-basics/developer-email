@@ -24,6 +24,7 @@ import {
     GitBranch,
     FileUp,
     UsersRound,
+    Tag,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -149,6 +150,11 @@ export default function AudienceManagerPage() {
     const [csvPreview, setCsvPreview] = useState<string[][]>([])
     const [csvHeaders, setCsvHeaders] = useState<string[]>([])
     const [csvImporting, setCsvImporting] = useState(false)
+
+    // Bulk Tag State
+    const [isBulkTagOpen, setIsBulkTagOpen] = useState(false)
+    const [bulkTagSelections, setBulkTagSelections] = useState<string[]>([])
+    const [bulkTagging, setBulkTagging] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState<Partial<Subscriber>>({
@@ -741,6 +747,28 @@ export default function AudienceManagerPage() {
         reader.readAsText(csvFile)
     }
 
+    // Bulk tag selected subscribers
+    const handleBulkTag = async () => {
+        if (bulkTagSelections.length === 0 || selectedIds.length === 0) return
+        setBulkTagging(true)
+
+        const selectedSubs = subscribers.filter(s => selectedIds.includes(s.id))
+        let updated = 0
+        for (const sub of selectedSubs) {
+            const existingTags = sub.tags || []
+            const merged = [...new Set([...existingTags, ...bulkTagSelections])]
+            const { error } = await supabase.from("subscribers").update({ tags: merged }).eq("id", sub.id)
+            if (!error) updated++
+        }
+
+        toast({ title: `Tagged ${updated} subscribers`, description: `Applied: ${bulkTagSelections.join(", ")}` })
+        setBulkTagging(false)
+        setIsBulkTagOpen(false)
+        setBulkTagSelections([])
+        setSelectedIds([])
+        fetchSubscribers()
+    }
+
     // Export subscribers as CSV in our import-compatible format
     const handleExportCsv = () => {
         const headers = ["email", "first_name", "last_name", "country", "country_code", "phone_code", "phone_number", "shipping_address1", "shipping_address2", "shipping_city", "shipping_zip", "shipping_province", "tags", "status"]
@@ -898,6 +926,44 @@ export default function AudienceManagerPage() {
                             <Button variant="ghost" onClick={() => setSelectedIds([])}>
                                 Cancel ({selectedIds.length})
                             </Button>
+                            <Popover open={isBulkTagOpen} onOpenChange={(open) => { setIsBulkTagOpen(open); if (!open) setBulkTagSelections([]) }}>
+                                <PopoverTrigger asChild>
+                                    <Button variant="secondary" className="gap-2">
+                                        <Tag className="h-4 w-4" />
+                                        Bulk Tag
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent align="end" className="w-64 p-3">
+                                    <div className="space-y-3">
+                                        <p className="text-sm font-medium">Apply tags to {selectedIds.length} subscribers</p>
+                                        <div className="max-h-[200px] overflow-y-auto space-y-1">
+                                            {allTags.length === 0 ? (
+                                                <p className="text-xs text-muted-foreground py-2">No tags defined yet.</p>
+                                            ) : allTags.map(tag => (
+                                                <label key={tag} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                                                    <Checkbox
+                                                        checked={bulkTagSelections.includes(tag)}
+                                                        onCheckedChange={(checked) => {
+                                                            setBulkTagSelections(prev =>
+                                                                checked ? [...prev, tag] : prev.filter(t => t !== tag)
+                                                            )
+                                                        }}
+                                                    />
+                                                    {tag}
+                                                </label>
+                                            ))}
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            className="w-full bg-amber-500 text-zinc-900 hover:bg-amber-400"
+                                            disabled={bulkTagSelections.length === 0 || bulkTagging}
+                                            onClick={handleBulkTag}
+                                        >
+                                            {bulkTagging ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying...</> : `Apply ${bulkTagSelections.length} Tag${bulkTagSelections.length !== 1 ? 's' : ''}`}
+                                        </Button>
+                                    </div>
+                                </PopoverContent>
+                            </Popover>
                             <Button variant="destructive" onClick={() => setIsDeleteAlertOpen(true)} className="gap-2">
                                 <Trash2 className="h-4 w-4" />
                                 Delete Selected
