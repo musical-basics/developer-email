@@ -38,7 +38,7 @@ export interface Subscriber {
     shipping_zip: string
     shipping_province: string
     tags: string[] | null
-    status: 'active' | 'unsubscribed' | 'bounced'
+    status: 'active' | 'inactive' | 'unsubscribed' | 'bounced'
     created_at: string
 }
 

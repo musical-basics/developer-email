@@ -90,6 +90,7 @@ import { useToast } from "@/hooks/use-toast"
 
 const statusStyles: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
+    inactive: "bg-amber-500/20 text-amber-400 border-amber-500/30",
     bounced: "bg-red-500/20 text-red-400 border-red-500/30",
     unsubscribed: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
 }
@@ -714,7 +715,7 @@ export default function AudienceManagerPage() {
                 shipping_zip: (row[idxMap["shipping_zip"]] || "").replace(/'/g, ""),
                 shipping_province: row[idxMap["shipping_province"]] || "",
                 tags: (row[idxMap["tags"]] || "").trim() ? (row[idxMap["tags"]]).split(/[;,]+/).map((t: string) => t.trim()).filter(Boolean) : [],
-                status: (["active", "unsubscribed", "bounced"].includes((row[idxMap["status"]] || "").toLowerCase()) ? (row[idxMap["status"]]).toLowerCase() : "active") as "active" | "unsubscribed" | "bounced",
+                status: (["active", "inactive", "unsubscribed", "bounced"].includes((row[idxMap["status"]] || "").toLowerCase()) ? (row[idxMap["status"]]).toLowerCase() : "active") as "active" | "inactive" | "unsubscribed" | "bounced",
             }))
 
             let added = 0
@@ -971,10 +972,10 @@ export default function AudienceManagerPage() {
                                         className="border-border cursor-pointer hover:bg-muted/50"
                                         onClick={() => router.push(`/audience/${subscriber.id}`)}
                                     >
-                                        <TableCell onClick={(e) => { e.stopPropagation(); const idx = filteredSubscribers.indexOf(subscriber); handleSelectOne(subscriber.id, idx, e.shiftKey) }}>
+                                        <TableCell onClick={(e) => { e.stopPropagation(); const idx = filteredSubscribers.indexOf(subscriber); handleSelectOne(subscriber.id, idx, e.shiftKey) }} className="cursor-pointer">
                                             <Checkbox
                                                 checked={selectedIds.includes(subscriber.id)}
-                                                onCheckedChange={() => handleSelectOne(subscriber.id, filteredSubscribers.indexOf(subscriber), false)}
+                                                className="pointer-events-none"
                                             />
                                         </TableCell>
                                         <TableCell>
@@ -1279,7 +1280,7 @@ export default function AudienceManagerPage() {
                             <div className="space-y-2">
                                 <Label htmlFor="status">Status</Label>
                                 <div className="flex gap-2">
-                                    {['active', 'unsubscribed', 'bounced'].map((s) => (
+                                    {['active', 'inactive', 'unsubscribed', 'bounced'].map((s) => (
                                         <Button
                                             key={s}
                                             type="button"
