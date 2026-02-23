@@ -121,6 +121,7 @@ export default function AudienceManagerPage() {
     const [viewMode, setViewMode] = useState<"list" | "tags">("list")
     const [tagComboboxOpen, setTagComboboxOpen] = useState(false)
     const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([])
+    const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null)
 
     // Send Existing Campaign State
     const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
@@ -281,8 +282,19 @@ export default function AudienceManagerPage() {
         }
     }
 
-    const handleSelectOne = (id: string) => {
-        setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]))
+    const handleSelectOne = (id: string, index: number, shiftKey: boolean) => {
+        if (shiftKey && lastSelectedIndex !== null) {
+            const start = Math.min(lastSelectedIndex, index)
+            const end = Math.max(lastSelectedIndex, index)
+            const rangeIds = filteredSubscribers.slice(start, end + 1).map(s => s.id)
+            setSelectedIds(prev => {
+                const combined = new Set([...prev, ...rangeIds])
+                return Array.from(combined)
+            })
+        } else {
+            setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]))
+        }
+        setLastSelectedIndex(index)
     }
 
     const handleEdit = (subscriber: Subscriber) => {
@@ -682,6 +694,8 @@ export default function AudienceManagerPage() {
                 if (h === "city" || h === "shipping_city") idxMap["shipping_city"] = i
                 if (h === "zip" || h === "postal_code" || h === "zipcode" || h === "zip_code" || h === "shipping_zip") idxMap["shipping_zip"] = i
                 if (h === "state" || h === "province" || h === "region" || h === "shipping_province") idxMap["shipping_province"] = i
+                if (h === "tags" || h === "tag") idxMap["tags"] = i
+                if (h === "status") idxMap["status"] = i
             })
 
             const rows = lines.slice(1).map(parseLine).filter(row => row[emailIdx]?.includes("@"))
@@ -699,8 +713,8 @@ export default function AudienceManagerPage() {
                 shipping_city: row[idxMap["shipping_city"]] || "",
                 shipping_zip: (row[idxMap["shipping_zip"]] || "").replace(/'/g, ""),
                 shipping_province: row[idxMap["shipping_province"]] || "",
-                tags: [],
-                status: "active" as const,
+                tags: (row[idxMap["tags"]] || "").trim() ? (row[idxMap["tags"]]).split(/[;,]+/).map((t: string) => t.trim()).filter(Boolean) : [],
+                status: (["active", "unsubscribed", "bounced"].includes((row[idxMap["status"]] || "").toLowerCase()) ? (row[idxMap["status"]]).toLowerCase() : "active") as "active" | "unsubscribed" | "bounced",
             }))
 
             let added = 0
@@ -957,10 +971,10 @@ export default function AudienceManagerPage() {
                                         className="border-border cursor-pointer hover:bg-muted/50"
                                         onClick={() => router.push(`/audience/${subscriber.id}`)}
                                     >
-                                        <TableCell onClick={(e) => e.stopPropagation()}>
+                                        <TableCell onClick={(e) => { e.stopPropagation(); const idx = filteredSubscribers.indexOf(subscriber); handleSelectOne(subscriber.id, idx, e.shiftKey) }}>
                                             <Checkbox
                                                 checked={selectedIds.includes(subscriber.id)}
-                                                onCheckedChange={() => handleSelectOne(subscriber.id)}
+                                                onCheckedChange={() => handleSelectOne(subscriber.id, filteredSubscribers.indexOf(subscriber), false)}
                                             />
                                         </TableCell>
                                         <TableCell>
