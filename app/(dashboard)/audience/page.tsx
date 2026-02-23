@@ -1565,7 +1565,7 @@ export default function AudienceManagerPage() {
 
             {/* CSV Import Dialog */}
             <Dialog open={isCsvImportOpen} onOpenChange={(open) => { setIsCsvImportOpen(open); if (!open) { setCsvFile(null); setCsvPreview([]); setCsvHeaders([]) } }}>
-                <DialogContent className="sm:max-w-2xl overflow-hidden">
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Import CSV</DialogTitle>
                         <DialogDescription>
