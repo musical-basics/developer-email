@@ -22,6 +22,8 @@ import {
     Copy,
     Loader2,
     GitBranch,
+    FileUp,
+    UsersRound,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -133,6 +135,18 @@ export default function AudienceManagerPage() {
     const [availableChains, setAvailableChains] = useState<ChainRow[]>([])
     const [loadingChains, setLoadingChains] = useState(false)
     const [startingChain, setStartingChain] = useState(false)
+
+    // Bulk Add State
+    const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
+    const [bulkEmails, setBulkEmails] = useState("")
+    const [bulkAdding, setBulkAdding] = useState(false)
+
+    // CSV Import State
+    const [isCsvImportOpen, setIsCsvImportOpen] = useState(false)
+    const [csvFile, setCsvFile] = useState<File | null>(null)
+    const [csvPreview, setCsvPreview] = useState<string[][]>([])
+    const [csvHeaders, setCsvHeaders] = useState<string[]>([])
+    const [csvImporting, setCsvImporting] = useState(false)
 
     // Form State
     const [formData, setFormData] = useState<Partial<Subscriber>>({
@@ -543,6 +557,175 @@ export default function AudienceManagerPage() {
         }
     }
 
+    // Bulk add subscribers from textarea (one email per line)
+    const handleBulkAdd = async () => {
+        const emails = bulkEmails
+            .split(/[\n,;]+/)
+            .map(e => e.trim().toLowerCase())
+            .filter(e => e && e.includes("@"))
+
+        if (emails.length === 0) {
+            toast({ title: "No valid emails found", variant: "destructive" })
+            return
+        }
+
+        const unique = [...new Set(emails)]
+        setBulkAdding(true)
+
+        const rows = unique.map(email => ({
+            email,
+            first_name: "",
+            last_name: "",
+            country: "",
+            country_code: "",
+            phone_code: "",
+            phone_number: "",
+            shipping_address1: "",
+            shipping_address2: "",
+            shipping_city: "",
+            shipping_zip: "",
+            shipping_province: "",
+            tags: [],
+            status: "active" as const,
+        }))
+
+        const { error } = await supabase.from("subscribers").upsert(rows, { onConflict: "email", ignoreDuplicates: true })
+
+        if (error) {
+            toast({ title: "Error adding subscribers", description: error.message, variant: "destructive" })
+        } else {
+            toast({ title: `${unique.length} subscribers added`, description: "Duplicates were skipped." })
+            setIsBulkAddOpen(false)
+            setBulkEmails("")
+            fetchSubscribers()
+        }
+        setBulkAdding(false)
+    }
+
+    // CSV Import - parse file and show preview
+    const handleCsvFileSelect = (file: File) => {
+        setCsvFile(file)
+        const reader = new FileReader()
+        reader.onload = (e) => {
+            const text = e.target?.result as string
+            const lines = text.split(/\r?\n/).filter(l => l.trim())
+            if (lines.length === 0) return
+
+            const parseLine = (line: string): string[] => {
+                const result: string[] = []
+                let current = ""
+                let inQuotes = false
+                for (const char of line) {
+                    if (char === '"') { inQuotes = !inQuotes }
+                    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = "" }
+                    else { current += char }
+                }
+                result.push(current.trim())
+                return result
+            }
+
+            const headers = parseLine(lines[0])
+            setCsvHeaders(headers)
+            const rows = lines.slice(1, 6).map(parseLine)
+            setCsvPreview(rows)
+        }
+        reader.readAsText(file)
+    }
+
+    // CSV Import - process and insert
+    const handleCsvImport = async () => {
+        if (!csvFile) return
+        setCsvImporting(true)
+
+        const reader = new FileReader()
+        reader.onload = async (e) => {
+            const text = e.target?.result as string
+            const lines = text.split(/\r?\n/).filter(l => l.trim())
+            if (lines.length < 2) {
+                toast({ title: "CSV has no data rows", variant: "destructive" })
+                setCsvImporting(false)
+                return
+            }
+
+            const parseLine = (line: string): string[] => {
+                const result: string[] = []
+                let current = ""
+                let inQuotes = false
+                for (const char of line) {
+                    if (char === '"') { inQuotes = !inQuotes }
+                    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = "" }
+                    else { current += char }
+                }
+                result.push(current.trim())
+                return result
+            }
+
+            const headers = parseLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, "_"))
+            const emailIdx = headers.findIndex(h => h === "email" || h === "email_address" || h === "e-mail")
+            if (emailIdx === -1) {
+                toast({ title: "No 'email' column found in CSV", description: "First row must contain headers with an 'email' column.", variant: "destructive" })
+                setCsvImporting(false)
+                return
+            }
+
+            // Map common column names to our fields
+            const idxMap: Record<string, number> = {}
+            headers.forEach((h, i) => {
+                if (h === "first_name" || h === "fname" || h === "first" || h === "firstname") idxMap["first_name"] = i
+                if (h === "last_name" || h === "lname" || h === "last" || h === "lastname") idxMap["last_name"] = i
+                if (h === "country") idxMap["country"] = i
+                if (h === "country_code") idxMap["country_code"] = i
+                if (h === "phone_code") idxMap["phone_code"] = i
+                if (h === "phone" || h === "phone_number" || h === "tel") idxMap["phone_number"] = i
+                if (h === "address" || h === "address_1" || h === "address1" || h === "shipping_address1") idxMap["shipping_address1"] = i
+                if (h === "address_2" || h === "address2" || h === "shipping_address2") idxMap["shipping_address2"] = i
+                if (h === "city" || h === "shipping_city") idxMap["shipping_city"] = i
+                if (h === "zip" || h === "postal_code" || h === "zipcode" || h === "zip_code" || h === "shipping_zip") idxMap["shipping_zip"] = i
+                if (h === "state" || h === "province" || h === "region" || h === "shipping_province") idxMap["shipping_province"] = i
+            })
+
+            const rows = lines.slice(1).map(parseLine).filter(row => row[emailIdx]?.includes("@"))
+
+            const subscribers = rows.map(row => ({
+                email: row[emailIdx].toLowerCase().trim(),
+                first_name: row[idxMap["first_name"]] || "",
+                last_name: row[idxMap["last_name"]] || "",
+                country: row[idxMap["country"]] || "",
+                country_code: row[idxMap["country_code"]] || "",
+                phone_code: row[idxMap["phone_code"]] || "",
+                phone_number: row[idxMap["phone_number"]] || "",
+                shipping_address1: row[idxMap["shipping_address1"]] || "",
+                shipping_address2: row[idxMap["shipping_address2"]] || "",
+                shipping_city: row[idxMap["shipping_city"]] || "",
+                shipping_zip: row[idxMap["shipping_zip"]] || "",
+                shipping_province: row[idxMap["shipping_province"]] || "",
+                tags: [],
+                status: "active" as const,
+            }))
+
+            let added = 0
+            for (let i = 0; i < subscribers.length; i += 500) {
+                const chunk = subscribers.slice(i, i + 500)
+                const { error } = await supabase.from("subscribers").upsert(chunk, { onConflict: "email", ignoreDuplicates: true })
+                if (error) {
+                    toast({ title: "Error importing CSV", description: error.message, variant: "destructive" })
+                    setCsvImporting(false)
+                    return
+                }
+                added += chunk.length
+            }
+
+            toast({ title: `${added} subscribers imported`, description: "Duplicates were skipped." })
+            setIsCsvImportOpen(false)
+            setCsvFile(null)
+            setCsvPreview([])
+            setCsvHeaders([])
+            fetchSubscribers()
+            setCsvImporting(false)
+        }
+        reader.readAsText(csvFile)
+    }
+
     const allSelected = filteredSubscribers.length > 0 && selectedIds.length === filteredSubscribers.length
     const someSelected = selectedIds.length > 0 && selectedIds.length < filteredSubscribers.length
 
@@ -671,9 +854,13 @@ export default function AudienceManagerPage() {
                                 <Download className="h-4 w-4" />
                                 Export
                             </Button>
-                            <Button variant="secondary" className="gap-2">
-                                <Upload className="h-4 w-4" />
+                            <Button variant="secondary" className="gap-2" onClick={() => setIsCsvImportOpen(true)}>
+                                <FileUp className="h-4 w-4" />
                                 Import CSV
+                            </Button>
+                            <Button variant="secondary" className="gap-2" onClick={() => setIsBulkAddOpen(true)}>
+                                <UsersRound className="h-4 w-4" />
+                                Bulk Add
                             </Button>
                             <Button onClick={handleAddSubscriber} className="gap-2 bg-amber-500 text-zinc-900 hover:bg-amber-400">
                                 <Plus className="h-4 w-4" />
@@ -1302,6 +1489,108 @@ export default function AudienceManagerPage() {
                                 </div>
                             </ScrollArea>
                         )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Bulk Add Dialog */}
+            <Dialog open={isBulkAddOpen} onOpenChange={setIsBulkAddOpen}>
+                <DialogContent className="sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Bulk Add Subscribers</DialogTitle>
+                        <DialogDescription>
+                            Paste email addresses below — one per line, or separated by commas.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-3">
+                        <Textarea
+                            value={bulkEmails}
+                            onChange={(e) => setBulkEmails(e.target.value)}
+                            placeholder={"john@example.com\njane@example.com\nbob@example.com"}
+                            rows={10}
+                            className="bg-card font-mono text-sm"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            {bulkEmails.split(/[\n,;]+/).filter(e => e.trim() && e.includes("@")).length} valid emails detected
+                        </p>
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsBulkAddOpen(false)}>Cancel</Button>
+                        <Button onClick={handleBulkAdd} disabled={bulkAdding} className="bg-amber-500 text-zinc-900 hover:bg-amber-400">
+                            {bulkAdding ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Adding...</> : "Add All"}
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* CSV Import Dialog */}
+            <Dialog open={isCsvImportOpen} onOpenChange={(open) => { setIsCsvImportOpen(open); if (!open) { setCsvFile(null); setCsvPreview([]); setCsvHeaders([]) } }}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Import CSV</DialogTitle>
+                        <DialogDescription>
+                            Upload a CSV file with subscriber data. The first row must be headers and must include an &quot;email&quot; column.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4 space-y-4">
+                        {!csvFile ? (
+                            <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border p-8 cursor-pointer hover:bg-muted/50 transition-colors">
+                                <FileUp className="h-10 w-10 text-muted-foreground" />
+                                <span className="text-sm text-muted-foreground">Click to select a CSV file</span>
+                                <input
+                                    type="file"
+                                    accept=".csv,text/csv"
+                                    className="hidden"
+                                    onChange={(e) => e.target.files?.[0] && handleCsvFileSelect(e.target.files[0])}
+                                />
+                            </label>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <FileUp className="h-4 w-4 text-amber-500" />
+                                        <span className="text-sm font-medium">{csvFile.name}</span>
+                                        <span className="text-xs text-muted-foreground">({(csvFile.size / 1024).toFixed(1)} KB)</span>
+                                    </div>
+                                    <Button variant="ghost" size="sm" onClick={() => { setCsvFile(null); setCsvPreview([]); setCsvHeaders([]) }}>
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+
+                                {csvHeaders.length > 0 && (
+                                    <div className="space-y-2">
+                                        <p className="text-xs text-muted-foreground">Detected columns: <span className="text-foreground">{csvHeaders.join(", ")}</span></p>
+                                        <p className="text-xs text-muted-foreground">Preview (first {csvPreview.length} rows):</p>
+                                        <div className="rounded border border-border overflow-x-auto">
+                                            <table className="w-full text-xs">
+                                                <thead>
+                                                    <tr className="border-b border-border bg-muted/50">
+                                                        {csvHeaders.map((h, i) => (
+                                                            <th key={i} className="px-3 py-1.5 text-left font-medium text-foreground">{h}</th>
+                                                        ))}
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {csvPreview.map((row, ri) => (
+                                                        <tr key={ri} className="border-b border-border last:border-0">
+                                                            {csvHeaders.map((_, ci) => (
+                                                                <td key={ci} className="px-3 py-1 text-muted-foreground truncate max-w-[150px]">{row[ci] || ""}</td>
+                                                            ))}
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+                    </div>
+                    <div className="flex justify-end gap-2">
+                        <Button variant="outline" onClick={() => setIsCsvImportOpen(false)}>Cancel</Button>
+                        <Button onClick={handleCsvImport} disabled={!csvFile || csvImporting} className="bg-amber-500 text-zinc-900 hover:bg-amber-400">
+                            {csvImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importing...</> : "Import"}
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>
