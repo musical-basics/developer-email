@@ -143,6 +143,11 @@ export default function AudienceManagerPage() {
         country_code: "",
         phone_code: "",
         phone_number: "",
+        shipping_address1: "",
+        shipping_address2: "",
+        shipping_city: "",
+        shipping_zip: "",
+        shipping_province: "",
         tags: [],
         status: "active",
     })
@@ -158,7 +163,7 @@ export default function AudienceManagerPage() {
         setLoading(true)
         const { data, error } = await supabase
             .from("subscribers")
-            .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, tags, status, created_at")
+            .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
             .order("created_at", { ascending: false })
 
         if (data) {
@@ -281,6 +286,11 @@ export default function AudienceManagerPage() {
             country_code: "",
             phone_code: "",
             phone_number: "",
+            shipping_address1: "",
+            shipping_address2: "",
+            shipping_city: "",
+            shipping_zip: "",
+            shipping_province: "",
             tags: [],
             status: "active",
         })
@@ -298,6 +308,11 @@ export default function AudienceManagerPage() {
             country_code: formData.country_code || "",
             phone_code: formData.phone_code || "",
             phone_number: formData.phone_number || "",
+            shipping_address1: formData.shipping_address1 || "",
+            shipping_address2: formData.shipping_address2 || "",
+            shipping_city: formData.shipping_city || "",
+            shipping_zip: formData.shipping_zip || "",
+            shipping_province: formData.shipping_province || "",
             tags: formData.tags || [],
             status: formData.status,
         }
@@ -957,6 +972,64 @@ export default function AudienceManagerPage() {
                                         value={formData.phone_number}
                                         onChange={(e) => setFormData({ ...formData, phone_number: e.target.value.replace(/[^0-9-() ]/g, '') })}
                                         placeholder="(555) 123-4567"
+                                        className="bg-card"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Shipping Address */}
+                            <h3 className="text-sm font-medium text-foreground pt-2">Shipping Address</h3>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="shippingAddress1">Address Line 1</Label>
+                                <Input
+                                    id="shippingAddress1"
+                                    value={formData.shipping_address1}
+                                    onChange={(e) => setFormData({ ...formData, shipping_address1: e.target.value })}
+                                    placeholder="123 Main St"
+                                    className="bg-card"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="shippingAddress2">Address Line 2</Label>
+                                <Input
+                                    id="shippingAddress2"
+                                    value={formData.shipping_address2}
+                                    onChange={(e) => setFormData({ ...formData, shipping_address2: e.target.value })}
+                                    placeholder="Apt 4B"
+                                    className="bg-card"
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="shippingCity">City</Label>
+                                    <Input
+                                        id="shippingCity"
+                                        value={formData.shipping_city}
+                                        onChange={(e) => setFormData({ ...formData, shipping_city: e.target.value })}
+                                        placeholder="New York"
+                                        className="bg-card"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="shippingProvince">Province / State</Label>
+                                    <Input
+                                        id="shippingProvince"
+                                        value={formData.shipping_province}
+                                        onChange={(e) => setFormData({ ...formData, shipping_province: e.target.value })}
+                                        placeholder="NY"
+                                        className="bg-card"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="shippingZip">Zip / Postal</Label>
+                                    <Input
+                                        id="shippingZip"
+                                        value={formData.shipping_zip}
+                                        onChange={(e) => setFormData({ ...formData, shipping_zip: e.target.value })}
+                                        placeholder="10001"
                                         className="bg-card"
                                     />
                                 </div>

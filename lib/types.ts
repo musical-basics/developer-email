@@ -32,6 +32,11 @@ export interface Subscriber {
     country_code: string
     phone_code: string
     phone_number: string
+    shipping_address1: string
+    shipping_address2: string
+    shipping_city: string
+    shipping_zip: string
+    shipping_province: string
     tags: string[] | null
     status: 'active' | 'unsubscribed' | 'bounced'
     created_at: string
