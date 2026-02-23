@@ -139,6 +139,10 @@ export default function AudienceManagerPage() {
         email: "",
         first_name: "",
         last_name: "",
+        country: "",
+        country_code: "",
+        phone_code: "",
+        phone_number: "",
         tags: [],
         status: "active",
     })
@@ -154,7 +158,7 @@ export default function AudienceManagerPage() {
         setLoading(true)
         const { data, error } = await supabase
             .from("subscribers")
-            .select("id, email, first_name, last_name, tags, status, created_at")
+            .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, tags, status, created_at")
             .order("created_at", { ascending: false })
 
         if (data) {
@@ -273,6 +277,10 @@ export default function AudienceManagerPage() {
             email: "",
             first_name: "",
             last_name: "",
+            country: "",
+            country_code: "",
+            phone_code: "",
+            phone_number: "",
             tags: [],
             status: "active",
         })
@@ -286,6 +294,10 @@ export default function AudienceManagerPage() {
             email: formData.email,
             first_name: formData.first_name,
             last_name: formData.last_name,
+            country: formData.country || "",
+            country_code: formData.country_code || "",
+            phone_code: formData.phone_code || "",
+            phone_number: formData.phone_number || "",
             tags: formData.tags || [],
             status: formData.status,
         }
@@ -893,6 +905,58 @@ export default function AudienceManagerPage() {
                                         value={formData.last_name}
                                         onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
                                         placeholder="Doe"
+                                        className="bg-card"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="country">Country</Label>
+                                    <Input
+                                        id="country"
+                                        value={formData.country}
+                                        onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                                        placeholder="United States"
+                                        className="bg-card"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="countryCode">Country Code</Label>
+                                    <Input
+                                        id="countryCode"
+                                        value={formData.country_code}
+                                        onChange={(e) => setFormData({ ...formData, country_code: e.target.value.toUpperCase() })}
+                                        placeholder="US"
+                                        maxLength={2}
+                                        className="bg-card"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="phoneCode">Phone Code</Label>
+                                    <Input
+                                        id="phoneCode"
+                                        value={formData.phone_code}
+                                        onChange={(e) => {
+                                            let val = e.target.value
+                                            if (val && !val.startsWith('+')) val = '+' + val
+                                            setFormData({ ...formData, phone_code: val })
+                                        }}
+                                        placeholder="+1"
+                                        maxLength={5}
+                                        className="bg-card"
+                                    />
+                                </div>
+                                <div className="col-span-2 space-y-2">
+                                    <Label htmlFor="phoneNumber">Phone Number</Label>
+                                    <Input
+                                        id="phoneNumber"
+                                        value={formData.phone_number}
+                                        onChange={(e) => setFormData({ ...formData, phone_number: e.target.value.replace(/[^0-9-() ]/g, '') })}
+                                        placeholder="(555) 123-4567"
                                         className="bg-card"
                                     />
                                 </div>

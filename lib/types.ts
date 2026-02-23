@@ -28,6 +28,10 @@ export interface Subscriber {
     email: string
     first_name: string
     last_name: string
+    country: string
+    country_code: string
+    phone_code: string
+    phone_number: string
     tags: string[] | null
     status: 'active' | 'unsubscribed' | 'bounced'
     created_at: string
