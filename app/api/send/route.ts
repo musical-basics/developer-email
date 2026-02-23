@@ -15,7 +15,7 @@ const supabaseAdmin = createClient(
 export async function POST(request: Request) {
     try {
         const body = await request.json();
-        const { campaignId, type, email, fromName, fromEmail, clickTracking = true, openTracking = true } = body;
+        const { campaignId, type, email, fromName, fromEmail, clickTracking = true, openTracking = true, resendClickTracking = false, resendOpenTracking = false } = body;
 
         // Fetch Campaign
         const { data: campaign, error: campaignError } = await supabaseAdmin
@@ -101,7 +101,9 @@ export async function POST(request: Request) {
                 to: email,
                 subject: `[TEST] ${campaign.subject_line}`,
                 html: finalHtml,
-            });
+                click_tracking: resendClickTracking,
+                open_tracking: resendOpenTracking,
+            } as any);
 
             if (error) {
                 console.error("❌ RESEND FAILED:", JSON.stringify(error, null, 2));
@@ -113,7 +115,7 @@ export async function POST(request: Request) {
 
         else if (type === "broadcast") {
             console.log(`🚀 Starting broadcast for campaign ${campaignId}`);
-            console.log(`📊 Tracking flags — click: ${clickTracking}, open: ${openTracking}, fromEmail: ${fromEmail}`);
+            console.log(`📊 Tracking flags — click: ${clickTracking}, open: ${openTracking}, resendClick: ${resendClickTracking}, resendOpen: ${resendOpenTracking}, fromEmail: ${fromEmail}`);
 
             // If broadcasting from a template, create a child campaign for tracking
             let trackingCampaignId = campaignId;
@@ -232,6 +234,8 @@ export async function POST(request: Request) {
                             "List-Unsubscribe": `<${unsubscribeUrl}>`,
                             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
                         },
+                        click_tracking: resendClickTracking,
+                        open_tracking: resendOpenTracking,
                     } as any);
 
                     if (error) {

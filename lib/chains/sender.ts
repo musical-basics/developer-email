@@ -7,7 +7,7 @@ import { renderTemplate } from "@/lib/render-template";
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
 
-export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKeyOrId: string) {
+export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKeyOrId: string, resendClickTracking = false, resendOpenTracking = false) {
     let rawHtml = "";
     let subject = "";
     let campaignId = "";
@@ -77,7 +77,9 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         headers: {
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
-        }
+        },
+        click_tracking: resendClickTracking,
+        open_tracking: resendOpenTracking,
     } as any);
 
     return { success: true, campaignId };
@@ -149,6 +151,8 @@ ${emailBody.split("\n").filter((l: string) => l.trim()).map((p: string) => `<p s
             "List-Unsubscribe": `<${unsubscribeUrl}>`,
             "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
         },
+        click_tracking: false,
+        open_tracking: false,
     } as any);
 
     if (sendResult.error) {

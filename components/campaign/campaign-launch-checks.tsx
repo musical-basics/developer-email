@@ -52,6 +52,8 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 fromEmail,
                 clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
                 openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
+                resendClickTracking: localStorage.getItem(`mb_resend_click_tracking_${fromEmail}`) === "true",
+                resendOpenTracking: localStorage.getItem(`mb_resend_open_tracking_${fromEmail}`) === "true",
             })
         })
 
@@ -90,6 +92,8 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 fromEmail,
                 clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
                 openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
+                resendClickTracking: localStorage.getItem(`mb_resend_click_tracking_${fromEmail}`) === "true",
+                resendOpenTracking: localStorage.getItem(`mb_resend_open_tracking_${fromEmail}`) === "true",
             })
         })
 

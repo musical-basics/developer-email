@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot, Zap, Flame, Cpu, MousePointerClick, Eye, Plus, Trash2 } from "lucide-react"
+import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot, Zap, Flame, Cpu, MousePointerClick, Eye, Plus, Trash2, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
@@ -63,9 +63,9 @@ export default function SettingsPage() {
 
     // ─── Per-Sender Tracking Toggles ─────────────────────
     const senderEmails = ["lionel@musicalbasics.com", "lionel@email.dreamplaypianos.com"] as const
-    const [trackingSettings, setTrackingSettings] = useState<Record<string, { click: boolean; open: boolean }>>({
-        "lionel@musicalbasics.com": { click: true, open: true },
-        "lionel@email.dreamplaypianos.com": { click: true, open: true },
+    const [trackingSettings, setTrackingSettings] = useState<Record<string, { click: boolean; open: boolean; resendClick: boolean; resendOpen: boolean }>>({
+        "lionel@musicalbasics.com": { click: true, open: true, resendClick: false, resendOpen: false },
+        "lionel@email.dreamplaypianos.com": { click: true, open: true, resendClick: false, resendOpen: false },
     })
     const { toast } = useToast()
 
@@ -108,13 +108,17 @@ export default function SettingsPage() {
         if (savedAuto === "true") setAutoRouting(true)
 
         // Load per-sender tracking toggles
-        const loaded: Record<string, { click: boolean; open: boolean }> = {}
+        const loaded: Record<string, { click: boolean; open: boolean; resendClick: boolean; resendOpen: boolean }> = {}
         for (const email of ["lionel@musicalbasics.com", "lionel@email.dreamplaypianos.com"]) {
             const savedClick = localStorage.getItem(`mb_click_tracking_${email}`)
             const savedOpen = localStorage.getItem(`mb_open_tracking_${email}`)
+            const savedResendClick = localStorage.getItem(`mb_resend_click_tracking_${email}`)
+            const savedResendOpen = localStorage.getItem(`mb_resend_open_tracking_${email}`)
             loaded[email] = {
                 click: savedClick !== null ? savedClick === "true" : true,
                 open: savedOpen !== null ? savedOpen === "true" : true,
+                resendClick: savedResendClick === "true",
+                resendOpen: savedResendOpen === "true",
             }
         }
         setTrackingSettings(loaded)
@@ -287,13 +291,48 @@ export default function SettingsPage() {
                 <CardContent className="space-y-6">
                     {senderEmails.map(email => {
                         const label = email.includes("musicalbasics") ? "Musical Basics" : "DreamPlay Pianos"
-                        const settings = trackingSettings[email] || { click: true, open: true }
-                        const toggleSetting = (field: "click" | "open") => {
+                        const settings = trackingSettings[email] || { click: true, open: true, resendClick: false, resendOpen: false }
+                        const toggleSetting = (field: "click" | "open" | "resendClick" | "resendOpen") => {
                             const next = !settings[field]
-                            const newSettings = { ...trackingSettings, [email]: { ...settings, [field]: next } }
+                            const updated = { ...settings, [field]: next }
+
+                            // Mutual exclusion: app and resend tracking can't both be ON for the same type
+                            if (next) {
+                                if (field === "click" && updated.resendClick) {
+                                    updated.resendClick = false
+                                    localStorage.setItem(`mb_resend_click_tracking_${email}`, "false")
+                                    toast({ title: `Resend Click Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend click tracking simultaneously." })
+                                } else if (field === "resendClick" && updated.click) {
+                                    updated.click = false
+                                    localStorage.setItem(`mb_click_tracking_${email}`, "false")
+                                    toast({ title: `App Click Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend click tracking simultaneously." })
+                                } else if (field === "open" && updated.resendOpen) {
+                                    updated.resendOpen = false
+                                    localStorage.setItem(`mb_resend_open_tracking_${email}`, "false")
+                                    toast({ title: `Resend Open Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend open tracking simultaneously." })
+                                } else if (field === "resendOpen" && updated.open) {
+                                    updated.open = false
+                                    localStorage.setItem(`mb_open_tracking_${email}`, "false")
+                                    toast({ title: `App Open Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend open tracking simultaneously." })
+                                }
+                            }
+
+                            const newSettings = { ...trackingSettings, [email]: updated }
                             setTrackingSettings(newSettings)
-                            localStorage.setItem(`mb_${field}_tracking_${email}`, String(next))
-                            toast({ title: `${field === "click" ? "Click" : "Open"} Tracking ${next ? "ON" : "OFF"} for ${label}` })
+                            const storageKeyMap: Record<string, string> = {
+                                click: `mb_click_tracking_${email}`,
+                                open: `mb_open_tracking_${email}`,
+                                resendClick: `mb_resend_click_tracking_${email}`,
+                                resendOpen: `mb_resend_open_tracking_${email}`,
+                            }
+                            localStorage.setItem(storageKeyMap[field], String(next))
+                            const labelMap: Record<string, string> = {
+                                click: "Click Tracking",
+                                open: "Open Tracking",
+                                resendClick: "Resend Click Tracking",
+                                resendOpen: "Resend Open Tracking",
+                            }
+                            toast({ title: `${labelMap[field]} ${next ? "ON" : "OFF"} for ${label}` })
                         }
                         return (
                             <div key={email} className="space-y-3">
@@ -332,6 +371,38 @@ export default function SettingsPage() {
                                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.open ? "bg-primary" : "bg-muted-foreground/30"}`}
                                     >
                                         <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.open ? "translate-x-6" : "translate-x-1"}`} />
+                                    </button>
+                                </div>
+                                {/* Resend Click Tracking */}
+                                <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/30 ml-4">
+                                    <div className="flex items-center gap-3">
+                                        <Send className="w-4 h-4 text-emerald-400" />
+                                        <div>
+                                            <p className="text-sm font-medium text-foreground">Resend Click Tracking</p>
+                                            <p className="text-xs text-muted-foreground">Let Resend rewrite links for its own click analytics</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => toggleSetting("resendClick")}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.resendClick ? "bg-primary" : "bg-muted-foreground/30"}`}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.resendClick ? "translate-x-6" : "translate-x-1"}`} />
+                                    </button>
+                                </div>
+                                {/* Resend Open Tracking */}
+                                <div className="flex items-center justify-between rounded-lg border border-border p-4 bg-muted/30 ml-4">
+                                    <div className="flex items-center gap-3">
+                                        <Send className="w-4 h-4 text-orange-400" />
+                                        <div>
+                                            <p className="text-sm font-medium text-foreground">Resend Open Tracking</p>
+                                            <p className="text-xs text-muted-foreground">Let Resend inject its own open-tracking pixel</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => toggleSetting("resendOpen")}
+                                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${settings.resendOpen ? "bg-primary" : "bg-muted-foreground/30"}`}
+                                    >
+                                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.resendOpen ? "translate-x-6" : "translate-x-1"}`} />
                                     </button>
                                 </div>
                             </div>

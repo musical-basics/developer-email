@@ -123,6 +123,8 @@ export const sendCampaign = inngest.createFunction(
                                 "List-Unsubscribe": `<${unsubscribeUrl}>`,
                                 "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
                             },
+                            click_tracking: false,
+                            open_tracking: false,
                         } as any);
 
                         if (error) {
