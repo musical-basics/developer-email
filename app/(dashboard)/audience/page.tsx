@@ -726,6 +726,46 @@ export default function AudienceManagerPage() {
         reader.readAsText(csvFile)
     }
 
+    // Export subscribers as CSV in our import-compatible format
+    const handleExportCsv = () => {
+        const headers = ["email", "first_name", "last_name", "country", "country_code", "phone_code", "phone_number", "shipping_address1", "shipping_address2", "shipping_city", "shipping_zip", "shipping_province", "tags", "status"]
+
+        const escapeField = (val: string) => {
+            if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+                return '"' + val.replace(/"/g, '""') + '"'
+            }
+            return val
+        }
+
+        const rows = filteredSubscribers.map(sub => [
+            sub.email,
+            sub.first_name || "",
+            sub.last_name || "",
+            sub.country || "",
+            sub.country_code || "",
+            sub.phone_code || "",
+            sub.phone_number || "",
+            sub.shipping_address1 || "",
+            sub.shipping_address2 || "",
+            sub.shipping_city || "",
+            sub.shipping_zip || "",
+            sub.shipping_province || "",
+            (sub.tags || []).join(";"),
+            sub.status,
+        ].map(escapeField).join(","))
+
+        const csv = [headers.join(","), ...rows].join("\n")
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `subscribers_${new Date().toISOString().split("T")[0]}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+
+        toast({ title: `Exported ${rows.length} subscribers` })
+    }
+
     const allSelected = filteredSubscribers.length > 0 && selectedIds.length === filteredSubscribers.length
     const someSelected = selectedIds.length > 0 && selectedIds.length < filteredSubscribers.length
 
@@ -850,7 +890,7 @@ export default function AudienceManagerPage() {
                         </>
                     ) : (
                         <>
-                            <Button variant="ghost" className="gap-2">
+                            <Button variant="ghost" className="gap-2" onClick={handleExportCsv}>
                                 <Download className="h-4 w-4" />
                                 Export
                             </Button>
