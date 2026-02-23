@@ -1565,7 +1565,7 @@ export default function AudienceManagerPage() {
 
             {/* CSV Import Dialog */}
             <Dialog open={isCsvImportOpen} onOpenChange={(open) => { setIsCsvImportOpen(open); if (!open) { setCsvFile(null); setCsvPreview([]); setCsvHeaders([]) } }}>
-                <DialogContent className="sm:max-w-2xl">
+                <DialogContent className="sm:max-w-2xl overflow-hidden">
                     <DialogHeader>
                         <DialogTitle>Import CSV</DialogTitle>
                         <DialogDescription>
@@ -1587,10 +1587,10 @@ export default function AudienceManagerPage() {
                         ) : (
                             <>
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <FileUp className="h-4 w-4 text-amber-500" />
-                                        <span className="text-sm font-medium">{csvFile.name}</span>
-                                        <span className="text-xs text-muted-foreground">({(csvFile.size / 1024).toFixed(1)} KB)</span>
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <FileUp className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                                        <span className="text-sm font-medium truncate">{csvFile.name}</span>
+                                        <span className="text-xs text-muted-foreground flex-shrink-0">({(csvFile.size / 1024).toFixed(1)} KB)</span>
                                     </div>
                                     <Button variant="ghost" size="sm" onClick={() => { setCsvFile(null); setCsvPreview([]); setCsvHeaders([]) }}>
                                         <X className="h-4 w-4" />
@@ -1599,14 +1599,15 @@ export default function AudienceManagerPage() {
 
                                 {csvHeaders.length > 0 && (
                                     <div className="space-y-2">
-                                        <p className="text-xs text-muted-foreground">Detected columns: <span className="text-foreground">{csvHeaders.join(", ")}</span></p>
-                                        <p className="text-xs text-muted-foreground">Preview (first {csvPreview.length} rows):</p>
-                                        <div className="rounded border border-border overflow-x-auto">
-                                            <table className="w-full text-xs">
-                                                <thead>
-                                                    <tr className="border-b border-border bg-muted/50">
+                                        <p className="text-xs text-muted-foreground">
+                                            <span className="font-medium text-foreground">{csvHeaders.length}</span> columns detected · Preview (first {csvPreview.length} rows):
+                                        </p>
+                                        <div className="rounded border border-border overflow-auto max-h-[250px]">
+                                            <table className="text-xs">
+                                                <thead className="sticky top-0">
+                                                    <tr className="border-b border-border bg-muted">
                                                         {csvHeaders.map((h, i) => (
-                                                            <th key={i} className="px-3 py-1.5 text-left font-medium text-foreground">{h}</th>
+                                                            <th key={i} className="px-2 py-1.5 text-left font-medium text-foreground whitespace-nowrap">{h}</th>
                                                         ))}
                                                     </tr>
                                                 </thead>
@@ -1614,7 +1615,7 @@ export default function AudienceManagerPage() {
                                                     {csvPreview.map((row, ri) => (
                                                         <tr key={ri} className="border-b border-border last:border-0">
                                                             {csvHeaders.map((_, ci) => (
-                                                                <td key={ci} className="px-3 py-1 text-muted-foreground truncate max-w-[150px]">{row[ci] || ""}</td>
+                                                                <td key={ci} className="px-2 py-1 text-muted-foreground whitespace-nowrap max-w-[120px] truncate">{row[ci] || ""}</td>
                                                             ))}
                                                         </tr>
                                                     ))}
