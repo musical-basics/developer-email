@@ -19,7 +19,6 @@ const navItems = [
     { name: "Tags", href: "/tags", icon: Tag },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
     { name: "Chains", href: "/chains", icon: GitBranch },
-    { name: "Settings", href: "/settings", icon: Settings },
 ]
 
 export function AppSidebar() {
@@ -82,8 +81,8 @@ export function AppSidebar() {
                         )
                     })}
 
-                    {/* AI Approvals — separate with visual distinction */}
-                    <div className="pt-2 mt-2 border-t border-border">
+                    {/* Below separator */}
+                    <div className="pt-2 mt-2 border-t border-border space-y-1">
                         <Link
                             href="/approvals"
                             className={cn(
@@ -100,6 +99,18 @@ export function AppSidebar() {
                                     {pendingCount}
                                 </span>
                             )}
+                        </Link>
+                        <Link
+                            href="/settings"
+                            className={cn(
+                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                                pathname === "/settings"
+                                    ? "bg-primary/10 text-primary"
+                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                            )}
+                        >
+                            <Settings className="h-5 w-5" />
+                            Settings
                         </Link>
                     </div>
                 </nav>
