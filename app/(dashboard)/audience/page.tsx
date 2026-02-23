@@ -697,7 +697,7 @@ export default function AudienceManagerPage() {
                 shipping_address1: row[idxMap["shipping_address1"]] || "",
                 shipping_address2: row[idxMap["shipping_address2"]] || "",
                 shipping_city: row[idxMap["shipping_city"]] || "",
-                shipping_zip: row[idxMap["shipping_zip"]] || "",
+                shipping_zip: (row[idxMap["shipping_zip"]] || "").replace(/'/g, ""),
                 shipping_province: row[idxMap["shipping_province"]] || "",
                 tags: [],
                 status: "active" as const,
