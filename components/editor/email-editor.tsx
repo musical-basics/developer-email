@@ -8,7 +8,7 @@ import { CopilotPane } from "./copilot-pane"
 import { CampaignPicker } from "./campaign-picker"
 import { renderTemplate } from "@/lib/render-template"
 import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, TicketPercent } from "lucide-react"
-import { generateShopifyDiscount } from "@/app/actions/shopify-discount"
+import { generateShopifyDiscount, generateShopifyFixedDiscount } from "@/app/actions/shopify-discount"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -65,6 +65,7 @@ export function EmailEditor({
     const { toast } = useToast()
 
     const [generatingDiscount, setGeneratingDiscount] = useState(false)
+    const [generatingFixed, setGeneratingFixed] = useState(false)
 
     // Version history
     const [backups, setBackups] = useState<{ id: string; saved_at: string; subject_line: string }[]>([])
@@ -226,6 +227,34 @@ export function EmailEditor({
                                 >
                                     {generatingDiscount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TicketPercent className="w-3.5 h-3.5" />}
                                     Generate 5% VIP Code
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        setGeneratingFixed(true);
+                                        const res = await generateShopifyFixedDiscount(30);
+                                        if (!res.success) {
+                                            toast({ title: "Error", description: res.error, variant: "destructive" });
+                                        } else if (res.code) {
+                                            const baseCta = assets.main_cta_url || "https://dreamplaypianos.com/customize";
+                                            const sep = baseCta.includes("?") ? "&" : "?";
+                                            const finalCta = baseCta.includes("discount=")
+                                                ? baseCta.replace(/discount=[^&]+/, `discount=${res.code}`)
+                                                : `${baseCta}${sep}discount=${res.code}`;
+                                            onAssetsChange({
+                                                ...assets,
+                                                discount_code: res.code,
+                                                main_cta_url: finalCta
+                                            });
+                                            toast({ title: "Discount Created!", description: `${res.code} — $30 off, valid 14 days.` });
+                                        }
+                                        setGeneratingFixed(false);
+                                    }}
+                                    disabled={generatingFixed}
+                                    className="w-full flex items-center justify-center gap-2 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 py-2 rounded text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer mt-2"
+                                >
+                                    {generatingFixed ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TicketPercent className="w-3.5 h-3.5" />}
+                                    Generate $30 Off Code
                                 </button>
                             </div>
                         </div>

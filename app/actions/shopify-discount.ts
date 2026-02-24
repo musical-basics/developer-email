@@ -108,3 +108,68 @@ export async function generateShopifyDiscount(percentage: number = 5) {
         return { success: false, error: e.message };
     }
 }
+
+export async function generateShopifyFixedDiscount(amount: number = 30) {
+    const shopifyDomain = process.env.SHOPIFY_STORE_DOMAIN;
+
+    if (!shopifyDomain) {
+        return { success: false, error: "Missing SHOPIFY_STORE_DOMAIN" };
+    }
+
+    const cleanDomain = shopifyDomain.replace('.myshopify.com', '') + '.myshopify.com';
+
+    const uniqueSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const discountCode = `SAVE${amount}-${uniqueSuffix}`;
+
+    const startsAt = new Date().toISOString();
+    const endsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days
+
+    const payload = {
+        price_rule: {
+            title: discountCode,
+            target_type: "line_item",
+            target_selection: "all",
+            allocation_method: "across",
+            value_type: "fixed_amount",
+            value: `-${amount}.0`,
+            customer_selection: "all",
+            usage_limit: 1,
+            starts_at: startsAt,
+            ends_at: endsAt
+        }
+    };
+
+    try {
+        const accessToken = await getAccessToken();
+        const headers = {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': accessToken
+        };
+
+        const prRes = await fetch(`https://${cleanDomain}/admin/api/2024-01/price_rules.json`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(payload)
+        });
+
+        if (!prRes.ok) {
+            const errText = await prRes.text();
+            throw new Error(`Price Rule Error (${prRes.status}): ${errText.substring(0, 200)}`);
+        }
+
+        const prData = await prRes.json();
+        const priceRuleId = prData.price_rule.id;
+
+        const dcRes = await fetch(`https://${cleanDomain}/admin/api/2024-01/price_rules/${priceRuleId}/discount_codes.json`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ discount_code: { code: discountCode } })
+        });
+
+        if (!dcRes.ok) throw new Error("Failed to create the discount code in Shopify.");
+
+        return { success: true, code: discountCode };
+    } catch (e: any) {
+        return { success: false, error: e.message };
+    }
+}
