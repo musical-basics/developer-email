@@ -205,23 +205,30 @@ export const genericChainRunner = inngest.createFunction(
                 });
             }
 
+            // ─── WAIT PERIOD ───────────────────────────
+            // Compute wait as a step so the return value is reliably available during Inngest replay
+            const waitDecision = await step.run(`compute-wait-${i}`, async () => {
+                if (stepDef.wait_after && i < chain.steps.length - 1) {
+                    const { inngestDuration, ms } = parseWaitDuration(stepDef.wait_after);
+                    const nextStepAt = new Date(Date.now() + ms);
 
-            if (stepDef.wait_after && i < chain.steps.length - 1) {
-                const { inngestDuration, ms } = parseWaitDuration(stepDef.wait_after);
-                const nextStepAt = new Date(Date.now() + ms);
-
-                // Save exact wake-up time to DB so the UI can show countdown
-                if (processId) {
-                    await step.run(`set-next-step-at-${i}`, async () => {
+                    // Save wake-up time to DB for UI countdown
+                    if (processId) {
                         await appendHistory(stepDef.label, "Waiting", `Sleep: ${inngestDuration}, next at ${nextStepAt.toISOString()} (${stepDef.wait_after})`);
                         await supabase.from("chain_processes").update({
                             next_step_at: nextStepAt.toISOString(),
                             updated_at: new Date().toISOString(),
                         }).eq("id", processId);
-                    });
-                }
+                    }
 
-                await step.sleep(`wait-after-step-${i}`, inngestDuration);
+                    return { shouldWait: true, duration: inngestDuration, nextStepAt: nextStepAt.toISOString() };
+                }
+                return { shouldWait: false, duration: null, nextStepAt: null };
+            });
+
+            // Sleep uses the RETURNED value from compute-wait (guaranteed by Inngest memoization)
+            if (waitDecision.shouldWait && waitDecision.duration) {
+                await step.sleep(`wait-after-step-${i}`, waitDecision.duration);
 
                 // Clear next_step_at after waking up
                 if (processId) {
