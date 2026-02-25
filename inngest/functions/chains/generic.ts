@@ -116,16 +116,10 @@ export const genericChainRunner = inngest.createFunction(
         // ─── EXECUTE STEPS SEQUENTIALLY ────────────────
         const sentCampaignIds: string[] = [];
 
-        // If processId exists, load current_step_index to resume from where we left off
-        let startIndex = 0;
-        if (processId) {
-            const { data: proc } = await supabase
-                .from("chain_processes")
-                .select("current_step_index")
-                .eq("id", processId)
-                .single();
-            startIndex = proc?.current_step_index || 0;
-        }
+        // Always start from 0 — Inngest's step memoization handles replay.
+        // DO NOT read startIndex from DB — updating current_step_index before sleep
+        // causes the loop to skip past pending sleeps on replay.
+        const startIndex = 0;
 
         for (let i = startIndex; i < chain.steps.length; i++) {
             const stepDef = chain.steps[i];
