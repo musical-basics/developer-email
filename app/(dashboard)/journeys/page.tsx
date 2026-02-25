@@ -356,7 +356,7 @@ function ChainFormDialog({
                 sortedSteps.forEach((step: any, i: number) => {
                     timelineItems.push({ type: "send", template_key: step.template_key })
                     if (step.wait_after) {
-                        const match = step.wait_after.match(/^(\d+)\s*(hours?|days?|weeks?)$/i)
+                        const match = step.wait_after.match(/^(\d+)\s*(minutes?|hours?|days?|weeks?)$/i)
                         if (match) {
                             const num = parseInt(match[1])
                             let unit: WaitUnit = "days"
@@ -1414,11 +1414,22 @@ export default function ChainsPage() {
                                         </div>
                                     </CardHeader>
                                     <CardContent className="pt-0">
-                                        <div className="flex flex-wrap gap-2">
-                                            {chain.chain_steps.map((step, i) => (
-                                                <Badge key={i} variant="secondary" className="text-xs">
-                                                    {i + 1}. {step.label}
-                                                </Badge>
+                                        <div className="flex flex-wrap gap-2 items-center">
+                                            {chain.chain_steps.map((step: any, i: number) => (
+                                                <div key={i} className="flex items-center gap-2">
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {i + 1}. {step.label}
+                                                    </Badge>
+                                                    {step.wait_after && (
+                                                        <span className="text-[10px] text-amber-400/70 flex items-center gap-0.5">
+                                                            <Clock className="h-2.5 w-2.5" />
+                                                            {step.wait_after}
+                                                        </span>
+                                                    )}
+                                                    {i < chain.chain_steps.length - 1 && (
+                                                        <span className="text-muted-foreground/30">→</span>
+                                                    )}
+                                                </div>
                                             ))}
                                         </div>
                                         {chain.description && (
