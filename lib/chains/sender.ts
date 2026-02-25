@@ -69,7 +69,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     });
 
     // Send Email (disable Resend's tracking — we use our own click redirect)
-    await resend.emails.send({
+    const sendResult = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL || "Lionel Yu <lionel@musicalbasics.com>",
         to: email,
         subject: subject,
@@ -81,6 +81,23 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         click_tracking: resendClickTracking,
         open_tracking: resendOpenTracking,
     } as any);
+
+    if (sendResult.error) {
+        console.error("Chain email send error:", sendResult.error);
+        return { success: false, campaignId, error: sendResult.error.message };
+    }
+
+    // Log to sent_history so chain emails appear in subscriber's email history
+    const supabaseForHistory = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!
+    );
+    await supabaseForHistory.from("sent_history").insert({
+        campaign_id: campaignId,
+        subscriber_id: subscriberId,
+        sent_at: new Date().toISOString(),
+        variant_sent: subject,
+    });
 
     return { success: true, campaignId };
 }

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, GitBranch, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
@@ -18,7 +18,7 @@ const navItems = [
     { name: "Assets Library", href: "/assets", icon: ImageIcon },
     { name: "Tags", href: "/tags", icon: Tag },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
-    { name: "Chains", href: "/chains", icon: GitBranch },
+    { name: "Journeys", href: "/chains", icon: Route },
     { name: "Discounts", href: "/discounts", icon: TicketPercent },
 ]
 

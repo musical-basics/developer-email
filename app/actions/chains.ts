@@ -30,10 +30,13 @@ export interface ChainRow {
     description: string | null
     trigger_label: string | null
     trigger_event: string
+    subscriber_id: string | null
     created_at: string
     updated_at: string
     chain_steps: ChainStepRow[]
     chain_branches: ChainBranchRow[]
+    // Joined subscriber info (only for drafts)
+    subscribers?: { id: string; email: string; first_name: string; last_name: string } | null
 }
 
 export interface ChainFormData {
@@ -42,11 +45,12 @@ export interface ChainFormData {
     description: string
     trigger_label: string
     trigger_event: string
+    subscriber_id?: string | null
     steps: Omit<ChainStepRow, "id" | "chain_id">[]
     branches: Omit<ChainBranchRow, "id" | "chain_id">[]
 }
 
-// ─── GET ALL ───────────────────────────────────────────────
+// ─── GET MASTER CHAINS (subscriber_id is null) ────────────
 export async function getChains(): Promise<{ data: ChainRow[] | null; error: string | null }> {
     const supabase = await createClient()
 
@@ -57,11 +61,11 @@ export async function getChains(): Promise<{ data: ChainRow[] | null; error: str
             chain_steps ( * ),
             chain_branches ( * )
         `)
+        .is("subscriber_id", null)
         .order("created_at", { ascending: true })
 
     if (error) return { data: null, error: error.message }
 
-    // Sort steps and branches by position
     const sorted = (data || []).map((chain: any) => ({
         ...chain,
         chain_steps: (chain.chain_steps || []).sort((a: any, b: any) => a.position - b.position),
@@ -71,7 +75,58 @@ export async function getChains(): Promise<{ data: ChainRow[] | null; error: str
     return { data: sorted, error: null }
 }
 
-// ─── CREATE ────────────────────────────────────────────────
+// ─── GET DRAFT CHAINS (subscriber_id is set) ──────────────
+export async function getDraftChains(): Promise<{ data: ChainRow[] | null; error: string | null }> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from("email_chains")
+        .select(`
+            *,
+            chain_steps ( * ),
+            chain_branches ( * ),
+            subscribers ( id, email, first_name, last_name )
+        `)
+        .not("subscriber_id", "is", null)
+        .order("created_at", { ascending: false })
+
+    if (error) return { data: null, error: error.message }
+
+    const sorted = (data || []).map((chain: any) => ({
+        ...chain,
+        chain_steps: (chain.chain_steps || []).sort((a: any, b: any) => a.position - b.position),
+        chain_branches: (chain.chain_branches || []).sort((a: any, b: any) => a.position - b.position),
+    }))
+
+    return { data: sorted, error: null }
+}
+
+// ─── GET DRAFT CHAINS FOR A SPECIFIC SUBSCRIBER ────────────
+export async function getDraftChainsForSubscriber(subscriberId: string): Promise<{ data: ChainRow[] | null; error: string | null }> {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from("email_chains")
+        .select(`
+            *,
+            chain_steps ( * ),
+            chain_branches ( * ),
+            subscribers ( id, email, first_name, last_name )
+        `)
+        .eq("subscriber_id", subscriberId)
+        .order("created_at", { ascending: false })
+
+    if (error) return { data: null, error: error.message }
+
+    const sorted = (data || []).map((chain: any) => ({
+        ...chain,
+        chain_steps: (chain.chain_steps || []).sort((a: any, b: any) => a.position - b.position),
+        chain_branches: (chain.chain_branches || []).sort((a: any, b: any) => a.position - b.position),
+    }))
+
+    return { data: sorted, error: null }
+}
+
 export async function createChain(formData: ChainFormData): Promise<{ data: { id: string } | null; error: string | null }> {
     const supabase = await createClient()
 
@@ -84,6 +139,7 @@ export async function createChain(formData: ChainFormData): Promise<{ data: { id
             description: formData.description || null,
             trigger_label: formData.trigger_label || null,
             trigger_event: formData.trigger_event,
+            subscriber_id: formData.subscriber_id || null,
         })
         .select("id")
         .single()

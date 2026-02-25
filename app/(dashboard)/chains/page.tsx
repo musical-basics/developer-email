@@ -22,16 +22,17 @@ import {
 import {
     GitBranch, Mail, Clock, ChevronDown, ChevronUp,
     Zap, ArrowRight, Eye, MousePointer2, Ghost, GraduationCap,
-    Plus, Pencil, Trash2, X, Pause, Play, XCircle, User, Timer, Loader2, CheckCircle2
+    Plus, Pencil, Trash2, X, Pause, Play, XCircle, User, Timer, Loader2, CheckCircle2, GripVertical
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
-    getChains, createChain, updateChain, deleteChain,
+    getChains, createChain, updateChain, deleteChain, getDraftChains,
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
 import { getCampaignList } from "@/app/actions/campaigns"
 import { getChainProcesses, updateProcessStatus } from "@/app/actions/chain-processes"
 import type { ChainProcess, ChainProcessHistoryEntry } from "@/lib/types"
+import { CustomerJourneysTab } from "@/components/chains/customer-journeys-tab"
 
 // ─── TYPES ─────────────────────────────────────────────────
 interface StepForm { label: string; template_key: string; wait_after: string }
@@ -300,18 +301,29 @@ function ChainCard({
 }
 
 // ─── CHAIN FORM DIALOG ─────────────────────────────────────
+// Timeline item for draft mode: either a "send" or a "wait"
+type TimelineItem =
+    | { type: "send"; template_key: string }
+    | { type: "wait"; duration: number; unit: "minutes" | "hours" | "days" | "weeks" }
+
 function ChainFormDialog({
     open,
     onOpenChange,
     editingChain,
     onSave,
+    subscriberName,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
     editingChain: ChainRow | null
     onSave: (data: ChainFormData, chainId?: string) => Promise<void>
+    subscriberName?: string
 }) {
+    const isEditingDraft = !!editingChain?.subscriber_id
+    const isDraftMode = (!!subscriberName && !editingChain) || isEditingDraft
     const [loading, setLoading] = useState(false)
+
+    // Master chain fields
     const [name, setName] = useState("")
     const [slug, setSlug] = useState("")
     const [description, setDescription] = useState("")
@@ -319,9 +331,14 @@ function ChainFormDialog({
     const [triggerEvent, setTriggerEvent] = useState("")
     const [steps, setSteps] = useState<StepForm[]>([emptyStep()])
     const [branches, setBranches] = useState<BranchForm[]>([])
+
+    // Draft chain fields
+    const [draftName, setDraftName] = useState("")
+    const [timeline, setTimeline] = useState<TimelineItem[]>([{ type: "send", template_key: "" }])
+    type WaitUnit = "minutes" | "hours" | "days" | "weeks"
+
     const [campaigns, setCampaigns] = useState<{ id: string; name: string; status: string }[]>([])
 
-    // Fetch saved campaigns when dialog opens
     useEffect(() => {
         if (open) {
             getCampaignList().then(data => setCampaigns(data.filter((c: any) => c.is_template === true)))
@@ -331,25 +348,47 @@ function ChainFormDialog({
     // Populate form when editing
     useEffect(() => {
         if (editingChain) {
-            const fd = chainRowToFormData(editingChain)
-            setName(fd.name)
-            setSlug(fd.slug)
-            setDescription(fd.description)
-            setTriggerLabel(fd.trigger_label)
-            setTriggerEvent(fd.trigger_event)
-            setSteps(fd.steps.map(s => ({
-                label: s.label,
-                template_key: s.template_key,
-                wait_after: s.wait_after || "",
-            })))
-            setBranches(fd.branches.map(b => ({
-                label: b.label,
-                condition: b.condition,
-                action: b.action,
-                description: b.description,
-            })))
+            if (editingChain.subscriber_id) {
+                // Editing a draft chain — populate timeline UI
+                setDraftName(editingChain.name)
+                const timelineItems: TimelineItem[] = []
+                const sortedSteps = [...(editingChain.chain_steps || [])].sort((a: any, b: any) => a.position - b.position)
+                sortedSteps.forEach((step: any, i: number) => {
+                    timelineItems.push({ type: "send", template_key: step.template_key })
+                    if (step.wait_after) {
+                        const match = step.wait_after.match(/^(\d+)\s*(hours?|days?|weeks?)$/i)
+                        if (match) {
+                            const num = parseInt(match[1])
+                            let unit: WaitUnit = "days"
+                            if (match[2].startsWith("min")) unit = "minutes"
+                            else if (match[2].startsWith("hour")) unit = "hours"
+                            else if (match[2].startsWith("week")) unit = "weeks"
+                            timelineItems.push({ type: "wait", duration: num, unit })
+                        }
+                    }
+                })
+                setTimeline(timelineItems.length > 0 ? timelineItems : [{ type: "send", template_key: "" }])
+            } else {
+                // Editing a master chain — populate full form
+                const fd = chainRowToFormData(editingChain)
+                setName(fd.name)
+                setSlug(fd.slug)
+                setDescription(fd.description)
+                setTriggerLabel(fd.trigger_label)
+                setTriggerEvent(fd.trigger_event)
+                setSteps(fd.steps.map(s => ({
+                    label: s.label,
+                    template_key: s.template_key,
+                    wait_after: s.wait_after || "",
+                })))
+                setBranches(fd.branches.map(b => ({
+                    label: b.label,
+                    condition: b.condition,
+                    action: b.action,
+                    description: b.description,
+                })))
+            }
         } else {
-            // Reset for "new" mode
             setName("")
             setSlug("")
             setDescription("")
@@ -357,10 +396,12 @@ function ChainFormDialog({
             setTriggerEvent("")
             setSteps([emptyStep()])
             setBranches([])
+            // Reset draft mode
+            setDraftName(subscriberName ? `New Chain for ${subscriberName}` : "")
+            setTimeline([{ type: "send", template_key: "" }])
         }
-    }, [editingChain, open])
+    }, [editingChain, open, subscriberName])
 
-    // Auto-generate slug from name
     const handleNameChange = (val: string) => {
         setName(val)
         if (!editingChain) {
@@ -376,217 +417,505 @@ function ChainFormDialog({
         setBranches(prev => prev.map((b, i) => i === index ? { ...b, [field]: value } : b))
     }
 
+    const updateTimelineItem = (index: number, patch: Partial<TimelineItem>) => {
+        setTimeline(prev => prev.map((item, i) => i === index ? { ...item, ...patch } as TimelineItem : item))
+    }
+
+    const removeTimelineItem = (index: number) => {
+        setTimeline(prev => prev.filter((_, i) => i !== index))
+    }
+
+    // Auto-insert a "Wait 1 day" between consecutive send steps
+    const addStep = () => {
+        setTimeline(prev => {
+            const newItems: TimelineItem[] = [...prev]
+            // If the last item is a "send", insert a wait before the new step
+            if (newItems.length > 0 && newItems[newItems.length - 1].type === "send") {
+                newItems.push({ type: "wait", duration: 1, unit: "days" })
+            }
+            newItems.push({ type: "send", template_key: "" })
+            return newItems
+        })
+    }
+
+    const addWait = () => {
+        setTimeline(prev => [...prev, { type: "wait", duration: 1, unit: "days" }])
+    }
+
+    // ─── Drag & Drop ───
+    const [dragIndex, setDragIndex] = useState<number | null>(null)
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        setDragIndex(index)
+        e.dataTransfer.effectAllowed = "move"
+        e.dataTransfer.setData("text/plain", String(index))
+    }
+
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = "move"
+        setDragOverIndex(index)
+    }
+
+    const handleDragLeave = () => {
+        setDragOverIndex(null)
+    }
+
+    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+        e.preventDefault()
+        const fromIndex = dragIndex
+        setDragIndex(null)
+        setDragOverIndex(null)
+        if (fromIndex === null || fromIndex === dropIndex) return
+        setTimeline(prev => {
+            const updated = [...prev]
+            const [moved] = updated.splice(fromIndex, 1)
+            updated.splice(dropIndex, 0, moved)
+            return updated
+        })
+    }
+
+    const handleDragEnd = () => {
+        setDragIndex(null)
+        setDragOverIndex(null)
+    }
+
+    // Convert timeline to steps format (merging send + following wait into one step)
+    const timelineToSteps = () => {
+        const result: { label: string; template_key: string; wait_after: string | null; position: number }[] = []
+        let stepNum = 0
+        for (let i = 0; i < timeline.length; i++) {
+            const item = timeline[i]
+            if (item.type === "send") {
+                stepNum++
+                const campaignName = campaigns.find(c => c.id === item.template_key)?.name || `Step ${stepNum}`
+                // Check if next item is a wait
+                const next = timeline[i + 1]
+                let waitAfter: string | null = null
+                if (next && next.type === "wait") {
+                    waitAfter = `${next.duration} ${next.unit}`
+                    i++ // skip the wait item
+                }
+                result.push({
+                    position: stepNum,
+                    label: campaignName,
+                    template_key: item.template_key,
+                    wait_after: waitAfter,
+                })
+            } else if (item.type === "wait") {
+                // Standalone wait — attach to previous step
+                if (result.length > 0) {
+                    result[result.length - 1].wait_after = `${item.duration} ${item.unit}`
+                }
+            }
+        }
+        return result
+    }
+
     const handleSubmit = async () => {
-        if (!name.trim() || !triggerEvent.trim()) return
         setLoading(true)
         try {
-            const formData: ChainFormData = {
-                name, slug, description, trigger_label: triggerLabel, trigger_event: triggerEvent,
-                steps: steps.filter(s => s.label.trim() && s.template_key.trim()).map((s, i) => ({
-                    position: i + 1, label: s.label, template_key: s.template_key,
-                    wait_after: s.wait_after || null,
-                })),
-                branches: branches.filter(b => b.label.trim()).map((b, i) => ({
-                    position: i + 1, label: b.label, condition: b.condition, action: b.action,
-                    description: b.description,
-                })),
+            if (isDraftMode) {
+                const convertedSteps = timelineToSteps()
+                const autoName = draftName || `New Chain for ${subscriberName}`
+                const autoSlug = autoName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-chain"
+                const formData: ChainFormData = {
+                    name: autoName,
+                    slug: autoSlug,
+                    description: "",
+                    trigger_label: "",
+                    trigger_event: "manual",
+                    steps: convertedSteps,
+                    branches: [],
+                }
+                await onSave(formData, editingChain?.id)
+            } else {
+                if (!name.trim() || !triggerEvent.trim()) return
+                const formData: ChainFormData = {
+                    name, slug, description, trigger_label: triggerLabel, trigger_event: triggerEvent,
+                    steps: steps.filter(s => s.label.trim() && s.template_key.trim()).map((s, i) => ({
+                        position: i + 1, label: s.label, template_key: s.template_key,
+                        wait_after: s.wait_after || null,
+                    })),
+                    branches: branches.filter(b => b.label.trim()).map((b, i) => ({
+                        position: i + 1, label: b.label, condition: b.condition, action: b.action,
+                        description: b.description,
+                    })),
+                }
+                await onSave(formData, editingChain?.id)
             }
-            await onSave(formData, editingChain?.id)
             onOpenChange(false)
         } finally {
             setLoading(false)
         }
     }
 
+    // Check if draft form has at least one send step with a template
+    const draftHasValidStep = timeline.some(item => item.type === "send" && item.template_key)
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>{editingChain ? "Edit Chain" : "New Email Chain"}</DialogTitle>
+                    <DialogTitle>{isEditingDraft ? "Edit Draft Chain" : editingChain ? "Edit Chain" : isDraftMode ? "New Draft Chain" : "New Email Chain"}</DialogTitle>
+                    {isDraftMode && (
+                        <div className="mt-2 rounded-md bg-[#D4AF37]/10 border border-[#D4AF37]/30 px-3 py-2 text-sm flex items-center gap-2">
+                            <User className="h-4 w-4 text-[#D4AF37]" />
+                            Creating draft chain for <span className="font-semibold">{subscriberName}</span>
+                        </div>
+                    )}
                     <DialogDescription>
                         {editingChain
                             ? "Update the chain configuration."
-                            : "Configure a new automated email sequence."}
+                            : isDraftMode
+                                ? "Build a sequence of steps and wait times. Drag to reorder."
+                                : "Configure a new automated email sequence."}
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-6 py-4">
-                    {/* Chain Details */}
-                    <div className="space-y-4">
-                        <h3 className="text-sm font-semibold text-foreground">Chain Details</h3>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label htmlFor="chain-name">Name <span className="text-muted-foreground font-normal">(required)</span></Label>
-                                <Input id="chain-name" value={name} onChange={e => handleNameChange(e.target.value)} placeholder="e.g., Welcome Sequence" />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="chain-slug">Slug <span className="text-muted-foreground font-normal">(auto-generated)</span></Label>
-                                <Input id="chain-slug" value={slug} onChange={e => setSlug(e.target.value)} placeholder="welcome-sequence-chain" className="font-mono text-xs" />
-                            </div>
+                {/* ─── DRAFT MODE (simplified) ─── */}
+                {isDraftMode ? (
+                    <div className="space-y-5 py-4">
+                        {/* Editable Name */}
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Chain Name</Label>
+                            <Input
+                                value={draftName}
+                                onChange={e => setDraftName(e.target.value)}
+                                className="text-sm"
+                            />
                         </div>
+
+                        {/* Sequential Timeline */}
                         <div className="space-y-2">
-                            <Label htmlFor="chain-desc">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                            <Input id="chain-desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="What this chain does..." />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <Label>Trigger Event <span className="text-muted-foreground font-normal">(required)</span></Label>
-                                <Select value={triggerEvent} onValueChange={setTriggerEvent}>
-                                    <SelectTrigger className="w-full font-mono text-xs">
-                                        <SelectValue placeholder="Select trigger event..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {TRIGGER_EVENT_OPTIONS.map(opt => (
-                                            <SelectItem key={opt.value} value={opt.value} className="font-mono text-xs">
-                                                {opt.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-foreground">Sequence</h3>
+                                <div className="flex gap-1">
+                                    <Button variant="outline" size="sm" onClick={addStep}>
+                                        <Plus className="h-3.5 w-3.5 mr-1" /> Step (Email)
+                                    </Button>
+                                    <Button variant="outline" size="sm" onClick={addWait}>
+                                        <Clock className="h-3.5 w-3.5 mr-1" /> Wait
+                                    </Button>
+                                </div>
                             </div>
-                            <div className="space-y-2">
-                                <Label>Trigger Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                                <Select value={triggerLabel} onValueChange={setTriggerLabel}>
-                                    <SelectTrigger className="w-full text-xs">
-                                        <SelectValue placeholder="Select trigger label..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {TRIGGER_LABEL_OPTIONS.map(opt => (
-                                            <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                                                {opt.label}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+
+                            <div className="space-y-0">
+                                {timeline.map((item, i) => (
+                                    <div key={i}>
+                                        {/* Connector line */}
+                                        {i > 0 && (
+                                            <div className="flex justify-center py-1">
+                                                <div className={`w-px h-4 ${dragOverIndex === i ? "bg-[#D4AF37]" : "bg-border"}`} />
+                                            </div>
+                                        )}
+
+                                        {item.type === "send" ? (
+                                            <div
+                                                draggable
+                                                onDragStart={e => handleDragStart(e, i)}
+                                                onDragOver={e => handleDragOver(e, i)}
+                                                onDragLeave={handleDragLeave}
+                                                onDrop={e => handleDrop(e, i)}
+                                                onDragEnd={handleDragEnd}
+                                                className={`rounded-lg border p-3 bg-card transition-all ${dragIndex === i ? "opacity-40 border-dashed border-muted-foreground" :
+                                                    dragOverIndex === i ? "border-[#D4AF37] ring-1 ring-[#D4AF37]/30" :
+                                                        "border-border"
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground transition-colors mr-0.5">
+                                                            <GripVertical className="h-4 w-4" />
+                                                        </div>
+                                                        <div className="h-5 w-5 rounded bg-primary/10 flex items-center justify-center">
+                                                            <Mail className="h-3 w-3 text-primary" />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-muted-foreground">Step (Email)</span>
+                                                    </div>
+                                                    {timeline.length > 1 && (
+                                                        <button
+                                                            onClick={() => removeTimelineItem(i)}
+                                                            className="text-xs text-muted-foreground hover:text-red-400 flex items-center gap-0.5 transition-colors"
+                                                        >
+                                                            <X className="h-3 w-3" /> Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <Select
+                                                    value={item.template_key}
+                                                    onValueChange={val => updateTimelineItem(i, { template_key: val })}
+                                                >
+                                                    <SelectTrigger className="text-sm">
+                                                        <SelectValue placeholder="Select email template..." />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {campaigns.map(c => (
+                                                            <SelectItem key={c.id} value={c.id} className="text-sm">
+                                                                {c.name}
+                                                            </SelectItem>
+                                                        ))}
+                                                        {Object.keys(CHAIN_TEMPLATES).map(k => (
+                                                            <SelectItem key={k} value={k} className="text-xs font-mono">
+                                                                {k}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                draggable
+                                                onDragStart={e => handleDragStart(e, i)}
+                                                onDragOver={e => handleDragOver(e, i)}
+                                                onDragLeave={handleDragLeave}
+                                                onDrop={e => handleDrop(e, i)}
+                                                onDragEnd={handleDragEnd}
+                                                className={`rounded-lg border border-dashed p-3 transition-all ${dragIndex === i ? "opacity-40 border-muted-foreground" :
+                                                    dragOverIndex === i ? "border-[#D4AF37] ring-1 ring-[#D4AF37]/30 bg-amber-500/5" :
+                                                        "border-amber-500/30 bg-amber-500/5"
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div className="cursor-grab active:cursor-grabbing text-muted-foreground/50 hover:text-muted-foreground transition-colors mr-0.5">
+                                                            <GripVertical className="h-4 w-4" />
+                                                        </div>
+                                                        <div className="h-5 w-5 rounded bg-amber-500/10 flex items-center justify-center">
+                                                            <Clock className="h-3 w-3 text-amber-400" />
+                                                        </div>
+                                                        <span className="text-xs font-medium text-amber-400">Wait</span>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => removeTimelineItem(i)}
+                                                        className="text-xs text-muted-foreground hover:text-red-400 flex items-center gap-0.5 transition-colors"
+                                                    >
+                                                        <X className="h-3 w-3" /> Remove
+                                                    </button>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        min={1}
+                                                        value={item.duration}
+                                                        onChange={e => updateTimelineItem(i, { duration: parseInt(e.target.value) || 1 })}
+                                                        className="w-20 text-sm"
+                                                    />
+                                                    <Select
+                                                        value={item.unit}
+                                                        onValueChange={(val: WaitUnit) => updateTimelineItem(i, { unit: val })}
+                                                    >
+                                                        <SelectTrigger className="w-[100px] text-sm">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="minutes">minutes</SelectItem>
+                                                            <SelectItem value="hours">hours</SelectItem>
+                                                            <SelectItem value="days">days</SelectItem>
+                                                            <SelectItem value="weeks">weeks</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
                             </div>
+
+                            {timeline.length === 0 && (
+                                <p className="text-sm text-muted-foreground text-center py-4">
+                                    Add a step or wait to start building your chain.
+                                </p>
+                            )}
                         </div>
                     </div>
-
-                    {/* Steps */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-foreground">Steps</h3>
-                            <Button variant="ghost" size="sm" onClick={() => setSteps(prev => [...prev, emptyStep()])}>
-                                <Plus className="h-3.5 w-3.5 mr-1" /> Add Step
-                            </Button>
-                        </div>
-                        {steps.map((step, i) => (
-                            <div key={i} className="rounded-lg border border-border p-3 space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-medium text-muted-foreground">Step {i + 1}</span>
-                                    <button onClick={() => setSteps(prev => prev.filter((_, j) => j !== i))} className="text-xs text-muted-foreground hover:text-red-400 flex items-center gap-1 transition-colors">
-                                        <X className="h-3 w-3" />
-                                        Remove
-                                    </button>
+                ) : (
+                    /* ─── MASTER MODE (full form) ─── */
+                    <div className="space-y-6 py-4">
+                        {/* Chain Details */}
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-semibold text-foreground">Chain Details</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label htmlFor="chain-name">Name <span className="text-muted-foreground font-normal">(required)</span></Label>
+                                    <Input id="chain-name" value={name} onChange={e => handleNameChange(e.target.value)} placeholder="e.g., Welcome Sequence" />
                                 </div>
                                 <div className="space-y-2">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <Input value={step.label} onChange={e => updateStep(i, "label", e.target.value)} placeholder="Step label" className="text-xs" />
-                                        <Select
-                                            value={step.template_key}
-                                            onValueChange={val => updateStep(i, "template_key", val)}
-                                        >
-                                            <SelectTrigger className="text-xs">
-                                                <SelectValue placeholder="Select template..." />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {campaigns.map(c => (
-                                                    <SelectItem key={c.id} value={c.id} className="text-xs">
-                                                        {c.name}
-                                                    </SelectItem>
-                                                ))}
-                                                {/* Legacy hardcoded keys */}
-                                                {Object.keys(CHAIN_TEMPLATES).map(k => (
-                                                    <SelectItem key={k} value={k} className="text-xs font-mono">
-                                                        {k}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+                                    <Label htmlFor="chain-slug">Slug <span className="text-muted-foreground font-normal">(auto-generated)</span></Label>
+                                    <Input id="chain-slug" value={slug} onChange={e => setSlug(e.target.value)} placeholder="welcome-sequence-chain" className="font-mono text-xs" />
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="chain-desc">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                                <Input id="chain-desc" value={description} onChange={e => setDescription(e.target.value)} placeholder="What this chain does..." />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <Label>Trigger Event <span className="text-muted-foreground font-normal">(required)</span></Label>
+                                    <Select value={triggerEvent} onValueChange={setTriggerEvent}>
+                                        <SelectTrigger className="w-full font-mono text-xs">
+                                            <SelectValue placeholder="Select trigger event..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {TRIGGER_EVENT_OPTIONS.map(opt => (
+                                                <SelectItem key={opt.value} value={opt.value} className="font-mono text-xs">
+                                                    {opt.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Trigger Label <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                                    <Select value={triggerLabel} onValueChange={setTriggerLabel}>
+                                        <SelectTrigger className="w-full text-xs">
+                                            <SelectValue placeholder="Select trigger label..." />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {TRIGGER_LABEL_OPTIONS.map(opt => (
+                                                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                                                    {opt.label}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Steps */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-foreground">Steps</h3>
+                                <Button variant="ghost" size="sm" onClick={() => setSteps(prev => [...prev, emptyStep()])}>
+                                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Step
+                                </Button>
+                            </div>
+                            {steps.map((step, i) => (
+                                <div key={i} className="rounded-lg border border-border p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-medium text-muted-foreground">Step {i + 1}</span>
+                                        <button onClick={() => setSteps(prev => prev.filter((_, j) => j !== i))} className="text-xs text-muted-foreground hover:text-red-400 flex items-center gap-1 transition-colors">
+                                            <X className="h-3 w-3" />
+                                            Remove
+                                        </button>
                                     </div>
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">Wait</span>
+                                    <div className="space-y-2">
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <Input value={step.label} onChange={e => updateStep(i, "label", e.target.value)} placeholder="Step label" className="text-xs" />
+                                            <Select
+                                                value={step.template_key}
+                                                onValueChange={val => updateStep(i, "template_key", val)}
+                                            >
+                                                <SelectTrigger className="text-xs">
+                                                    <SelectValue placeholder="Select template..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {campaigns.map(c => (
+                                                        <SelectItem key={c.id} value={c.id} className="text-xs">
+                                                            {c.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                    {Object.keys(CHAIN_TEMPLATES).map(k => (
+                                                        <SelectItem key={k} value={k} className="text-xs font-mono">
+                                                            {k}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs text-muted-foreground whitespace-nowrap">Wait</span>
+                                            <Input
+                                                type="number"
+                                                min={0}
+                                                value={parseInt(step.wait_after) || ""}
+                                                onChange={e => {
+                                                    const num = e.target.value
+                                                    const unit = step.wait_after.replace(/^\d+\s*/, "") || "days"
+                                                    updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
+                                                }}
+                                                placeholder="0"
+                                                className="text-xs w-16"
+                                            />
+                                            <Select
+                                                value={step.wait_after.replace(/^\d+\s*/, "").replace(/\s*\(.*\)/, "") || "days"}
+                                                onValueChange={unit => {
+                                                    const num = parseInt(step.wait_after) || 0
+                                                    updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[90px] text-xs">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="minutes" className="text-xs">minutes</SelectItem>
+                                                    <SelectItem value="hours" className="text-xs">hours</SelectItem>
+                                                    <SelectItem value="days" className="text-xs">days</SelectItem>
+                                                    <SelectItem value="weeks" className="text-xs">weeks</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Branches */}
+                        <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-foreground">Branches <span className="font-normal text-muted-foreground">(optional)</span></h3>
+                                <Button variant="ghost" size="sm" onClick={() => setBranches(prev => [...prev, emptyBranch()])}>
+                                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Branch
+                                </Button>
+                            </div>
+                            {branches.length > 0 && (
+                                <div className="space-y-2">
+                                    <div className="space-y-2">
+                                        <Label className="text-xs">Branch Description</Label>
                                         <Input
-                                            type="number"
-                                            min={0}
-                                            value={parseInt(step.wait_after) || ""}
+                                            value={branches[0]?.description || ""}
                                             onChange={e => {
-                                                const num = e.target.value
-                                                const unit = step.wait_after.replace(/^\d+\s*/, "") || "days"
-                                                updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
+                                                const desc = e.target.value
+                                                setBranches(prev => prev.map(b => ({ ...b, description: desc })))
                                             }}
-                                            placeholder="0"
-                                            className="text-xs w-16"
+                                            placeholder="After N emails, checks engagement..."
+                                            className="text-xs"
                                         />
-                                        <Select
-                                            value={step.wait_after.replace(/^\d+\s*/, "").replace(/\s*\(.*\)/, "") || "days"}
-                                            onValueChange={unit => {
-                                                const num = parseInt(step.wait_after) || 0
-                                                updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
-                                            }}
-                                        >
-                                            <SelectTrigger className="w-[90px] text-xs">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="hours" className="text-xs">hours</SelectItem>
-                                                <SelectItem value="days" className="text-xs">days</SelectItem>
-                                                <SelectItem value="weeks" className="text-xs">weeks</SelectItem>
-                                            </SelectContent>
-                                        </Select>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Branches */}
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h3 className="text-sm font-semibold text-foreground">Branches <span className="font-normal text-muted-foreground">(optional)</span></h3>
-                            <Button variant="ghost" size="sm" onClick={() => setBranches(prev => [...prev, emptyBranch()])}>
-                                <Plus className="h-3.5 w-3.5 mr-1" /> Add Branch
-                            </Button>
+                            )}
+                            {branches.map((branch, i) => (
+                                <div key={i} className="rounded-lg border border-border p-3 space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-xs font-medium text-muted-foreground">Branch {i + 1}</span>
+                                        <button onClick={() => setBranches(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-red-400">
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <Input value={branch.label} onChange={e => updateBranch(i, "label", e.target.value)} placeholder="Label" className="text-xs" />
+                                        <Input value={branch.condition} onChange={e => updateBranch(i, "condition", e.target.value)} placeholder="Condition" className="text-xs" />
+                                        <Input value={branch.action} onChange={e => updateBranch(i, "action", e.target.value)} placeholder="Action" className="text-xs" />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        {branches.length > 0 && (
-                            <div className="space-y-2">
-                                <div className="space-y-2">
-                                    <Label className="text-xs">Branch Description</Label>
-                                    <Input
-                                        value={branches[0]?.description || ""}
-                                        onChange={e => {
-                                            const desc = e.target.value
-                                            setBranches(prev => prev.map(b => ({ ...b, description: desc })))
-                                        }}
-                                        placeholder="After N emails, checks engagement..."
-                                        className="text-xs"
-                                    />
-                                </div>
-                            </div>
-                        )}
-                        {branches.map((branch, i) => (
-                            <div key={i} className="rounded-lg border border-border p-3 space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-xs font-medium text-muted-foreground">Branch {i + 1}</span>
-                                    <button onClick={() => setBranches(prev => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-red-400">
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <Input value={branch.label} onChange={e => updateBranch(i, "label", e.target.value)} placeholder="Label" className="text-xs" />
-                                    <Input value={branch.condition} onChange={e => updateBranch(i, "condition", e.target.value)} placeholder="Condition" className="text-xs" />
-                                    <Input value={branch.action} onChange={e => updateBranch(i, "action", e.target.value)} placeholder="Action" className="text-xs" />
-                                </div>
-                            </div>
-                        ))}
                     </div>
-                </div>
+                )}
 
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-                    <Button onClick={handleSubmit} disabled={!name.trim() || !triggerEvent.trim() || loading}>
-                        {loading ? "Saving..." : editingChain ? "Save Changes" : "Create Chain"}
-                    </Button>
+                    {isDraftMode ? (
+                        <Button onClick={handleSubmit} disabled={!draftHasValidStep || loading}>
+                            {loading ? "Saving..." : isEditingDraft ? "Save Changes" : "Create Draft Chain"}
+                        </Button>
+                    ) : (
+                        <Button onClick={handleSubmit} disabled={!name.trim() || !triggerEvent.trim() || loading}>
+                            {loading ? "Saving..." : editingChain ? "Save Changes" : "Create Chain"}
+                        </Button>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -709,8 +1038,8 @@ function ChainProcessCard({
                     <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
                             className={`h-full rounded-full transition-all ${process.status === "completed" ? "bg-blue-500" :
-                                    process.status === "cancelled" ? "bg-red-500" :
-                                        process.status === "paused" ? "bg-amber-500" : "bg-emerald-500"
+                                process.status === "cancelled" ? "bg-red-500" :
+                                    process.status === "paused" ? "bg-amber-500" : "bg-emerald-500"
                                 }`}
                             style={{ width: `${progress}%` }}
                         />
@@ -793,9 +1122,15 @@ export default function ChainsPage() {
     const [editingChain, setEditingChain] = useState<ChainRow | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<ChainRow | null>(null)
     const [deleting, setDeleting] = useState(false)
-    const [activeTab, setActiveTab] = useState<"templates" | "running">("templates")
+    const [activeTab, setActiveTab] = useState<"journeys" | "templates" | "running" | "drafts">("journeys")
     const [processes, setProcesses] = useState<ChainProcess[]>([])
     const [loadingProcesses, setLoadingProcesses] = useState(false)
+    // Draft chains state
+    const [draftChains, setDraftChains] = useState<ChainRow[]>([])
+    const [loadingDrafts, setLoadingDrafts] = useState(false)
+    // Subscriber context for creating draft chains
+    const [draftSubscriberId, setDraftSubscriberId] = useState<string | null>(null)
+    const [draftSubscriberName, setDraftSubscriberName] = useState<string>("")
     const { toast } = useToast()
 
     const fetchChains = useCallback(async () => {
@@ -825,22 +1160,35 @@ export default function ChainsPage() {
     }, [activeTab, fetchProcesses])
 
     const handleSave = async (formData: ChainFormData, chainId?: string) => {
+        // Inject subscriber_id if creating a draft chain from subscriber context
+        const saveData = { ...formData }
+        if (!chainId && draftSubscriberId) {
+            saveData.subscriber_id = draftSubscriberId
+        }
+
         if (chainId) {
-            const { error } = await updateChain(chainId, formData)
+            const { error } = await updateChain(chainId, saveData)
             if (error) {
                 toast({ title: "Error updating chain", description: error, variant: "destructive" })
                 return
             }
             toast({ title: "Chain updated", description: `"${formData.name}" has been updated.` })
         } else {
-            const { error } = await createChain(formData)
+            const { error } = await createChain(saveData)
             if (error) {
                 toast({ title: "Error creating chain", description: error, variant: "destructive" })
                 return
             }
-            toast({ title: "Chain created", description: `"${formData.name}" has been created.` })
+            if (draftSubscriberId) {
+                toast({ title: "Draft chain created", description: `"${formData.name}" created for ${draftSubscriberName}. Find it in the Drafts tab.` })
+            } else {
+                toast({ title: "Chain created", description: `"${formData.name}" has been created.` })
+            }
         }
+        setDraftSubscriberId(null)
+        setDraftSubscriberName("")
         fetchChains()
+        if (activeTab === "drafts") fetchDrafts()
     }
 
     const handleDelete = async () => {
@@ -871,13 +1219,33 @@ export default function ChainsPage() {
     const activeProcesses = processes.filter(p => p.status === "active" || p.status === "paused")
     const completedProcesses = processes.filter(p => p.status === "completed" || p.status === "cancelled")
 
+    // Fetch draft chains
+    const fetchDrafts = useCallback(async () => {
+        setLoadingDrafts(true)
+        const { data } = await getDraftChains()
+        setDraftChains(data || [])
+        setLoadingDrafts(false)
+    }, [])
+
+    useEffect(() => {
+        if (activeTab === "drafts") fetchDrafts()
+    }, [activeTab, fetchDrafts])
+
+    // Callback for "Start New Chain" from Customer Journeys tab
+    const handleStartNewChain = (subscriberId: string, subscriberName: string) => {
+        setDraftSubscriberId(subscriberId)
+        setDraftSubscriberName(subscriberName)
+        setEditingChain(null)
+        setFormOpen(true)
+    }
+
     return (
         <div className="p-6 max-w-4xl mx-auto space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Email Chains</h1>
+                    <h1 className="text-2xl font-bold tracking-tight">Journeys</h1>
                     <p className="text-muted-foreground">
-                        Automated email sequences powered by Inngest. Each chain runs independently with built-in unsubscribe safety checks.
+                        Design email chains from real customer context. Browse subscribers, see their history, and build journeys that fit.
                     </p>
                 </div>
                 {activeTab === "templates" && (
@@ -891,11 +1259,21 @@ export default function ChainsPage() {
             {/* Tab Bar */}
             <div className="flex gap-1 border-b border-border">
                 <button
+                    onClick={() => setActiveTab("journeys")}
+                    className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "journeys" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                >
+                    Customer Journeys
+                    {activeTab === "journeys" && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37]" />
+                    )}
+                </button>
+                <button
                     onClick={() => setActiveTab("templates")}
                     className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "templates" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                         }`}
                 >
-                    Chain Templates
+                    Master Chains
                     {chains.length > 0 && (
                         <span className="ml-2 text-xs text-muted-foreground">({chains.length})</span>
                     )}
@@ -908,7 +1286,7 @@ export default function ChainsPage() {
                     className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "running" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                         }`}
                 >
-                    Currently Running
+                    Running
                     {activeProcesses.length > 0 && (
                         <span className="ml-2 text-xs text-emerald-400">({activeProcesses.length})</span>
                     )}
@@ -916,9 +1294,25 @@ export default function ChainsPage() {
                         <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37]" />
                     )}
                 </button>
+                <button
+                    onClick={() => setActiveTab("drafts")}
+                    className={`px-4 py-2.5 text-sm font-medium transition-colors relative ${activeTab === "drafts" ? "text-foreground" : "text-muted-foreground hover:text-foreground"
+                        }`}
+                >
+                    Drafts
+                    {draftChains.length > 0 && (
+                        <span className="ml-2 text-xs text-muted-foreground">({draftChains.length})</span>
+                    )}
+                    {activeTab === "drafts" && (
+                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#D4AF37]" />
+                    )}
+                </button>
             </div>
 
-            {/* TEMPLATES TAB */}
+            {/* CUSTOMER JOURNEYS TAB */}
+            {activeTab === "journeys" && <CustomerJourneysTab onStartNewChain={handleStartNewChain} />}
+
+            {/* MASTER CHAINS TAB */}
             {activeTab === "templates" && (
                 <div className="space-y-4">
                     {loading ? (
@@ -979,12 +1373,78 @@ export default function ChainsPage() {
                 </div>
             )}
 
+            {/* DRAFTS TAB */}
+            {activeTab === "drafts" && (
+                <div className="space-y-4">
+                    {loadingDrafts ? (
+                        <div className="flex justify-center py-12">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : draftChains.length === 0 ? (
+                        <div className="text-center py-12">
+                            <GitBranch className="h-12 w-12 mx-auto text-muted-foreground/30 mb-4" />
+                            <p className="text-muted-foreground">No draft chains yet.</p>
+                            <p className="text-xs text-muted-foreground mt-1">Go to Customer Journeys, click a subscriber, and hit &quot;Start New Chain&quot; to create one.</p>
+                        </div>
+                    ) : (
+                        draftChains.map(chain => {
+                            const sub = chain.subscribers as any
+                            const subName = sub?.first_name
+                                ? `${sub.first_name} ${sub.last_name || ""}`.trim()
+                                : sub?.email || "Unknown"
+                            return (
+                                <Card key={chain.id} className="border-border">
+                                    <CardHeader className="pb-2">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <CardTitle className="text-base">{chain.name}</CardTitle>
+                                                <CardDescription className="flex items-center gap-1.5 mt-1">
+                                                    <User className="h-3 w-3" />
+                                                    Draft for {subName}
+                                                </CardDescription>
+                                            </div>
+                                            <div className="flex gap-1">
+                                                <Button variant="ghost" size="icon" onClick={() => { setEditingChain(chain); setFormOpen(true) }}>
+                                                    <Pencil className="h-4 w-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" onClick={() => setDeleteTarget(chain)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="pt-0">
+                                        <div className="flex flex-wrap gap-2">
+                                            {chain.chain_steps.map((step, i) => (
+                                                <Badge key={i} variant="secondary" className="text-xs">
+                                                    {i + 1}. {step.label}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                        {chain.description && (
+                                            <p className="text-xs text-muted-foreground mt-2">{chain.description}</p>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            )
+                        })
+                    )}
+                </div>
+            )}
+
             {/* Create/Edit Dialog */}
             <ChainFormDialog
                 open={formOpen}
-                onOpenChange={setFormOpen}
+                onOpenChange={(open) => {
+                    setFormOpen(open)
+                    if (!open) {
+                        setDraftSubscriberId(null)
+                        setDraftSubscriberName("")
+                    }
+                }}
                 editingChain={editingChain}
                 onSave={handleSave}
+                subscriberName={draftSubscriberName || undefined}
             />
 
             {/* Delete Confirmation */}
