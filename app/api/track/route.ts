@@ -8,11 +8,17 @@ const supabase = createClient(
 );
 
 // 1. Smart CORS (Allow your website to talk to this API)
-const allowedOrigins = ["https://dreamplaypianos.com", "https://www.dreamplaypianos.com"];
+const allowedOrigins = [
+    "https://dreamplaypianos.com",
+    "https://www.dreamplaypianos.com",
+    "http://localhost:3000",
+    "http://localhost:3002",
+];
 
 function getCorsHeaders(request: Request) {
     const origin = request.headers.get("origin") || "";
-    const allow = allowedOrigins.includes(origin) ? origin : allowedOrigins[0];
+    const isAllowed = allowedOrigins.includes(origin) || origin.endsWith(".vercel.app") || origin.includes("localhost");
+    const allow = isAllowed ? origin : allowedOrigins[0];
     return {
         "Access-Control-Allow-Origin": allow,
         "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -31,6 +37,10 @@ export async function POST(request: Request) {
         // 2. Validate — need at least subscriber_id or temp_session_id
         if (!subscriber_id && !temp_session_id) return NextResponse.json({ error: "No ID" }, { status: 400 });
 
+        // Extract IP from request headers (server-side, reliable)
+        const forwarded = request.headers.get("x-forwarded-for");
+        const serverIP = forwarded ? forwarded.split(",")[0].trim() : request.headers.get("x-real-ip") || ip || null;
+
         // 3. Log the Event
         const metadata: Record<string, any> = {};
         if (duration) metadata.duration_seconds = duration;
@@ -41,7 +51,7 @@ export async function POST(request: Request) {
             campaign_id,
             type,
             url,
-            ip_address: ip,
+            ip_address: serverIP,
             metadata: Object.keys(metadata).length > 0 ? metadata : {},
         });
 
