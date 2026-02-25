@@ -90,6 +90,7 @@ export const genericChainRunner = inngest.createFunction(
                 ...chainData,
                 steps: steps || [],
                 branches: branches || [],
+                _codeVersion: "d824c47-debug-v2",
             };
         });
 
