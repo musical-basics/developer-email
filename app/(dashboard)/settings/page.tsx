@@ -25,6 +25,7 @@ const LINK_LABELS: Record<keyof DefaultLinks, string> = {
     about_url: "About Page",
     shipping_url: "Shipping Info",
     main_cta_url: "Main CTA URL",
+    main_activate_url: "Activate URL ($30 Off)",
     crowdfunding_cta_url: "Crowdfunding CTA",
     homepage_url: "Homepage URL",
 }
@@ -38,11 +39,11 @@ export default function SettingsPage() {
     // ─── Links State ────────────────────────────────
     const [linksMB, setLinksMB] = useState<DefaultLinks>({
         unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
-        shipping_url: "", main_cta_url: "", crowdfunding_cta_url: "", homepage_url: ""
+        shipping_url: "", main_cta_url: "", main_activate_url: "", crowdfunding_cta_url: "", homepage_url: ""
     })
     const [linksDP, setLinksDP] = useState<DefaultLinks>({
         unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
-        shipping_url: "", main_cta_url: "", crowdfunding_cta_url: "", homepage_url: ""
+        shipping_url: "", main_cta_url: "", main_activate_url: "", crowdfunding_cta_url: "", homepage_url: ""
     })
 
     const [loading, setLoading] = useState(true)

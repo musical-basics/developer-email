@@ -389,15 +389,15 @@ export function ModularEmailEditor({
                                     if (!res.success) {
                                         toast({ title: "Error", description: res.error, variant: "destructive" });
                                     } else if (res.code) {
-                                        const baseCta = assets.main_cta_url || "https://dreamplaypianos.com/customize";
-                                        const sep = baseCta.includes("?") ? "&" : "?";
-                                        const finalCta = baseCta.includes("discount=")
-                                            ? baseCta.replace(/discount=[^&]+/, `discount=${res.code}`)
-                                            : `${baseCta}${sep}discount=${res.code}`;
+                                        const baseActivate = assets.main_activate_url || "https://www.dreamplaypianos.com/activate";
+                                        const sep = baseActivate.includes("?") ? "&" : "?";
+                                        const finalActivate = baseActivate.includes("discount=")
+                                            ? baseActivate.replace(/discount=[^&]+/, `discount=${res.code}`)
+                                            : `${baseActivate}${sep}discount=${res.code}`;
                                         onAssetsChange({
                                             ...assets,
                                             discount_code: res.code,
-                                            main_cta_url: finalCta
+                                            main_activate_url: finalActivate
                                         });
                                         toast({ title: "Discount Created!", description: `${res.code} — $30 off, valid 14 days.` });
                                     }

@@ -15,6 +15,7 @@ export interface DefaultLinks {
     about_url: string
     shipping_url: string
     main_cta_url: string
+    main_activate_url: string
     crowdfunding_cta_url: string
     homepage_url: string
 }
@@ -26,6 +27,7 @@ const DEFAULT_LINKS_EMPTY: DefaultLinks = {
     about_url: "",
     shipping_url: "",
     main_cta_url: "",
+    main_activate_url: "",
     crowdfunding_cta_url: "",
     homepage_url: "",
 }
