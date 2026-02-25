@@ -50,7 +50,7 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
         },
     })
 
-    revalidatePath("/chains")
+    revalidatePath("/journeys")
     return { success: true, processId: process.id }
 }
 
@@ -133,6 +133,6 @@ export async function updateProcessStatus(processId: string, newStatus: "active"
         await inngest.send({ name: "chain.resume", data: { processId } })
     }
 
-    revalidatePath("/chains")
+    revalidatePath("/journeys")
     return { success: true }
 }

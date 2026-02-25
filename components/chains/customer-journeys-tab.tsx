@@ -383,7 +383,7 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
                                                     {journeyDetail.campaigns.length === 0 ? (
                                                         <p className="text-sm text-muted-foreground py-3 text-center">No emails sent yet.</p>
                                                     ) : (
-                                                        <div className="ml-2 border-l-2 border-muted pl-4 space-y-3">
+                                                        <div className="ml-2 border-l-2 border-muted pl-4 space-y-3 max-h-[420px] overflow-y-auto pr-1">
                                                             {journeyDetail.campaigns.map(campaign => (
                                                                 <div key={campaign.campaign_id + campaign.sent_at} className="relative">
                                                                     <div className={`absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full border-2 ${campaign.was_clicked

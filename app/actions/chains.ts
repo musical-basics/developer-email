@@ -175,7 +175,7 @@ export async function createChain(formData: ChainFormData): Promise<{ data: { id
         if (branchError) return { data: null, error: branchError.message }
     }
 
-    revalidatePath("/chains")
+    revalidatePath("/journeys")
     return { data: { id: chain.id }, error: null }
 }
 
@@ -231,7 +231,7 @@ export async function updateChain(chainId: string, formData: ChainFormData): Pro
         if (branchError) return { error: branchError.message }
     }
 
-    revalidatePath("/chains")
+    revalidatePath("/journeys")
     return { error: null }
 }
 
@@ -246,6 +246,6 @@ export async function deleteChain(chainId: string): Promise<{ error: string | nu
 
     if (error) return { error: error.message }
 
-    revalidatePath("/chains")
+    revalidatePath("/journeys")
     return { error: null }
 }

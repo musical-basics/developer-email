@@ -18,7 +18,7 @@ const navItems = [
     { name: "Assets Library", href: "/assets", icon: ImageIcon },
     { name: "Tags", href: "/tags", icon: Tag },
     { name: "Analytics", href: "/analytics", icon: BarChart3 },
-    { name: "Journeys", href: "/chains", icon: Route },
+    { name: "Journeys", href: "/journeys", icon: Route },
     { name: "Discounts", href: "/discounts", icon: TicketPercent },
 ]
 
