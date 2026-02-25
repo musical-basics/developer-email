@@ -655,7 +655,10 @@ export default function AudienceManagerPage() {
         reader.readAsText(file)
     }
 
-    // CSV Import - process and insert
+    // CSV Import - smart merge upsert
+    // - New emails: inserted with defaults
+    // - Existing emails: only non-blank CSV fields overwrite; blank cells preserve existing data
+    // - Tags: merged additively (CSV tags are added to existing tags)
     const handleCsvImport = async () => {
         if (!csvFile) return
         setCsvImporting(true)
@@ -711,36 +714,117 @@ export default function AudienceManagerPage() {
 
             const rows = lines.slice(1).map(parseLine).filter(row => row[emailIdx]?.includes("@"))
 
-            const subscribers = rows.map(row => ({
-                email: row[emailIdx].toLowerCase().trim(),
-                first_name: row[idxMap["first_name"]] || "",
-                last_name: row[idxMap["last_name"]] || "",
-                country: row[idxMap["country"]] || "",
-                country_code: row[idxMap["country_code"]] || "",
-                phone_code: row[idxMap["phone_code"]] || "",
-                phone_number: row[idxMap["phone_number"]] || "",
-                shipping_address1: row[idxMap["shipping_address1"]] || "",
-                shipping_address2: row[idxMap["shipping_address2"]] || "",
-                shipping_city: row[idxMap["shipping_city"]] || "",
-                shipping_zip: (row[idxMap["shipping_zip"]] || "").replace(/'/g, ""),
-                shipping_province: row[idxMap["shipping_province"]] || "",
-                tags: (row[idxMap["tags"]] || "").trim() ? (row[idxMap["tags"]]).split(/[;,]+/).map((t: string) => t.trim()).filter(Boolean) : [],
-                status: (["active", "inactive", "unsubscribed", "bounced"].includes((row[idxMap["status"]] || "").toLowerCase()) ? (row[idxMap["status"]]).toLowerCase() : "active") as "active" | "inactive" | "unsubscribed" | "bounced",
-            }))
+            // Build raw parsed rows (keep blanks as empty strings so we know what to skip)
+            const mergeFields = ["first_name", "last_name", "country", "country_code", "phone_code", "phone_number", "shipping_address1", "shipping_address2", "shipping_city", "shipping_zip", "shipping_province"] as const
+            type MergeField = typeof mergeFields[number]
 
-            let added = 0
-            for (let i = 0; i < subscribers.length; i += 500) {
-                const chunk = subscribers.slice(i, i + 500)
-                const { error } = await supabase.from("subscribers").upsert(chunk, { onConflict: "email", ignoreDuplicates: true })
+            const csvRows = rows.map(row => {
+                const rawTags = (row[idxMap["tags"]] || "").trim()
+                const rawStatus = (row[idxMap["status"]] || "").trim().toLowerCase()
+                const parsed: Record<string, string | string[]> = {
+                    email: row[emailIdx].toLowerCase().trim(),
+                }
+                for (const f of mergeFields) {
+                    const val = idxMap[f] !== undefined ? (row[idxMap[f]] || "").trim() : ""
+                    parsed[f] = f === "shipping_zip" ? val.replace(/'/g, "") : val
+                }
+                parsed._tags = rawTags ? rawTags.split(/[;,]+/).map((t: string) => t.trim()).filter(Boolean) : []
+                parsed._status = (["active", "inactive", "unsubscribed", "bounced"].includes(rawStatus) ? rawStatus : "")
+                return parsed
+            })
+
+            // Gather all emails to look up existing records
+            const allEmails = csvRows.map(r => r.email as string)
+
+            // Fetch existing subscribers in batches of 500
+            const existingMap = new Map<string, any>()
+            for (let i = 0; i < allEmails.length; i += 500) {
+                const batch = allEmails.slice(i, i + 500)
+                const { data } = await supabase
+                    .from("subscribers")
+                    .select("*")
+                    .in("email", batch)
+                if (data) {
+                    for (const row of data) {
+                        existingMap.set(row.email, row)
+                    }
+                }
+            }
+
+            const toInsert: any[] = []
+            const toUpdate: { id: string; payload: any }[] = []
+
+            for (const csvRow of csvRows) {
+                const email = csvRow.email as string
+                const existing = existingMap.get(email)
+                const csvTags = csvRow._tags as string[]
+                const csvStatus = csvRow._status as string
+
+                if (existing) {
+                    // Merge: only overwrite fields where CSV has a non-blank value
+                    const updates: Record<string, any> = {}
+                    for (const f of mergeFields) {
+                        const csvVal = csvRow[f] as string
+                        if (csvVal) {
+                            updates[f] = csvVal
+                        }
+                    }
+                    // Merge tags additively
+                    if (csvTags.length > 0) {
+                        const existingTags: string[] = existing.tags || []
+                        updates.tags = [...new Set([...existingTags, ...csvTags])]
+                    }
+                    // Only overwrite status if CSV specifies a valid one
+                    if (csvStatus) {
+                        updates.status = csvStatus
+                    }
+                    if (Object.keys(updates).length > 0) {
+                        toUpdate.push({ id: existing.id, payload: updates })
+                    }
+                } else {
+                    // New subscriber: insert with defaults for blank fields
+                    const newSub: Record<string, any> = { email }
+                    for (const f of mergeFields) {
+                        newSub[f] = (csvRow[f] as string) || ""
+                    }
+                    newSub.tags = csvTags
+                    newSub.status = csvStatus || "active"
+                    toInsert.push(newSub)
+                }
+            }
+
+            let addedCount = 0
+            let updatedCount = 0
+
+            // Insert new subscribers in batches
+            for (let i = 0; i < toInsert.length; i += 500) {
+                const chunk = toInsert.slice(i, i + 500)
+                const { error } = await supabase.from("subscribers").insert(chunk)
                 if (error) {
-                    toast({ title: "Error importing CSV", description: error.message, variant: "destructive" })
+                    toast({ title: "Error inserting new subscribers", description: error.message, variant: "destructive" })
                     setCsvImporting(false)
                     return
                 }
-                added += chunk.length
+                addedCount += chunk.length
             }
 
-            toast({ title: `${added} subscribers imported`, description: "Duplicates were skipped." })
+            // Update existing subscribers one-by-one (each may have different fields)
+            for (const { id, payload } of toUpdate) {
+                const { error } = await supabase.from("subscribers").update(payload).eq("id", id)
+                if (error) {
+                    console.error(`Failed to update subscriber ${id}:`, error.message)
+                } else {
+                    updatedCount++
+                }
+            }
+
+            const parts: string[] = []
+            if (addedCount > 0) parts.push(`${addedCount} added`)
+            if (updatedCount > 0) parts.push(`${updatedCount} updated`)
+            const skipped = csvRows.length - addedCount - updatedCount
+            if (skipped > 0) parts.push(`${skipped} unchanged`)
+
+            toast({ title: `Import complete`, description: parts.join(", ") + "." })
             setIsCsvImportOpen(false)
             setCsvFile(null)
             setCsvPreview([])
