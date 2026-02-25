@@ -14,7 +14,7 @@ import {
     AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import {
-    Search, Mail, Eye, MousePointer2, GitBranch, Tag,
+    Search, Mail, Eye, MousePointer2, GitBranch, Tag, FlaskConical,
     CalendarDays, ExternalLink, ChevronDown, ChevronUp, Loader2,
     PlayCircle, Pause, CheckCircle2, XCircle, Route, MailPlus, AlertTriangle,
 } from "lucide-react"
@@ -77,6 +77,7 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
     const [loading, setLoading] = useState(true)
     const [search, setSearch] = useState("")
     const [statusFilter, setStatusFilter] = useState<string>("all")
+    const [testAccountFilter, setTestAccountFilter] = useState(false)
 
     // Inline expansion state
     const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -159,7 +160,8 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
             (sub.first_name || "").toLowerCase().includes(search.toLowerCase()) ||
             (sub.last_name || "").toLowerCase().includes(search.toLowerCase())
         const matchesStatus = statusFilter === "all" || sub.status === statusFilter
-        return matchesSearch && matchesStatus
+        const matchesTestAccount = !testAccountFilter || (sub.tags && sub.tags.some(t => t.toLowerCase() === "test account"))
+        return matchesSearch && matchesStatus && matchesTestAccount
     })
 
     return (
@@ -175,6 +177,18 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
                         className="pl-9"
                     />
                 </div>
+                <Button
+                    variant={testAccountFilter ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setTestAccountFilter(prev => !prev)}
+                    className={`gap-1.5 h-9 px-3 text-xs font-medium transition-colors ${testAccountFilter
+                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                >
+                    <FlaskConical className="h-3.5 w-3.5" />
+                    Test Accounts
+                </Button>
                 <Select value={statusFilter} onValueChange={setStatusFilter}>
                     <SelectTrigger className="w-[140px]">
                         <SelectValue />
