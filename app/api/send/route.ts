@@ -211,7 +211,7 @@ export async function POST(request: Request) {
                         personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                             if (url.includes('/unsubscribe')) return match;
                             const sep = url.includes('?') ? '&' : '?';
-                            return `href=${quote}${url}${sep}sid=${sub.id}&em=${encodeURIComponent(sub.email)}${quote}`;
+                            return `href=${quote}${url}${sep}sid=${sub.id}&cid=${trackingCampaignId}&em=${encodeURIComponent(sub.email)}${quote}`;
                         });
                     }
 
