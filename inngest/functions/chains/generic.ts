@@ -199,6 +199,19 @@ export const genericChainRunner = inngest.createFunction(
             }
 
             // ─── WAIT PERIOD ───────────────────────────
+            // Debug: log wait_after value as an Inngest step so it appears in trace
+            const waitDebug = await step.run(`debug-wait-${i}`, async () => {
+                return {
+                    wait_after: stepDef.wait_after,
+                    wait_after_type: typeof stepDef.wait_after,
+                    wait_after_truthy: !!stepDef.wait_after,
+                    index: i,
+                    totalSteps: chain.steps.length,
+                    shouldWait: !!(stepDef.wait_after && i < chain.steps.length - 1),
+                    stepKeys: Object.keys(stepDef),
+                };
+            });
+
             if (stepDef.wait_after && i < chain.steps.length - 1) {
                 const { inngestDuration, ms } = parseWaitDuration(stepDef.wait_after);
                 const nextStepAt = new Date(Date.now() + ms);
