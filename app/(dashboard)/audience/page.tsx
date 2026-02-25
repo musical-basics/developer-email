@@ -25,6 +25,7 @@ import {
     FileUp,
     UsersRound,
     Tag,
+    FlaskConical,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -114,6 +115,7 @@ export default function AudienceManagerPage() {
     const [loading, setLoading] = useState(true)
     const [lastSentSubjects, setLastSentSubjects] = useState<Record<string, { subject: string; sentAt: string }>>({})
     const [searchQuery, setSearchQuery] = useState("")
+    const [showTestOnly, setShowTestOnly] = useState(false)
     const [selectedTags, setSelectedTags] = useState<string[]>([])
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [isDrawerOpen, setIsDrawerOpen] = useState(false)
@@ -251,9 +253,11 @@ export default function AudienceManagerPage() {
             const subscriberTags = subscriber.tags || []
             const matchesTags = selectedTags.length === 0 || selectedTags.some((tag) => subscriberTags.includes(tag))
 
-            return matchesSearch && matchesTags
+            const matchesTest = !showTestOnly || subscriberTags.includes("Test Account")
+
+            return matchesSearch && matchesTags && matchesTest
         })
-    }, [subscribers, searchQuery, selectedTags])
+    }, [subscribers, searchQuery, selectedTags, showTestOnly])
 
     // Build tagColors lookup from tag_definitions DB (hex colors)
     const tagColors = useMemo(() => {
@@ -903,6 +907,20 @@ export default function AudienceManagerPage() {
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
+
+                    <Button
+                        variant={showTestOnly ? "default" : "outline"}
+                        className={cn(
+                            "gap-2 border-border",
+                            showTestOnly
+                                ? "bg-amber-500 text-zinc-900 hover:bg-amber-400"
+                                : "bg-transparent"
+                        )}
+                        onClick={() => setShowTestOnly(!showTestOnly)}
+                    >
+                        <FlaskConical className="h-4 w-4" />
+                        Test Accounts
+                    </Button>
 
                     <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
 
