@@ -191,27 +191,20 @@ export const genericChainRunner = inngest.createFunction(
             // ─── LOG TO DB ─────────────────────────────
             if (processId) {
                 await step.run(`log-sent-${i}`, async () => {
-                    await appendHistory(stepDef.label, "Email Sent", `Campaign: ${sendResult?.campaignId || "N/A"}`);
+                    await appendHistory(stepDef.label, "Email Sent", `Campaign: ${sendResult?.campaignId || "N/A"}, wait_after: ${stepDef.wait_after || "NONE"}`);
                     await supabase.from("chain_processes").update({
                         current_step_index: i + 1,
                         updated_at: new Date().toISOString(),
                     }).eq("id", processId);
+                    return {
+                        _debug_wait_after: stepDef.wait_after,
+                        _debug_index: i,
+                        _debug_totalSteps: chain.steps.length,
+                        _debug_shouldWait: !!(stepDef.wait_after && i < chain.steps.length - 1),
+                    };
                 });
             }
 
-            // ─── WAIT PERIOD ───────────────────────────
-            // Debug: log wait_after value as an Inngest step so it appears in trace
-            const waitDebug = await step.run(`debug-wait-${i}`, async () => {
-                return {
-                    wait_after: stepDef.wait_after,
-                    wait_after_type: typeof stepDef.wait_after,
-                    wait_after_truthy: !!stepDef.wait_after,
-                    index: i,
-                    totalSteps: chain.steps.length,
-                    shouldWait: !!(stepDef.wait_after && i < chain.steps.length - 1),
-                    stepKeys: Object.keys(stepDef),
-                };
-            });
 
             if (stepDef.wait_after && i < chain.steps.length - 1) {
                 const { inngestDuration, ms } = parseWaitDuration(stepDef.wait_after);
@@ -220,7 +213,7 @@ export const genericChainRunner = inngest.createFunction(
                 // Save exact wake-up time to DB so the UI can show countdown
                 if (processId) {
                     await step.run(`set-next-step-at-${i}`, async () => {
-                        await appendHistory(stepDef.label, "Waiting", `Next step at ${nextStepAt.toISOString()} (${stepDef.wait_after})`);
+                        await appendHistory(stepDef.label, "Waiting", `Sleep: ${inngestDuration}, next at ${nextStepAt.toISOString()} (${stepDef.wait_after})`);
                         await supabase.from("chain_processes").update({
                             next_step_at: nextStepAt.toISOString(),
                             updated_at: new Date().toISOString(),
@@ -228,7 +221,7 @@ export const genericChainRunner = inngest.createFunction(
                     });
                 }
 
-                await step.sleepUntil(`wait-after-step-${i}`, nextStepAt);
+                await step.sleep(`wait-after-step-${i}`, inngestDuration);
 
                 // Clear next_step_at after waking up
                 if (processId) {
