@@ -8,7 +8,8 @@ import { CopilotPane } from "./copilot-pane"
 import { CampaignPicker } from "./campaign-picker"
 import { renderTemplate } from "@/lib/render-template"
 import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, TicketPercent } from "lucide-react"
-import { generateShopifyDiscount, generateShopifyFixedDiscount } from "@/app/actions/shopify-discount"
+import { generateShopifyDiscount, generateShopifyFixedDiscount, createShopifyDiscount } from "@/app/actions/shopify-discount"
+import { getActiveDiscountPresets, type DiscountPreset } from "@/app/actions/discount-presets"
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
@@ -66,6 +67,12 @@ export function EmailEditor({
 
     const [generatingDiscount, setGeneratingDiscount] = useState(false)
     const [generatingFixed, setGeneratingFixed] = useState(false)
+    const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([])
+    const [generatingPresetId, setGeneratingPresetId] = useState<string | null>(null)
+
+    useEffect(() => {
+        getActiveDiscountPresets().then(setDiscountPresets).catch(() => { })
+    }, [])
 
     // Version history
     const [backups, setBackups] = useState<{ id: string; saved_at: string; subject_line: string }[]>([])
@@ -256,6 +263,46 @@ export function EmailEditor({
                                     {generatingFixed ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TicketPercent className="w-3.5 h-3.5" />}
                                     Generate $30 Off Code
                                 </button>
+                                {discountPresets.map(preset => (
+                                    <button
+                                        key={preset.id}
+                                        type="button"
+                                        onClick={async () => {
+                                            setGeneratingPresetId(preset.id);
+                                            const res = await createShopifyDiscount({
+                                                type: preset.type,
+                                                value: preset.value,
+                                                durationDays: preset.duration_days,
+                                                codePrefix: preset.code_prefix,
+                                                usageLimit: preset.usage_limit,
+                                            });
+                                            if (!res.success) {
+                                                toast({ title: "Error", description: res.error, variant: "destructive" });
+                                            } else if (res.code) {
+                                                const baseUrl = (assets as any)[preset.target_url_key] || "";
+                                                const sep = baseUrl.includes("?") ? "&" : "?";
+                                                const finalUrl = baseUrl
+                                                    ? (baseUrl.includes("discount=")
+                                                        ? baseUrl.replace(/discount=[^&]+/, `discount=${res.code}`)
+                                                        : `${baseUrl}${sep}discount=${res.code}`)
+                                                    : "";
+                                                onAssetsChange({
+                                                    ...assets,
+                                                    discount_code: res.code,
+                                                    ...(finalUrl ? { [preset.target_url_key]: finalUrl } : {}),
+                                                });
+                                                const label = preset.type === "percentage" ? `${preset.value}% off` : `$${preset.value} off`;
+                                                toast({ title: "Discount Created!", description: `${res.code} — ${label}, valid ${preset.duration_days} days.` });
+                                            }
+                                            setGeneratingPresetId(null);
+                                        }}
+                                        disabled={generatingPresetId === preset.id}
+                                        className={`w-full flex items-center justify-center gap-2 ${preset.type === 'percentage' ? 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border-emerald-500/20' : 'bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border-violet-500/20'} border py-2 rounded text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer mt-2`}
+                                    >
+                                        {generatingPresetId === preset.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TicketPercent className="w-3.5 h-3.5" />}
+                                        {preset.name}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 
