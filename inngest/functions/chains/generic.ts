@@ -90,7 +90,6 @@ export const genericChainRunner = inngest.createFunction(
                 ...chainData,
                 steps: steps || [],
                 branches: branches || [],
-                _codeVersion: "d824c47-debug-v2",
             };
         });
 
@@ -188,47 +187,43 @@ export const genericChainRunner = inngest.createFunction(
                 sentCampaignIds.push(sendResult.campaignId);
             }
 
-            // ─── LOG TO DB ─────────────────────────────
-            if (processId) {
-                await step.run(`log-sent-${i}`, async () => {
-                    await appendHistory(stepDef.label, "Email Sent", `Campaign: ${sendResult?.campaignId || "N/A"}, wait_after: ${stepDef.wait_after || "NONE"}`);
+            // ─── LOG TO DB + COMPUTE WAIT ──────────────
+            // Wait decision MUST be returned from step.run so Inngest replay can use it
+            const stepResult = await step.run(`log-sent-${i}`, async () => {
+                // Log the email send
+                if (processId) {
+                    await appendHistory(stepDef.label, "Email Sent", `Campaign: ${sendResult?.campaignId || "N/A"}`);
                     await supabase.from("chain_processes").update({
                         current_step_index: i + 1,
                         updated_at: new Date().toISOString(),
                     }).eq("id", processId);
-                    return {
-                        _debug_wait_after: stepDef.wait_after,
-                        _debug_index: i,
-                        _debug_totalSteps: chain.steps.length,
-                        _debug_shouldWait: !!(stepDef.wait_after && i < chain.steps.length - 1),
-                    };
-                });
-            }
+                }
 
-            // ─── WAIT PERIOD ───────────────────────────
-            // Compute wait as a step so the return value is reliably available during Inngest replay
-            const waitDecision = await step.run(`compute-wait-${i}`, async () => {
-                if (stepDef.wait_after && i < chain.steps.length - 1) {
+                // Compute wait decision and return it
+                const shouldWait = !!(stepDef.wait_after && i < chain.steps.length - 1);
+                let waitDuration: string | null = null;
+                let nextStepAt: string | null = null;
+
+                if (shouldWait && stepDef.wait_after) {
                     const { inngestDuration, ms } = parseWaitDuration(stepDef.wait_after);
-                    const nextStepAt = new Date(Date.now() + ms);
+                    waitDuration = inngestDuration;
+                    nextStepAt = new Date(Date.now() + ms).toISOString();
 
-                    // Save wake-up time to DB for UI countdown
                     if (processId) {
-                        await appendHistory(stepDef.label, "Waiting", `Sleep: ${inngestDuration}, next at ${nextStepAt.toISOString()} (${stepDef.wait_after})`);
+                        await appendHistory(stepDef.label, "Waiting", `Sleep: ${waitDuration}, next at ${nextStepAt}`);
                         await supabase.from("chain_processes").update({
-                            next_step_at: nextStepAt.toISOString(),
+                            next_step_at: nextStepAt,
                             updated_at: new Date().toISOString(),
                         }).eq("id", processId);
                     }
-
-                    return { shouldWait: true, duration: inngestDuration, nextStepAt: nextStepAt.toISOString() };
                 }
-                return { shouldWait: false, duration: null, nextStepAt: null };
+
+                return { shouldWait, waitDuration, nextStepAt };
             });
 
-            // Sleep uses the RETURNED value from compute-wait (guaranteed by Inngest memoization)
-            if (waitDecision.shouldWait && waitDecision.duration) {
-                await step.sleep(`wait-after-step-${i}`, waitDecision.duration);
+            // Sleep MUST use the returned value from step.run (replay-safe)
+            if (stepResult.shouldWait && stepResult.waitDuration) {
+                await step.sleep(`wait-after-step-${i}`, stepResult.waitDuration);
 
                 // Clear next_step_at after waking up
                 if (processId) {
