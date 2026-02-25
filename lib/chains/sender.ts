@@ -11,6 +11,8 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     let rawHtml = "";
     let subject = "";
     let campaignId = "";
+    let templateFromName = "";
+    let templateFromEmail = "";
 
     const template = CHAIN_TEMPLATES[templateKeyOrId as keyof typeof CHAIN_TEMPLATES];
 
@@ -44,6 +46,8 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         rawHtml = renderTemplate(dbTemplate.html_content || "", vars);
         subject = dbTemplate.subject_line || "No Subject";
         campaignId = dbTemplate.id;
+        templateFromName = dbTemplate.variable_values?.from_name || "";
+        templateFromEmail = dbTemplate.variable_values?.from_email || "";
     }
 
 
@@ -69,8 +73,12 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     });
 
     // Send Email (disable Resend's tracking — we use our own click redirect)
+    const fromField = templateFromName && templateFromEmail
+        ? `${templateFromName} <${templateFromEmail}>`
+        : (process.env.RESEND_FROM_EMAIL || "Lionel Yu <lionel@musicalbasics.com>");
+
     const sendResult = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || "Lionel Yu <lionel@musicalbasics.com>",
+        from: fromField,
         to: email,
         subject: subject,
         html: finalHtml,
