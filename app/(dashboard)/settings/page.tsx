@@ -575,7 +575,10 @@ function BrandLinksCard({
             <CardContent className="space-y-3">
                 {(Object.keys(LINK_LABELS) as (keyof DefaultLinks)[]).map((key) => (
                     <div key={key} className="grid grid-cols-3 gap-3 items-center">
-                        <Label className="text-sm text-muted-foreground">{LINK_LABELS[key]}</Label>
+                        <div>
+                            <Label className="text-sm text-muted-foreground">{LINK_LABELS[key]}</Label>
+                            <p className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{`{{${key}}}`}</p>
+                        </div>
                         <Input
                             value={links[key]}
                             onChange={(e) => onChange(key, e.target.value)}
