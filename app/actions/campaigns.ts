@@ -267,7 +267,42 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
         return { error: "Failed to fetch original campaign" }
     }
 
-    // 2. Create new campaign copy with subscriber lock
+    // 2. Build variable_values for the duplicate
+    const newVars = {
+        ...original.variable_values,
+        subscriber_id: subscriberId
+    }
+
+    // 3. If per-user discount preset, generate a unique code for this recipient
+    const presetConfig = newVars.discount_preset_config
+    if (newVars.discount_preset_id && presetConfig) {
+        try {
+            const { createShopifyDiscount } = await import("@/app/actions/shopify-discount")
+            const res = await createShopifyDiscount({
+                type: presetConfig.type,
+                value: presetConfig.value,
+                durationDays: presetConfig.durationDays,
+                codePrefix: presetConfig.codePrefix,
+                usageLimit: 1, // per-user = 1 use per code
+            })
+            if (res.success && res.code) {
+                newVars.discount_code = res.code
+                // Update the target URL with the new code
+                const targetUrlKey = presetConfig.targetUrlKey || "main_cta_url"
+                const baseUrl = newVars[targetUrlKey] || ""
+                if (baseUrl) {
+                    newVars[targetUrlKey] = baseUrl.includes("discount=")
+                        ? baseUrl.replace(/discount=[^&]+/, `discount=${res.code}`)
+                        : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}discount=${res.code}`
+                }
+            }
+        } catch (e) {
+            console.error("Failed to generate per-user discount code:", e)
+            // Continue without unique code — preview code will be used as fallback
+        }
+    }
+
+    // 4. Create new campaign copy with subscriber lock
     const { data, error: insertError } = await supabase
         .from("campaigns")
         .insert([
@@ -277,10 +312,7 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
                 status: "draft",
                 subject_line: original.subject_line,
                 html_content: original.html_content,
-                variable_values: {
-                    ...original.variable_values,
-                    subscriber_id: subscriberId
-                },
+                variable_values: newVars,
                 parent_template_id: original.is_template ? original.id : (original.parent_template_id || null),
             },
         ])

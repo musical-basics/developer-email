@@ -65,6 +65,7 @@ export default function DiscountsPage() {
             code_prefix: "VIP",
             target_url_key: "main_cta_url",
             usage_limit: 1,
+            code_mode: "all_users",
             is_active: true,
         }])
     }
@@ -379,15 +380,38 @@ function PresetCard({
                         </Select>
                     </div>
 
+                    {/* Code Mode */}
+                    <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Code Mode</Label>
+                        <Select value={draft.code_mode || "all_users"} onValueChange={v => {
+                            onChange("code_mode", v)
+                            if (v === "per_user") onChange("usage_limit", 1)
+                        }}>
+                            <SelectTrigger className="h-9">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all_users">All Users (shared code)</SelectItem>
+                                <SelectItem value="per_user">Per User (unique codes)</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     {/* Usage Limit */}
                     <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Usage Limit</Label>
+                        <Label className="text-xs text-muted-foreground">
+                            Usage Limit
+                            {draft.code_mode === "per_user" && (
+                                <span className="text-[10px] text-amber-400 ml-1">(1 per code)</span>
+                            )}
+                        </Label>
                         <Input
                             type="number"
-                            value={draft.usage_limit}
+                            value={draft.code_mode === "per_user" ? 1 : draft.usage_limit}
                             onChange={e => onChange("usage_limit", Math.max(1, Number(e.target.value)))}
                             min={1}
-                            className="h-9"
+                            disabled={draft.code_mode === "per_user"}
+                            className={`h-9 ${draft.code_mode === "per_user" ? "opacity-50" : ""}`}
                         />
                     </div>
                 </div>

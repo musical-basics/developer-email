@@ -2,6 +2,7 @@ import { inngest } from "@/inngest/client";
 import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
+import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const supabase = createClient(
@@ -71,79 +72,104 @@ export const sendCampaign = inngest.createFunction(
             let failureCount = 0;
             const sentRecords: any[] = [];
 
-            // Chunk processing to avoid rate limits
-            const CHUNK_SIZE = 50;
-            for (let i = 0; i < recipients.length; i += CHUNK_SIZE) {
-                const chunk = recipients.slice(i, i + CHUNK_SIZE);
+            // Pre-check for per-user discount config
+            const discountPresetConfig = campaign.variable_values?.discount_preset_config;
+            const isPerUserDiscount = !!campaign.variable_values?.discount_preset_id && !!discountPresetConfig;
 
-                await Promise.all(chunk.map(async (sub) => {
-                    try {
-                        // Generate Unsubscribe Link
-                        const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${campaignId}`;
+            // Process recipients sequentially (needed for per-user discount rate limiting)
+            for (let ri = 0; ri < recipients.length; ri++) {
+                const sub = recipients[ri];
+                try {
+                    // Generate Unsubscribe Link
+                    const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${campaignId}`;
 
-                        // Personalize content
-                        let personalHtml = htmlWithFooter
-                            .replace(/{{first_name}}/g, sub.first_name || "there")
-                            .replace(/{{last_name}}/g, sub.last_name || "")
-                            .replace(/{{email}}/g, sub.email)
-                            .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
-                            .replace(/{{subscriber_id}}/g, sub.id);
+                    // Personalize content
+                    let personalHtml = htmlWithFooter
+                        .replace(/{{first_name}}/g, sub.first_name || "there")
+                        .replace(/{{last_name}}/g, sub.last_name || "")
+                        .replace(/{{email}}/g, sub.email)
+                        .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
+                        .replace(/{{subscriber_id}}/g, sub.id);
 
-                        // Smart Blocks: process conditional tag content per subscriber
-                        const subscriberTags = sub.tags || [];
-                        personalHtml = personalHtml.replace(
-                            /\{\{#if\s+tag_(\w+)\}\}([\s\S]*?)\{\{\/?endif\}\}/gi,
-                            (_match: string, tagName: string, content: string) => {
-                                const hasTag = subscriberTags.some(
-                                    (t: string) => t.toLowerCase() === tagName.toLowerCase()
-                                );
-                                return hasTag ? content.trim() : "";
-                            }
-                        );
-
-                        // Click tracking: rewrite all links to go through our redirect tracker
-                        personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
-                            if (url.includes('/unsubscribe')) return match;
-                            if (url.includes('/api/track/')) return match;
-                            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
-                            return `href=${quote}${trackUrl}${quote}`;
-                        });
-
-                        // Send Email
-                        const fromName = campaign.variable_values?.from_name;
-                        const fromEmail = campaign.variable_values?.from_email;
-
-                        // Send Email (disable Resend's tracking — we use our own)
-                        const { error } = await resend.emails.send({
-                            from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
-                            to: sub.email,
-                            subject: campaign.subject_line,
-                            html: personalHtml,
-                            headers: {
-                                "List-Unsubscribe": `<${unsubscribeUrl}>`,
-                                "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
-                            },
-                            click_tracking: false,
-                            open_tracking: false,
-                        } as any);
-
-                        if (error) {
-                            console.error(`Failed to send to ${sub.email}:`, error);
-                            failureCount++;
-                        } else {
-                            successCount++;
-                            sentRecords.push({
-                                campaign_id: campaignId,
-                                subscriber_id: sub.id,
-                                sent_at: new Date().toISOString(),
-                                variant_sent: campaign.subject_line || null
+                    // Per-user discount: generate a unique Shopify code for this recipient
+                    if (isPerUserDiscount) {
+                        try {
+                            const discountRes = await createShopifyDiscount({
+                                type: discountPresetConfig.type,
+                                value: discountPresetConfig.value,
+                                durationDays: discountPresetConfig.durationDays,
+                                codePrefix: discountPresetConfig.codePrefix,
+                                usageLimit: 1,
                             });
+                            if (discountRes.success && discountRes.code) {
+                                const oldCode = campaign.variable_values?.discount_code;
+                                if (oldCode) {
+                                    personalHtml = personalHtml.replaceAll(oldCode, discountRes.code);
+                                }
+                                personalHtml = personalHtml.replace(/discount=[A-Z0-9-]+/g, `discount=${discountRes.code}`);
+                            }
+                            if (ri < recipients.length - 1) {
+                                await new Promise(r => setTimeout(r, 300));
+                            }
+                        } catch (discountErr) {
+                            console.error(`Failed to generate per-user discount for ${sub.email}:`, discountErr);
                         }
-                    } catch (e) {
-                        console.error(`Unexpected error for ${sub.email}:`, e);
-                        failureCount++;
                     }
-                }));
+
+                    // Smart Blocks: process conditional tag content per subscriber
+                    const subscriberTags = sub.tags || [];
+                    personalHtml = personalHtml.replace(
+                        /\{\{#if\s+tag_(\w+)\}\}([\s\S]*?)\{\{\/?endif\}\}/gi,
+                        (_match: string, tagName: string, content: string) => {
+                            const hasTag = subscriberTags.some(
+                                (t: string) => t.toLowerCase() === tagName.toLowerCase()
+                            );
+                            return hasTag ? content.trim() : "";
+                        }
+                    );
+
+                    // Click tracking: rewrite all links to go through our redirect tracker
+                    personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
+                        if (url.includes('/unsubscribe')) return match;
+                        if (url.includes('/api/track/')) return match;
+                        const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
+                        return `href=${quote}${trackUrl}${quote}`;
+                    });
+
+                    // Send Email
+                    const fromName = campaign.variable_values?.from_name;
+                    const fromEmail = campaign.variable_values?.from_email;
+
+                    // Send Email (disable Resend's tracking — we use our own)
+                    const { error } = await resend.emails.send({
+                        from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
+                        to: sub.email,
+                        subject: campaign.subject_line,
+                        html: personalHtml,
+                        headers: {
+                            "List-Unsubscribe": `<${unsubscribeUrl}>`,
+                            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"
+                        },
+                        click_tracking: false,
+                        open_tracking: false,
+                    } as any);
+
+                    if (error) {
+                        console.error(`Failed to send to ${sub.email}:`, error);
+                        failureCount++;
+                    } else {
+                        successCount++;
+                        sentRecords.push({
+                            campaign_id: campaignId,
+                            subscriber_id: sub.id,
+                            sent_at: new Date().toISOString(),
+                            variant_sent: campaign.subject_line || null
+                        });
+                    }
+                } catch (e) {
+                    console.error(`Unexpected error for ${sub.email}:`, e);
+                    failureCount++;
+                }
             }
 
             return { successCount, failureCount, sentRecords };

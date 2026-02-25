@@ -274,7 +274,7 @@ export function EmailEditor({
                                                 value: preset.value,
                                                 durationDays: preset.duration_days,
                                                 codePrefix: preset.code_prefix,
-                                                usageLimit: preset.usage_limit,
+                                                usageLimit: preset.code_mode === "per_user" ? 1 : preset.usage_limit,
                                             });
                                             if (!res.success) {
                                                 toast({ title: "Error", description: res.error, variant: "destructive" });
@@ -286,13 +286,33 @@ export function EmailEditor({
                                                         ? baseUrl.replace(/discount=[^&]+/, `discount=${res.code}`)
                                                         : `${baseUrl}${sep}discount=${res.code}`)
                                                     : "";
-                                                onAssetsChange({
+                                                const updatedAssets: Record<string, any> = {
                                                     ...assets,
                                                     discount_code: res.code,
                                                     ...(finalUrl ? { [preset.target_url_key]: finalUrl } : {}),
-                                                });
+                                                };
+                                                // For per-user mode, store preset config so send flow generates unique codes
+                                                if (preset.code_mode === "per_user") {
+                                                    updatedAssets.discount_preset_id = preset.id;
+                                                    updatedAssets.discount_preset_config = {
+                                                        type: preset.type,
+                                                        value: preset.value,
+                                                        durationDays: preset.duration_days,
+                                                        codePrefix: preset.code_prefix,
+                                                        targetUrlKey: preset.target_url_key,
+                                                    };
+                                                } else {
+                                                    // Clear any previous per-user config
+                                                    delete updatedAssets.discount_preset_id;
+                                                    delete updatedAssets.discount_preset_config;
+                                                }
+                                                onAssetsChange(updatedAssets);
                                                 const label = preset.type === "percentage" ? `${preset.value}% off` : `$${preset.value} off`;
-                                                toast({ title: "Discount Created!", description: `${res.code} — ${label}, valid ${preset.duration_days} days.` });
+                                                if (preset.code_mode === "per_user") {
+                                                    toast({ title: "Preview Code Created!", description: `${res.code} — ${label}. Each recipient will get a unique code at send time.` });
+                                                } else {
+                                                    toast({ title: "Discount Created!", description: `${res.code} — ${label}, valid ${preset.duration_days} days.` });
+                                                }
                                             }
                                             setGeneratingPresetId(null);
                                         }}
@@ -301,6 +321,7 @@ export function EmailEditor({
                                     >
                                         {generatingPresetId === preset.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TicketPercent className="w-3.5 h-3.5" />}
                                         {preset.name}
+                                        {preset.code_mode === "per_user" && <span className="text-[10px] opacity-60">(per user)</span>}
                                     </button>
                                 ))}
                             </div>

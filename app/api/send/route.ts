@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { addPlayButtonsToVideoThumbnails } from "@/lib/video-overlay";
+import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -185,7 +186,12 @@ export async function POST(request: Request) {
             const sentRecords: any[] = [];
 
             // Send to each recipient
-            await Promise.all(recipients.map(async (sub) => {
+            // Pre-check for per-user discount config
+            const discountPresetConfig = campaign.variable_values?.discount_preset_config;
+            const isPerUserDiscount = !!campaign.variable_values?.discount_preset_id && !!discountPresetConfig;
+
+            for (let ri = 0; ri < recipients.length; ri++) {
+                const sub = recipients[ri];
                 try {
                     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${trackingCampaignId}`;
 
@@ -197,6 +203,35 @@ export async function POST(request: Request) {
                         .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
                         .replace(/{{unsubscribe_link_url}}/g, unsubscribeUrl)
                         .replace(/{{subscriber_id}}/g, sub.id);
+
+                    // Per-user discount: generate a unique Shopify code for this recipient
+                    if (isPerUserDiscount) {
+                        try {
+                            const discountRes = await createShopifyDiscount({
+                                type: discountPresetConfig.type,
+                                value: discountPresetConfig.value,
+                                durationDays: discountPresetConfig.durationDays,
+                                codePrefix: discountPresetConfig.codePrefix,
+                                usageLimit: 1,
+                            });
+                            if (discountRes.success && discountRes.code) {
+                                // Replace discount code text in HTML
+                                const oldCode = campaign.variable_values?.discount_code;
+                                if (oldCode) {
+                                    personalHtml = personalHtml.replaceAll(oldCode, discountRes.code);
+                                }
+                                // Also replace discount= param in any URLs
+                                personalHtml = personalHtml.replace(/discount=[A-Z0-9-]+/g, `discount=${discountRes.code}`);
+                            }
+                            // Rate limit: small delay between Shopify API calls
+                            if (ri < recipients.length - 1) {
+                                await new Promise(r => setTimeout(r, 300));
+                            }
+                        } catch (discountErr) {
+                            console.error(`Failed to generate per-user discount for ${sub.email}:`, discountErr);
+                            // Continue with the preview code as fallback
+                        }
+                    }
 
                     // Click tracking: rewrite all links to go through our redirect tracker
                     if (clickTracking) {
@@ -258,7 +293,7 @@ export async function POST(request: Request) {
                     console.error(`Unexpected error for ${sub.email}:`, e);
                     failureCount++;
                 }
-            }));
+            }
 
             // Insert history
             if (sentRecords.length > 0) {

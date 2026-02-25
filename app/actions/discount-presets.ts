@@ -12,6 +12,7 @@ export interface DiscountPreset {
     code_prefix: string
     target_url_key: string
     usage_limit: number
+    code_mode: "per_user" | "all_users"
     is_active: boolean
     created_at: string
 }
