@@ -22,6 +22,9 @@ import {
     Copy,
     Loader2,
     GitBranch,
+    ArrowUpDown,
+    ArrowUp,
+    ArrowDown,
     FileUp,
     UsersRound,
     Tag,
@@ -126,6 +129,7 @@ export default function AudienceManagerPage() {
     const [tagComboboxOpen, setTagComboboxOpen] = useState(false)
     const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([])
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null)
+    const [lastEmailedSort, setLastEmailedSort] = useState<"asc" | "desc" | null>(null)
 
     // Send Existing Campaign State
     const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
@@ -244,7 +248,7 @@ export default function AudienceManagerPage() {
 
     // Filtered subscribers
     const filteredSubscribers = useMemo(() => {
-        return subscribers.filter((subscriber) => {
+        const filtered = subscribers.filter((subscriber) => {
             const matchesSearch =
                 subscriber.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (subscriber.first_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -257,7 +261,22 @@ export default function AudienceManagerPage() {
 
             return matchesSearch && matchesTags && matchesTest
         })
-    }, [subscribers, searchQuery, selectedTags, showTestOnly])
+
+        if (lastEmailedSort) {
+            filtered.sort((a, b) => {
+                const aDate = lastSentSubjects[a.id]?.sentAt
+                const bDate = lastSentSubjects[b.id]?.sentAt
+                // Push subscribers with no sent history to the bottom
+                if (!aDate && !bDate) return 0
+                if (!aDate) return 1
+                if (!bDate) return -1
+                const diff = new Date(aDate).getTime() - new Date(bDate).getTime()
+                return lastEmailedSort === "asc" ? diff : -diff
+            })
+        }
+
+        return filtered
+    }, [subscribers, searchQuery, selectedTags, showTestOnly, lastEmailedSort, lastSentSubjects])
 
     // Build tagColors lookup from tag_definitions DB (hex colors)
     const tagColors = useMemo(() => {
@@ -1116,6 +1135,21 @@ export default function AudienceManagerPage() {
                                 <TableHead className="w-[100px]"></TableHead>
                                 <TableHead>Tags</TableHead>
                                 <TableHead>Status</TableHead>
+                                <TableHead>
+                                    <button
+                                        className="flex items-center gap-1 hover:text-foreground transition-colors"
+                                        onClick={() => setLastEmailedSort(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null)}
+                                    >
+                                        Last Emailed
+                                        {lastEmailedSort === "desc" ? (
+                                            <ArrowDown className="h-3.5 w-3.5 text-amber-400" />
+                                        ) : lastEmailedSort === "asc" ? (
+                                            <ArrowUp className="h-3.5 w-3.5 text-amber-400" />
+                                        ) : (
+                                            <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+                                        )}
+                                    </button>
+                                </TableHead>
                                 <TableHead>Added</TableHead>
                                 <TableHead className="w-12">Actions</TableHead>
                             </TableRow>
@@ -1123,13 +1157,13 @@ export default function AudienceManagerPage() {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                         Loading subscribers...
                                     </TableCell>
                                 </TableRow>
                             ) : filteredSubscribers.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
                                         No subscribers found.
                                     </TableCell>
                                 </TableRow>
@@ -1225,6 +1259,18 @@ export default function AudienceManagerPage() {
                                             <Badge variant="outline" className={statusStyles[subscriber.status] || "bg-muted"}>
                                                 {subscriber.status.charAt(0).toUpperCase() + subscriber.status.slice(1)}
                                             </Badge>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {lastSentSubjects[subscriber.id] ? (
+                                                <>
+                                                    <div>{formatDate(lastSentSubjects[subscriber.id].sentAt)}</div>
+                                                    <div className="text-[10px] text-muted-foreground/60">
+                                                        {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs text-muted-foreground/40">—</span>
+                                            )}
                                         </TableCell>
                                         <TableCell className="text-muted-foreground">
                                             <div>{formatDate(subscriber.created_at)}</div>
