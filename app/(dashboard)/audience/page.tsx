@@ -26,6 +26,7 @@ import {
     ArrowUp,
     ArrowDown,
     ChevronDown,
+    FilterX,
     FileUp,
     UsersRound,
     Tag,
@@ -114,6 +115,7 @@ interface SavedView {
     name: string
     searchQuery: string
     selectedTags: string[]
+    excludedTags: string[]
     statusFilter: string[]
     showTestOnly: boolean
     lastEmailedSort: "asc" | "desc" | null
@@ -139,6 +141,7 @@ export default function AudienceManagerPage() {
     const [searchQuery, setSearchQuery] = useState("")
     const [showTestOnly, setShowTestOnly] = useState(false)
     const [selectedTags, setSelectedTags] = useState<string[]>([])
+    const [excludedTags, setExcludedTags] = useState<string[]>([])
     const [selectedIds, setSelectedIds] = useState<string[]>([])
     const [isDrawerOpen, setIsDrawerOpen] = useState(false)
     const [isNewSubscriber, setIsNewSubscriber] = useState(false)
@@ -279,6 +282,7 @@ export default function AudienceManagerPage() {
             if (view) {
                 setSearchQuery(view.searchQuery)
                 setSelectedTags(view.selectedTags)
+                setExcludedTags(view.excludedTags || [])
                 setStatusFilter(view.statusFilter)
                 setShowTestOnly(view.showTestOnly)
                 setLastEmailedSort(view.lastEmailedSort)
@@ -294,6 +298,7 @@ export default function AudienceManagerPage() {
     const applyView = (view: SavedView) => {
         setSearchQuery(view.searchQuery)
         setSelectedTags(view.selectedTags)
+        setExcludedTags(view.excludedTags || [])
         setStatusFilter(view.statusFilter)
         setShowTestOnly(view.showTestOnly)
         setLastEmailedSort(view.lastEmailedSort)
@@ -313,6 +318,7 @@ export default function AudienceManagerPage() {
             name: newViewName.trim(),
             searchQuery,
             selectedTags,
+            excludedTags,
             statusFilter,
             showTestOnly,
             lastEmailedSort,
@@ -346,13 +352,14 @@ export default function AudienceManagerPage() {
                 (subscriber.last_name || "").toLowerCase().includes(searchQuery.toLowerCase())
 
             const subscriberTags = subscriber.tags || []
-            const matchesTags = selectedTags.length === 0 || selectedTags.some((tag) => subscriberTags.includes(tag))
+            const matchesIncludeTags = selectedTags.length === 0 || selectedTags.some((tag) => subscriberTags.includes(tag))
+            const matchesExcludeTags = excludedTags.length === 0 || !excludedTags.some((tag) => subscriberTags.includes(tag))
 
             const matchesTest = !showTestOnly || subscriberTags.includes("Test Account")
 
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(subscriber.status)
 
-            return matchesSearch && matchesTags && matchesTest && matchesStatus
+            return matchesSearch && matchesIncludeTags && matchesExcludeTags && matchesTest && matchesStatus
         })
 
         if (lastEmailedSort) {
@@ -369,7 +376,7 @@ export default function AudienceManagerPage() {
         }
 
         return filtered
-    }, [subscribers, searchQuery, selectedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects])
+    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects])
 
     // Build tagColors lookup from tag_definitions DB (hex colors)
     const tagColors = useMemo(() => {
@@ -393,8 +400,12 @@ export default function AudienceManagerPage() {
         return Array.from(subscriberTags).sort()
     }, [subscribers, allTags])
 
-    const handleTagToggle = (tag: string) => {
+    const handleIncludeTagToggle = (tag: string) => {
         setSelectedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
+    }
+
+    const handleExcludeTagToggle = (tag: string) => {
+        setExcludedTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]))
     }
 
     const handleSelectAll = () => {
@@ -1174,9 +1185,9 @@ export default function AudienceManagerPage() {
                         <DropdownMenuTrigger asChild>
                             <Button variant="outline" className="gap-2 border-border bg-transparent">
                                 <Filter className="h-4 w-4" />
-                                Filter by Tag
+                                Include Tags
                                 {selectedTags.length > 0 && (
-                                    <span className="ml-1 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-zinc-900">
+                                    <span className="ml-1 rounded-full bg-emerald-500 px-2 py-0.5 text-xs text-white">
                                         {selectedTags.length}
                                     </span>
                                 )}
@@ -1187,7 +1198,32 @@ export default function AudienceManagerPage() {
                                 <DropdownMenuCheckboxItem
                                     key={tag}
                                     checked={selectedTags.includes(tag)}
-                                    onCheckedChange={() => handleTagToggle(tag)}
+                                    onCheckedChange={() => handleIncludeTagToggle(tag)}
+                                >
+                                    {tag}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="gap-2 border-border bg-transparent">
+                                <FilterX className="h-4 w-4" />
+                                Exclude Tags
+                                {excludedTags.length > 0 && (
+                                    <span className="ml-1 rounded-full bg-red-500 px-2 py-0.5 text-xs text-white">
+                                        {excludedTags.length}
+                                    </span>
+                                )}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-48">
+                            {allTags.map((tag) => (
+                                <DropdownMenuCheckboxItem
+                                    key={tag}
+                                    checked={excludedTags.includes(tag)}
+                                    onCheckedChange={() => handleExcludeTagToggle(tag)}
                                 >
                                     {tag}
                                 </DropdownMenuCheckboxItem>
