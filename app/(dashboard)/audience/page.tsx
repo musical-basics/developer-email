@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
 import {
     Users,
     Search,
@@ -157,6 +157,7 @@ export default function AudienceManagerPage() {
     const [activeViewId, setActiveViewId] = useState<string | null>(null)
     const [savingViewName, setSavingViewName] = useState(false)
     const [newViewName, setNewViewName] = useState("")
+    const viewsLoadedRef = useRef(false)
 
     // Send Existing Campaign State
     const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
@@ -275,10 +276,12 @@ export default function AudienceManagerPage() {
                 if (view) applyView(view)
             }
         } catch { }
+        viewsLoadedRef.current = true
     }, [])
 
-    // Save views to localStorage whenever they change
+    // Save views to localStorage whenever they change (skip initial render)
     useEffect(() => {
+        if (!viewsLoadedRef.current) return
         localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(savedViews))
     }, [savedViews])
 
