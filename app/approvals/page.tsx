@@ -95,10 +95,10 @@ export default function ApprovalsPage() {
                 toast({ title: "Error", description: result.error, variant: "destructive" })
             } else {
                 toast({
-                    title: decision === "approved" ? "Approved & Sending" : "Rejected — Fallback Sent",
+                    title: decision === "approved" ? "Approved & Sending" : "Draft Discarded",
                     description: decision === "approved"
                         ? "The AI email is being sent now."
-                        : "The standard template will be sent instead.",
+                        : "The draft has been rejected. No email will be sent.",
                 })
                 // Remove from list
                 setDrafts(prev => prev.filter(d => d.id !== campaignId))
