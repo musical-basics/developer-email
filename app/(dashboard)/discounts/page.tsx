@@ -247,11 +247,14 @@ function PresetCard({
     const previewCode = `${draft.code_prefix}-XXXXXX`
 
     // Bidirectional: compute expiry from duration
-    const expiryDate = new Date(Date.now() + draft.duration_days * 24 * 60 * 60 * 1000)
-    const expiryStr = expiryDate.toISOString().split("T")[0]
+    const durationMs = (draft.duration_days || 0) * 24 * 60 * 60 * 1000
+    const expiryDate = new Date(Date.now() + (isNaN(durationMs) ? 0 : durationMs))
+    const expiryStr = isNaN(expiryDate.getTime()) ? "" : expiryDate.toISOString().split("T")[0]
 
     const handleDateChange = (dateStr: string) => {
+        if (!dateStr) return
         const date = new Date(dateStr)
+        if (isNaN(date.getTime())) return // ignore invalid/partial dates
         const now = new Date()
         const diffMs = date.getTime() - now.getTime()
         const days = Math.max(1, Math.ceil(diffMs / (24 * 60 * 60 * 1000)))
