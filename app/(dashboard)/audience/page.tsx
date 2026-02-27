@@ -30,6 +30,9 @@ import {
     UsersRound,
     Tag,
     FlaskConical,
+    Bookmark,
+    Save,
+    Eye,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -103,6 +106,19 @@ const statusStyles: Record<string, string> = {
     unsubscribed: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
 }
 
+const SAVED_VIEWS_KEY = "audience_saved_views"
+const ACTIVE_VIEW_KEY = "audience_active_view"
+
+interface SavedView {
+    id: string
+    name: string
+    searchQuery: string
+    selectedTags: string[]
+    statusFilter: string[]
+    showTestOnly: boolean
+    lastEmailedSort: "asc" | "desc" | null
+}
+
 function getInitials(firstName: string, lastName: string): string {
     return `${(firstName || "").charAt(0)}${(lastName || "").charAt(0)}`.toUpperCase()
 }
@@ -134,6 +150,13 @@ export default function AudienceManagerPage() {
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null)
     const [expandedSubscriberId, setExpandedSubscriberId] = useState<string | null>(null)
     const [lastEmailedSort, setLastEmailedSort] = useState<"asc" | "desc" | null>(null)
+    const [statusFilter, setStatusFilter] = useState<string[]>([])
+
+    // Saved Views
+    const [savedViews, setSavedViews] = useState<SavedView[]>([])
+    const [activeViewId, setActiveViewId] = useState<string | null>(null)
+    const [savingViewName, setSavingViewName] = useState(false)
+    const [newViewName, setNewViewName] = useState("")
 
     // Send Existing Campaign State
     const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
@@ -241,7 +264,61 @@ export default function AudienceManagerPage() {
     useEffect(() => {
         fetchSubscribers()
         fetchTagDefinitions()
+        // Load saved views from localStorage
+        try {
+            const stored = localStorage.getItem(SAVED_VIEWS_KEY)
+            if (stored) setSavedViews(JSON.parse(stored))
+            const activeId = localStorage.getItem(ACTIVE_VIEW_KEY)
+            if (activeId && stored) {
+                const views: SavedView[] = JSON.parse(stored)
+                const view = views.find(v => v.id === activeId)
+                if (view) applyView(view)
+            }
+        } catch { }
     }, [])
+
+    // Save views to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(savedViews))
+    }, [savedViews])
+
+    const applyView = (view: SavedView) => {
+        setSearchQuery(view.searchQuery)
+        setSelectedTags(view.selectedTags)
+        setStatusFilter(view.statusFilter)
+        setShowTestOnly(view.showTestOnly)
+        setLastEmailedSort(view.lastEmailedSort)
+        setActiveViewId(view.id)
+        localStorage.setItem(ACTIVE_VIEW_KEY, view.id)
+    }
+
+    const clearActiveView = () => {
+        setActiveViewId(null)
+        localStorage.removeItem(ACTIVE_VIEW_KEY)
+    }
+
+    const handleSaveView = () => {
+        if (!newViewName.trim()) return
+        const view: SavedView = {
+            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            name: newViewName.trim(),
+            searchQuery,
+            selectedTags,
+            statusFilter,
+            showTestOnly,
+            lastEmailedSort,
+        }
+        setSavedViews(prev => [...prev, view])
+        setActiveViewId(view.id)
+        localStorage.setItem(ACTIVE_VIEW_KEY, view.id)
+        setNewViewName("")
+        setSavingViewName(false)
+    }
+
+    const handleDeleteView = (viewId: string) => {
+        setSavedViews(prev => prev.filter(v => v.id !== viewId))
+        if (activeViewId === viewId) clearActiveView()
+    }
 
     // Stats
     const stats = useMemo(() => {
@@ -264,7 +341,9 @@ export default function AudienceManagerPage() {
 
             const matchesTest = !showTestOnly || subscriberTags.includes("Test Account")
 
-            return matchesSearch && matchesTags && matchesTest
+            const matchesStatus = statusFilter.length === 0 || statusFilter.includes(subscriber.status)
+
+            return matchesSearch && matchesTags && matchesTest && matchesStatus
         })
 
         if (lastEmailedSort) {
@@ -281,7 +360,7 @@ export default function AudienceManagerPage() {
         }
 
         return filtered
-    }, [subscribers, searchQuery, selectedTags, showTestOnly, lastEmailedSort, lastSentSubjects])
+    }, [subscribers, searchQuery, selectedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects])
 
     // Build tagColors lookup from tag_definitions DB (hex colors)
     const tagColors = useMemo(() => {
@@ -974,6 +1053,81 @@ export default function AudienceManagerPage() {
                 </Card>
             </div>
 
+            {/* Saved Views Bar */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <Bookmark className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                <span className="text-xs text-muted-foreground font-medium mr-1">Views:</span>
+
+                {savedViews.map((view) => (
+                    <div key={view.id} className="group relative">
+                        <Button
+                            variant={activeViewId === view.id ? "default" : "outline"}
+                            size="sm"
+                            className={cn(
+                                "h-7 text-xs gap-1 pr-1.5",
+                                activeViewId === view.id
+                                    ? "bg-amber-500 text-zinc-900 hover:bg-amber-400"
+                                    : "border-border bg-transparent"
+                            )}
+                            onClick={() => {
+                                if (activeViewId === view.id) {
+                                    clearActiveView()
+                                } else {
+                                    applyView(view)
+                                }
+                            }}
+                        >
+                            <Eye className="h-3 w-3" />
+                            {view.name}
+                            {activeViewId === view.id && (
+                                <X className="h-3 w-3 ml-0.5 opacity-70 hover:opacity-100" onClick={(e) => {
+                                    e.stopPropagation()
+                                    clearActiveView()
+                                }} />
+                            )}
+                        </Button>
+                        <button
+                            className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[8px] leading-none"
+                            onClick={() => handleDeleteView(view.id)}
+                        >
+                            ×
+                        </button>
+                    </div>
+                ))}
+
+                {savingViewName ? (
+                    <div className="flex items-center gap-1">
+                        <Input
+                            value={newViewName}
+                            onChange={(e) => setNewViewName(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") handleSaveView()
+                                if (e.key === "Escape") setSavingViewName(false)
+                            }}
+                            placeholder="View name..."
+                            className="h-7 w-32 text-xs bg-card border-border"
+                            autoFocus
+                        />
+                        <Button size="sm" className="h-7 text-xs" onClick={handleSaveView} disabled={!newViewName.trim()}>
+                            <Save className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSavingViewName(false)}>
+                            <X className="h-3 w-3" />
+                        </Button>
+                    </div>
+                ) : (
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs gap-1 border-dashed border-border bg-transparent text-muted-foreground hover:text-foreground"
+                        onClick={() => setSavingViewName(true)}
+                    >
+                        <Plus className="h-3 w-3" />
+                        Save Current View
+                    </Button>
+                )}
+            </div>
+
             {/* Toolbar */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex flex-1 items-center gap-3">
@@ -1007,6 +1161,39 @@ export default function AudienceManagerPage() {
                                     onCheckedChange={() => handleTagToggle(tag)}
                                 >
                                     {tag}
+                                </DropdownMenuCheckboxItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+
+                    {/* Status Filter */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="gap-2 border-border bg-transparent">
+                                <UserCheck className="h-4 w-4" />
+                                Status
+                                {statusFilter.length > 0 && (
+                                    <span className="ml-1 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-zinc-900">
+                                        {statusFilter.length}
+                                    </span>
+                                )}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-44">
+                            {["active", "inactive", "unsubscribed", "bounced"].map((status) => (
+                                <DropdownMenuCheckboxItem
+                                    key={status}
+                                    checked={statusFilter.includes(status)}
+                                    onCheckedChange={() => {
+                                        setStatusFilter(prev =>
+                                            prev.includes(status)
+                                                ? prev.filter(s => s !== status)
+                                                : [...prev, status]
+                                        )
+                                    }}
+                                    className="capitalize"
+                                >
+                                    {status}
                                 </DropdownMenuCheckboxItem>
                             ))}
                         </DropdownMenuContent>
