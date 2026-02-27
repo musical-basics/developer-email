@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,6 +26,7 @@ import {
 } from "@/app/actions/journey-actions"
 import { getChains, getDraftChainsForSubscriber, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess, updateProcessStatus } from "@/app/actions/chain-processes"
+import { getTags, type TagDefinition } from "@/app/actions/tags"
 import { formatDistanceToNow } from "date-fns"
 
 // ─── Types ─────────────────────────────────────────────────
@@ -95,6 +96,14 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
 
     const { toast } = useToast()
 
+    // Tag color definitions
+    const [tagDefinitions, setTagDefinitions] = useState<TagDefinition[]>([])
+    const tagColors = useMemo(() => {
+        const colors: Record<string, string> = {}
+        tagDefinitions.forEach(td => { colors[td.name] = td.color })
+        return colors
+    }, [tagDefinitions])
+
     const fetchSubscribers = useCallback(async () => {
         setLoading(true)
         const data = await getSubscribersWithJourneySummary()
@@ -102,7 +111,10 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
         setLoading(false)
     }, [])
 
-    useEffect(() => { fetchSubscribers() }, [fetchSubscribers])
+    useEffect(() => {
+        fetchSubscribers()
+        getTags().then(({ tags }) => setTagDefinitions(tags))
+    }, [fetchSubscribers])
 
     // Toggle inline expansion
     const toggleExpand = async (sub: SubscriberSummary) => {
@@ -182,8 +194,8 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
                     size="sm"
                     onClick={() => setTestAccountFilter(prev => !prev)}
                     className={`gap-1.5 h-9 px-3 text-xs font-medium transition-colors ${testAccountFilter
-                            ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30"
-                            : "text-muted-foreground hover:text-foreground"
+                        ? "bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30"
+                        : "text-muted-foreground hover:text-foreground"
                         }`}
                 >
                     <FlaskConical className="h-3.5 w-3.5" />
@@ -257,9 +269,21 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
                                             )}
                                             {sub.tags && sub.tags.length > 0 && (
                                                 <div className="hidden sm:flex items-center gap-1">
-                                                    {sub.tags.slice(0, 2).map(tag => (
-                                                        <Badge key={tag} variant="secondary" className="text-[10px] px-1.5">{tag}</Badge>
-                                                    ))}
+                                                    {sub.tags.slice(0, 2).map(tag => {
+                                                        const hex = tagColors[tag]
+                                                        return (
+                                                            <Badge
+                                                                key={tag}
+                                                                variant="outline"
+                                                                className="text-[10px] px-1.5"
+                                                                style={hex ? {
+                                                                    backgroundColor: `${hex}20`,
+                                                                    color: hex,
+                                                                    borderColor: `${hex}50`,
+                                                                } : undefined}
+                                                            >{tag}</Badge>
+                                                        )
+                                                    })}
                                                     {sub.tags.length > 2 && (
                                                         <span className="text-[10px] text-muted-foreground">+{sub.tags.length - 2}</span>
                                                     )}
@@ -286,9 +310,21 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
                                                 <div className="flex items-center gap-1.5">
                                                     <Tag className="h-3 w-3 text-muted-foreground" />
                                                     <div className="flex flex-wrap gap-1">
-                                                        {sub.tags.map(tag => (
-                                                            <Badge key={tag} variant="secondary" className="text-[10px] px-1.5">{tag}</Badge>
-                                                        ))}
+                                                        {sub.tags.map(tag => {
+                                                            const hex = tagColors[tag]
+                                                            return (
+                                                                <Badge
+                                                                    key={tag}
+                                                                    variant="outline"
+                                                                    className="text-[10px] px-1.5"
+                                                                    style={hex ? {
+                                                                        backgroundColor: `${hex}20`,
+                                                                        color: hex,
+                                                                        borderColor: `${hex}50`,
+                                                                    } : undefined}
+                                                                >{tag}</Badge>
+                                                            )
+                                                        })}
                                                     </div>
                                                 </div>
                                             )}
