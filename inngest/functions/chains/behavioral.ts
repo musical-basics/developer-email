@@ -8,19 +8,15 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_KEY!
 );
 
-// The safe, pre-written fallback template for cart abandonment
-const FALLBACK_TEMPLATE = "dp_urgency";
-
 /**
- * Customize Page Abandonment — HITL Workflow
+ * Customize Page Abandonment — HITL Workflow (Admin Approval Required)
  * 
  * Flow:
  *   1. Wait 2 hours
- *   2. Purchase check → halt if converted
- *   3. Engagement routing:
- *      - Low/Medium engagement → send standard pre-written email immediately
- *      - High engagement → generate AI draft → wait 24h for admin approval
- *   4. If approved → send AI draft. If rejected/timeout → send standard fallback.
+ *   2. Purchase check → halt if already converted (all-time)
+ *   3. Generate AI draft for ALL engagement levels
+ *   4. Wait up to 24h for admin approval on /approvals
+ *   5. If approved → send. If rejected/timeout → discard (NO auto-send).
  */
 export const customizeAbandonment = inngest.createFunction(
     {
@@ -35,27 +31,23 @@ export const customizeAbandonment = inngest.createFunction(
         // ─── STEP 1: Wait 2 hours ───────────────────────
         await step.sleep("wait-for-purchase", "2h");
 
-        // ─── STEP 2: Purchase Check ─────────────────────
+        // ─── STEP 2: Purchase Check (all-time) ──────────
         const purchased = await step.run("check-purchase", async () => {
-            const twoHoursAgo = new Date();
-            twoHoursAgo.setHours(twoHoursAgo.getHours() - 2);
-
             const { data } = await supabase
                 .from("subscriber_events")
                 .select("id")
                 .eq("subscriber_id", subscriberId)
                 .in("type", ["conversion_t3", "conversion_t2"])
-                .gte("created_at", twoHoursAgo.toISOString())
                 .limit(1);
 
             return (data && data.length > 0);
         });
 
         if (purchased) {
-            return { status: "halted", reason: "purchased" };
+            return { status: "halted", reason: "already_purchased" };
         }
 
-        // ─── STEP 3: Fetch subscriber for engagement routing ─
+        // ─── STEP 3: Fetch subscriber ───────────────────
         const subscriber = await step.run("fetch-subscriber", async () => {
             const { data } = await supabase
                 .from("subscribers")
@@ -72,60 +64,32 @@ export const customizeAbandonment = inngest.createFunction(
 
         const engagement = subscriber.smart_tags?.engagement || "low";
 
-        // ─── STEP 4: Route by Engagement ────────────────
-        if (engagement !== "high") {
-            // Low/Medium engagement → send safe pre-written template immediately
-            const result = await step.run("send-standard-email", async () => {
-                return sendChainEmail(
-                    subscriber.id,
-                    subscriber.email,
-                    subscriber.first_name || "there",
-                    FALLBACK_TEMPLATE
-                );
-            });
-
-            return {
-                status: "sent_standard",
-                engagement,
-                body: result,
-            };
-        }
-
-        // ─── STEP 5: High Engagement → Generate AI Draft ─
+        // ─── STEP 4: Generate AI Draft (all engagement levels) ─
         const draft = await step.run("generate-ai-draft", async () => {
             return generateJITDraft(
                 subscriberId,
-                `Cart abandonment: spent ${duration}s on /customize. Offer to answer questions about the 15/16th size, mention Founder's Batch pricing ending soon.`
+                `Cart abandonment: spent ${duration}s on /customize (engagement: ${engagement}). Offer to answer questions about the 15/16th size, mention Founder's Batch pricing ending soon.`
             );
         });
 
         if ("error" in draft) {
-            // AI draft failed — fall back to standard
-            const result = await step.run("fallback-on-draft-error", async () => {
-                return sendChainEmail(
-                    subscriber.id,
-                    subscriber.email,
-                    subscriber.first_name || "there",
-                    FALLBACK_TEMPLATE
-                );
-            });
-
+            // AI draft failed — do NOT auto-send anything, just halt
             return {
-                status: "sent_standard_fallback",
+                status: "halted",
                 reason: "draft_generation_failed",
+                engagement,
                 error: draft.error,
-                body: result,
             };
         }
 
-        // ─── STEP 6: The Human Pause — Wait up to 24h for approval ─
+        // ─── STEP 5: Wait up to 24h for admin approval ─
         const approval = await step.waitForEvent("wait-for-admin-approval", {
             event: "jit.decision",
             timeout: "24h",
             match: "data.campaignId",
         });
 
-        // ─── STEP 7: Execute or Fallback ────────────────
+        // ─── STEP 6: Execute or Discard ─────────────────
         if (approval?.data?.decision === "approved") {
             // Admin approved → send the AI draft
             const result = await step.run("send-approved-draft", async () => {
@@ -133,11 +97,10 @@ export const customizeAbandonment = inngest.createFunction(
                     subscriber.id,
                     subscriber.email,
                     subscriber.first_name || "there",
-                    draft.campaignId // Send the AI-generated campaign
+                    draft.campaignId
                 );
             });
 
-            // Mark draft as completed
             await step.run("mark-draft-completed", async () => {
                 await supabase
                     .from("campaigns")
@@ -146,23 +109,14 @@ export const customizeAbandonment = inngest.createFunction(
             });
 
             return {
-                status: "sent_ai_approved",
+                status: "sent_approved",
+                engagement,
                 campaignId: draft.campaignId,
                 body: result,
             };
         }
 
-        // Rejected or timeout → send standard fallback
-        const fallbackResult = await step.run("send-fallback", async () => {
-            return sendChainEmail(
-                subscriber.id,
-                subscriber.email,
-                subscriber.first_name || "there",
-                FALLBACK_TEMPLATE
-            );
-        });
-
-        // Mark the AI draft as rejected/expired
+        // Rejected or timeout → discard, do NOT send any fallback
         await step.run("mark-draft-expired", async () => {
             const newStatus = approval?.data?.decision === "rejected" ? "rejected" : "expired";
             await supabase
@@ -172,9 +126,9 @@ export const customizeAbandonment = inngest.createFunction(
         });
 
         return {
-            status: approval ? "sent_fallback_rejected" : "sent_fallback_timeout",
+            status: approval?.data?.decision === "rejected" ? "discarded_rejected" : "discarded_timeout",
+            engagement,
             campaignId: draft.campaignId,
-            body: fallbackResult,
         };
     }
 );
