@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { CHAIN_TEMPLATES } from "./templates";
 import { createClient } from "@supabase/supabase-js";
 import { renderTemplate } from "@/lib/render-template";
+import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
@@ -13,6 +14,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     let campaignId = "";
     let templateFromName = "";
     let templateFromEmail = "";
+    let templateVariableValues: Record<string, any> | null = null;
 
     const template = CHAIN_TEMPLATES[templateKeyOrId as keyof typeof CHAIN_TEMPLATES];
 
@@ -48,6 +50,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         campaignId = dbTemplate.id;
         templateFromName = dbTemplate.variable_values?.from_name || "";
         templateFromEmail = dbTemplate.variable_values?.from_email || "";
+        templateVariableValues = dbTemplate.variable_values || null;
     }
 
 
@@ -63,6 +66,36 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
 
     // Replace subscriber_id placeholder if present in links
     finalHtml = finalHtml.replace(/{{subscriber_id}}/g, subscriberId);
+
+    // Per-user discount: generate a unique Shopify code for this recipient
+    if (templateVariableValues) {
+        const discountPresetConfig = templateVariableValues.discount_preset_config;
+        const isPerUserDiscount = !!templateVariableValues.discount_preset_id && !!discountPresetConfig;
+
+        if (isPerUserDiscount) {
+            try {
+                const discountRes = await createShopifyDiscount({
+                    type: discountPresetConfig.type,
+                    value: discountPresetConfig.value,
+                    durationDays: discountPresetConfig.durationDays,
+                    codePrefix: discountPresetConfig.codePrefix,
+                    usageLimit: 1,
+                });
+                if (discountRes.success && discountRes.code) {
+                    // Replace discount code text in HTML
+                    const oldCode = templateVariableValues.discount_code;
+                    if (oldCode) {
+                        finalHtml = finalHtml.replaceAll(oldCode, discountRes.code);
+                    }
+                    // Also replace discount= param in any URLs
+                    finalHtml = finalHtml.replace(/discount=[A-Z0-9-]+/g, `discount=${discountRes.code}`);
+                }
+            } catch (discountErr) {
+                console.error(`Chain: Failed to generate per-user discount for ${email}:`, discountErr);
+                // Continue with the preview/fallback code
+            }
+        }
+    }
 
     // Click tracking: rewrite links only when tracking is enabled
     if (clickTracking) {
