@@ -22,11 +22,11 @@ import {
 import {
     GitBranch, Mail, Clock, ChevronDown, ChevronUp,
     Zap, ArrowRight, Eye, MousePointer2, Ghost, GraduationCap,
-    Plus, Pencil, Trash2, X, Pause, Play, XCircle, User, Timer, Loader2, CheckCircle2, GripVertical
+    Plus, Pencil, Trash2, X, Pause, Play, XCircle, User, Timer, Loader2, CheckCircle2, GripVertical, Star
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
-    getChains, createChain, updateChain, deleteChain, getDraftChains,
+    getChains, createChain, updateChain, deleteChain, getDraftChains, promoteDraftToMaster,
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
 import { getCampaignList } from "@/app/actions/campaigns"
@@ -1404,6 +1404,24 @@ export default function ChainsPage() {
                                                 </CardDescription>
                                             </div>
                                             <div className="flex gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={async () => {
+                                                        const result = await promoteDraftToMaster(chain.id)
+                                                        if (result.error) {
+                                                            toast({ title: "Error promoting chain", description: result.error, variant: "destructive" })
+                                                        } else {
+                                                            toast({ title: "Promoted to Master Chain", description: `"${chain.name}" is now a master chain.` })
+                                                            fetchDrafts()
+                                                            fetchChains()
+                                                        }
+                                                    }}
+                                                    className="text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
+                                                    title="Promote to Master Chain"
+                                                >
+                                                    <Star className="h-4 w-4" />
+                                                </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => { setEditingChain(chain); setFormOpen(true) }}>
                                                     <Pencil className="h-4 w-4" />
                                                 </Button>

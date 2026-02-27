@@ -249,3 +249,21 @@ export async function deleteChain(chainId: string): Promise<{ error: string | nu
     revalidatePath("/journeys")
     return { error: null }
 }
+
+// ─── PROMOTE DRAFT TO MASTER ───────────────────────────────
+export async function promoteDraftToMaster(chainId: string): Promise<{ error: string | null }> {
+    const supabase = await createClient()
+
+    const { error } = await supabase
+        .from("email_chains")
+        .update({
+            subscriber_id: null,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", chainId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath("/journeys")
+    return { error: null }
+}
