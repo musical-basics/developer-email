@@ -7,7 +7,7 @@ import { renderTemplate } from "@/lib/render-template";
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
 
-export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKeyOrId: string, resendClickTracking = false, resendOpenTracking = false) {
+export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKeyOrId: string, clickTracking = false, resendClickTracking = false, resendOpenTracking = false) {
     let rawHtml = "";
     let subject = "";
     let campaignId = "";
@@ -64,13 +64,22 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     // Replace subscriber_id placeholder if present in links
     finalHtml = finalHtml.replace(/{{subscriber_id}}/g, subscriberId);
 
-    // Click tracking: rewrite all links to go through our redirect tracker
-    finalHtml = finalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
-        if (url.includes('/unsubscribe')) return match;
-        if (url.includes('/api/track/')) return match;
-        const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${subscriberId}&em=${encodeURIComponent(email)}`;
-        return `href=${quote}${trackUrl}${quote}`;
-    });
+    // Click tracking: rewrite links only when tracking is enabled
+    if (clickTracking) {
+        finalHtml = finalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
+            if (url.includes('/unsubscribe')) return match;
+            if (url.includes('/api/track/')) return match;
+            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${subscriberId}&em=${encodeURIComponent(email)}`;
+            return `href=${quote}${trackUrl}${quote}`;
+        });
+    } else {
+        // No redirect tracking — just append sid/cid/em params inline
+        finalHtml = finalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
+            if (url.includes('/unsubscribe')) return match;
+            const sep = url.includes('?') ? '&' : '?';
+            return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaignId}&em=${encodeURIComponent(email)}${quote}`;
+        });
+    }
 
     // Send Email (disable Resend's tracking — we use our own click redirect)
     const fromField = templateFromName && templateFromEmail

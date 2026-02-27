@@ -128,12 +128,11 @@ export const sendCampaign = inngest.createFunction(
                         }
                     );
 
-                    // Click tracking: rewrite all links to go through our redirect tracker
+                    // Append subscriber context to links (no redirect tracking)
                     personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                         if (url.includes('/unsubscribe')) return match;
-                        if (url.includes('/api/track/')) return match;
-                        const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
-                        return `href=${quote}${trackUrl}${quote}`;
+                        const sep = url.includes('?') ? '&' : '?';
+                        return `href=${quote}${url}${sep}sid=${sub.id}&cid=${campaignId}&em=${encodeURIComponent(sub.email)}${quote}`;
                     });
 
                     // Send Email
