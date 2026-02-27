@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useRef } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
     Users,
     Search,
@@ -152,12 +152,20 @@ export default function AudienceManagerPage() {
     const [lastEmailedSort, setLastEmailedSort] = useState<"asc" | "desc" | null>(null)
     const [statusFilter, setStatusFilter] = useState<string[]>([])
 
-    // Saved Views
-    const [savedViews, setSavedViews] = useState<SavedView[]>([])
-    const [activeViewId, setActiveViewId] = useState<string | null>(null)
+    // Saved Views — initialize directly from localStorage to avoid race conditions
+    const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
+        if (typeof window === 'undefined') return []
+        try {
+            const stored = localStorage.getItem(SAVED_VIEWS_KEY)
+            return stored ? JSON.parse(stored) : []
+        } catch { return [] }
+    })
+    const [activeViewId, setActiveViewId] = useState<string | null>(() => {
+        if (typeof window === 'undefined') return null
+        return localStorage.getItem(ACTIVE_VIEW_KEY)
+    })
     const [savingViewName, setSavingViewName] = useState(false)
     const [newViewName, setNewViewName] = useState("")
-    const viewsLoadedRef = useRef(false)
 
     // Send Existing Campaign State
     const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
@@ -265,23 +273,21 @@ export default function AudienceManagerPage() {
     useEffect(() => {
         fetchSubscribers()
         fetchTagDefinitions()
-        // Load saved views from localStorage
-        try {
-            const stored = localStorage.getItem(SAVED_VIEWS_KEY)
-            if (stored) setSavedViews(JSON.parse(stored))
-            const activeId = localStorage.getItem(ACTIVE_VIEW_KEY)
-            if (activeId && stored) {
-                const views: SavedView[] = JSON.parse(stored)
-                const view = views.find(v => v.id === activeId)
-                if (view) applyView(view)
+        // Apply active view filters on mount
+        if (activeViewId) {
+            const view = savedViews.find(v => v.id === activeViewId)
+            if (view) {
+                setSearchQuery(view.searchQuery)
+                setSelectedTags(view.selectedTags)
+                setStatusFilter(view.statusFilter)
+                setShowTestOnly(view.showTestOnly)
+                setLastEmailedSort(view.lastEmailedSort)
             }
-        } catch { }
-        viewsLoadedRef.current = true
+        }
     }, [])
 
-    // Save views to localStorage whenever they change (skip initial render)
+    // Persist views to localStorage whenever they change
     useEffect(() => {
-        if (!viewsLoadedRef.current) return
         localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(savedViews))
     }, [savedViews])
 
