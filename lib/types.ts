@@ -20,6 +20,7 @@ export interface Campaign {
     is_template?: boolean
     is_ready?: boolean
     sent_from_email?: string | null
+    sent_to_emails?: string[]
     parent_template_id?: string | null
 }
 

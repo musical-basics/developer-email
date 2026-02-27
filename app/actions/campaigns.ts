@@ -54,6 +54,24 @@ export async function getCampaigns() {
 
     if (completedIds.length === 0) return campaigns
 
+    // Fetch recipient emails for completed campaigns
+    const { data: sentRows } = await supabase
+        .from("sent_history")
+        .select("campaign_id, subscribers ( email )")
+        .in("campaign_id", completedIds)
+
+    // Build map: campaign_id -> list of recipient emails
+    const recipientMap: Record<string, string[]> = {}
+    sentRows?.forEach((row: any) => {
+        const email = row.subscribers?.email
+        if (email && row.campaign_id) {
+            if (!recipientMap[row.campaign_id]) recipientMap[row.campaign_id] = []
+            if (!recipientMap[row.campaign_id].includes(email)) {
+                recipientMap[row.campaign_id].push(email)
+            }
+        }
+    })
+
     // Fetch all open events for completed campaigns
     const { data: openEvents } = await supabase
         .from("subscriber_events")
@@ -104,6 +122,7 @@ export async function getCampaigns() {
         total_opens: uniqueOpens[c.id]?.size ?? c.total_opens ?? 0,
         total_clicks: uniqueClicks[c.id]?.size ?? c.total_clicks ?? 0,
         total_conversions: uniqueConversions[c.id]?.size ?? 0,
+        sent_to_emails: recipientMap[c.id] || [],
     }))
 }
 

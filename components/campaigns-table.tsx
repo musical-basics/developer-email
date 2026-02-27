@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2 } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import { createClient } from "@/lib/supabase/client"
@@ -226,6 +226,12 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                         From
                                     </div>
                                 </TableHead>
+                                <TableHead className="w-[160px]">
+                                    <div className="flex items-center gap-1">
+                                        <Send className="h-3.5 w-3.5 text-muted-foreground" />
+                                        Sent To
+                                    </div>
+                                </TableHead>
                                 <TableHead className="text-right">
                                     <div className="flex items-center justify-end gap-1">
                                         <Eye className="h-3.5 w-3.5 text-muted-foreground" />
@@ -340,6 +346,22 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                             {isMusicalBasics ? "MusicalBasics" : "DreamPlay"}
                                                         </Badge>
                                                     );
+                                                })()}
+                                            </TableCell>
+                                            <TableCell>
+                                                {(() => {
+                                                    const emails = (campaign as any).sent_to_emails || []
+                                                    if (emails.length === 0) return <span className="text-muted-foreground">—</span>
+                                                    if (emails.length === 1) return (
+                                                        <span className="text-xs text-foreground truncate block max-w-[150px]" title={emails[0]}>
+                                                            {emails[0]}
+                                                        </span>
+                                                    )
+                                                    return (
+                                                        <span className="text-xs text-foreground" title={emails.join(', ')}>
+                                                            {emails.length} recipients
+                                                        </span>
+                                                    )
                                                 })()}
                                             </TableCell>
                                             <TableCell className="text-right font-mono">
