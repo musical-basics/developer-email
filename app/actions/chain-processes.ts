@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { inngest } from "@/inngest/client"
 import { revalidatePath } from "next/cache"
 import type { ChainProcess } from "@/lib/types"
+import { duplicateChain } from "@/app/actions/chains"
 
 // ─── START A CHAIN PROCESS ─────────────────────────────────
 export async function startChainProcess(subscriberId: string, chainId: string) {
@@ -20,11 +21,24 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
         return { success: false, error: "Subscriber not found" }
     }
 
-    // Create process row
+    // Snapshot the master chain — clone it so edits to the master don't affect this run
+    // Keep subscriber_id null so the snapshot doesn't appear in the Drafts tab
+    const { data: clonedChain, error: cloneError } = await duplicateChain(chainId, {
+        subscriber_id: null,
+        is_snapshot: true,
+    })
+
+    if (cloneError || !clonedChain) {
+        return { success: false, error: cloneError || "Failed to snapshot chain" }
+    }
+
+    const snapshotChainId = clonedChain.id
+
+    // Create process row pointing to the snapshot
     const { data: process, error: procError } = await supabase
         .from("chain_processes")
         .insert({
-            chain_id: chainId,
+            chain_id: snapshotChainId,
             subscriber_id: subscriberId,
             status: "active",
             current_step_index: 0,
@@ -38,12 +52,12 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
         return { success: false, error: procError?.message || "Failed to create process" }
     }
 
-    // Fire Inngest event
+    // Fire Inngest event with the snapshot chain ID
     await inngest.send({
         name: "chain.run",
         data: {
             processId: process.id,
-            chainId,
+            chainId: snapshotChainId,
             subscriberId,
             email: subscriber.email,
             firstName: subscriber.first_name || "",
