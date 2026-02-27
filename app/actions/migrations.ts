@@ -94,6 +94,7 @@ export async function processMigration(formData: FormData): Promise<{
     error?: string
 }> {
     try {
+        console.log("[Migration] Starting processMigration...")
         const htmlFile = formData.get("htmlFile") as File
         const templateName = (formData.get("templateName") as string) || "Untitled Migration"
         const aiMode = (formData.get("aiMode") as string) || "both"
@@ -104,6 +105,8 @@ export async function processMigration(formData: FormData): Promise<{
             return { success: false, error: "No HTML file provided" }
         }
 
+        console.log(`[Migration] File: ${htmlFile.name} (${htmlFile.size} bytes), mode: ${aiMode}`)
+
         // Collect image files from the form
         const imageFiles: File[] = []
         for (const [key, value] of formData.entries()) {
@@ -111,17 +114,25 @@ export async function processMigration(formData: FormData): Promise<{
                 imageFiles.push(value)
             }
         }
+        console.log(`[Migration] ${imageFiles.length} asset files found`)
 
         // Step 1: Upload all images concurrently with hash dedup
+        console.log("[Migration] Step 1: Uploading assets...")
+        const t1 = Date.now()
         const assetMappings = await Promise.all(
             imageFiles.map((file) => uploadHashedAsset(file))
         )
+        console.log(`[Migration] Step 1 done in ${Date.now() - t1}ms — ${assetMappings.length} assets uploaded`)
 
         // Step 2: Parse HTML for analysis info
+        console.log("[Migration] Step 2: Parsing HTML...")
         const htmlContent = await htmlFile.text()
         const parsed = parseMailchimpHtml(htmlContent)
+        console.log(`[Migration] Step 2 done — title: "${parsed.title}", ${parsed.blocks.length} blocks`)
 
         // Step 3: Run AI conversion with selected model(s)
+        console.log(`[Migration] Step 3: Running AI conversion (mode: ${aiMode}, gemini: ${geminiModel}, claude: ${claudeModel})...`)
+        const t3 = Date.now()
         const { generatedHtml } = await convertMailchimpToEmail(
             htmlContent,
             assetMappings,
@@ -129,6 +140,7 @@ export async function processMigration(formData: FormData): Promise<{
             geminiModel,
             claudeModel
         )
+        console.log(`[Migration] Step 3 done in ${Date.now() - t3}ms — generated ${generatedHtml.length} chars`)
 
         // Step 4: Build variable_values map (variableName → Supabase public URL)
         const variableValues: Record<string, string> = {}
@@ -137,6 +149,7 @@ export async function processMigration(formData: FormData): Promise<{
         }
 
         // Step 5: Insert as Master Template using admin client for reliability
+        console.log("[Migration] Step 5: Inserting campaign...")
         const admin = getAdminClient()
         const { data, error } = await admin
             .from("campaigns")
@@ -152,14 +165,18 @@ export async function processMigration(formData: FormData): Promise<{
             .single()
 
         if (error) {
-            console.error("Insert campaign error:", error)
+            console.error("[Migration] Insert campaign error:", error)
             return { success: false, error: error.message }
         }
 
+        console.log(`[Migration] Success! Campaign ID: ${data.id}`)
         return { success: true, campaignId: data.id }
     } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown migration error"
-        console.error("Migration error:", message)
+        console.error("[Migration] Error:", message)
+        if (err instanceof Error && err.stack) {
+            console.error("[Migration] Stack:", err.stack)
+        }
         return { success: false, error: message }
     }
 }
