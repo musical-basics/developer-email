@@ -92,6 +92,7 @@ import { getTags, type TagDefinition } from "@/app/actions/tags"
 import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
+import { softDeleteSubscriber, bulkSoftDeleteSubscribers } from "@/app/actions/subscribers"
 
 const statusStyles: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -192,6 +193,7 @@ export default function AudienceManagerPage() {
         const { data, error } = await supabase
             .from("subscribers")
             .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
+            .neq("status", "deleted")
             .order("created_at", { ascending: false })
 
         if (data) {
@@ -406,12 +408,12 @@ export default function AudienceManagerPage() {
     }
 
     const handleDelete = async (id: string) => {
-        const { error } = await supabase.from("subscribers").delete().eq("id", id)
+        const { error } = await softDeleteSubscriber(id)
 
         if (error) {
             toast({
                 title: "Error deleting subscriber",
-                description: error.message,
+                description: error,
                 variant: "destructive",
             })
         } else {
@@ -419,7 +421,6 @@ export default function AudienceManagerPage() {
                 title: "Subscriber deleted",
                 description: "The subscriber has been removed.",
             })
-            // Optimistic update or refresh
             setSubscribers((prev) => prev.filter((s) => s.id !== id))
             setSelectedIds((prev) => prev.filter((i) => i !== id))
         }
@@ -428,15 +429,12 @@ export default function AudienceManagerPage() {
     const handleBulkDelete = async () => {
         if (selectedIds.length === 0) return
 
-        const { error } = await supabase
-            .from("subscribers")
-            .delete()
-            .in("id", selectedIds)
+        const { error } = await bulkSoftDeleteSubscribers(selectedIds)
 
         if (error) {
             toast({
                 title: "Error deleting subscribers",
-                description: error.message,
+                description: error,
                 variant: "destructive",
             })
         } else {
