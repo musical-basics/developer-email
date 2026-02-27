@@ -15,9 +15,7 @@ import {
     Link2
 } from "lucide-react"
 import { getSubscriberHistory, getSubscriberCampaigns, getSubscriberChains } from "@/app/actions/subscriber-history"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface TimelineEvent {
     id: string
@@ -65,12 +63,12 @@ export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: stri
 
     const getIcon = (type: string) => {
         switch (type) {
-            case 'sent': return <Mail className="w-4 h-4 text-zinc-400" />
-            case 'open': return <Eye className="w-4 h-4 text-amber-400" />
-            case 'click': return <MousePointer2 className="w-4 h-4 text-emerald-400" />
-            case 'page_view': return <Globe className="w-4 h-4 text-blue-400" />
-            case 'session_end': return <Clock className="w-4 h-4 text-purple-400" />
-            default: return <MoreHorizontal className="w-4 h-4 text-zinc-500" />
+            case 'sent': return <Mail className="w-3.5 h-3.5 text-zinc-400" />
+            case 'open': return <Eye className="w-3.5 h-3.5 text-amber-400" />
+            case 'click': return <MousePointer2 className="w-3.5 h-3.5 text-emerald-400" />
+            case 'page_view': return <Globe className="w-3.5 h-3.5 text-blue-400" />
+            case 'session_end': return <Clock className="w-3.5 h-3.5 text-purple-400" />
+            default: return <MoreHorizontal className="w-3.5 h-3.5 text-zinc-500" />
         }
     }
 
@@ -87,191 +85,175 @@ export function SubscriberHistoryTimeline({ subscriberId }: { subscriberId: stri
         cancelled: "bg-red-500/10 text-red-400 border-red-500/20",
     }
 
-    if (loading) return <div className="p-8 text-center text-muted-foreground">Loading history...</div>
+    if (loading) return <div className="py-4 text-center text-sm text-muted-foreground">Loading history...</div>
+
+    // Group consecutive identical events
+    type GroupedEvent = TimelineEvent & { count: number }
+    const grouped: GroupedEvent[] = []
+    for (const event of events) {
+        const prev = grouped[grouped.length - 1]
+        const sameType = prev && prev.type === event.type
+        const sameCampaign = prev?.campaigns?.name === event.campaigns?.name
+        const sameUrl = prev?.url === event.url
+        if (sameType && sameCampaign && sameUrl) {
+            prev.count++
+        } else {
+            grouped.push({ ...event, count: 1 })
+        }
+    }
+
+    const label = (type: string, count: number) => {
+        const names: Record<string, string> = {
+            sent: "Received Email",
+            open: "Opened Email",
+            click: "Clicked Link",
+            page_view: "Visited Website",
+            session_end: "Session Ended",
+        }
+        const name = names[type] || type
+        return count > 1 ? `${name} (×${count})` : name
+    }
 
     return (
-        <Card className="h-full border-border bg-card">
-            <CardHeader className="pb-4 border-b border-border/50">
-                <CardTitle className="text-lg font-medium flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-primary" />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* ─── Activity Timeline (left, wider) ─── */}
+            <div className="lg:col-span-2">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
                     Activity Timeline
-                </CardTitle>
-            </CardHeader>
-            <ScrollArea className="h-[600px] p-0">
-                <div className="p-6">
-                    <div className="relative border-l border-border space-y-8">
-                        {events.length === 0 ? (
-                            <p className="pl-6 text-sm text-muted-foreground">No activity recorded yet.</p>
-                        ) : (() => {
-                            // Group consecutive identical events
-                            type GroupedEvent = TimelineEvent & { count: number }
-                            const grouped: GroupedEvent[] = []
+                </h3>
+                {grouped.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No activity recorded yet.</p>
+                ) : (
+                    <div className="relative border-l border-border/60 ml-1 space-y-3 max-h-[350px] overflow-y-auto pr-1">
+                        {grouped.map((event) => (
+                            <div key={event.id} className="ml-3 relative">
+                                {/* Dot */}
+                                <div className="absolute -left-[17px] top-[5px] h-2.5 w-2.5 rounded-full border-2 border-background" style={{
+                                    backgroundColor: event.type === 'open' ? '#f59e0b' :
+                                        event.type === 'click' ? '#10b981' :
+                                            event.type === 'page_view' ? '#3b82f6' :
+                                                event.type === 'sent' ? '#71717a' : '#6b7280'
+                                }} />
 
-                            for (const event of events) {
-                                const prev = grouped[grouped.length - 1]
-                                const sameType = prev && prev.type === event.type
-                                const sameCampaign = prev?.campaigns?.name === event.campaigns?.name
-                                const sameUrl = prev?.url === event.url
-
-                                if (sameType && sameCampaign && sameUrl) {
-                                    prev.count++
-                                } else {
-                                    grouped.push({ ...event, count: 1 })
-                                }
-                            }
-
-                            const label = (type: string, count: number) => {
-                                const names: Record<string, string> = {
-                                    sent: "Received Email",
-                                    open: "Opened Email",
-                                    click: "Clicked Link",
-                                    page_view: "Visited Website",
-                                    session_end: "Session Ended",
-                                }
-                                const name = names[type] || type
-                                return count > 1 ? `${name} (x${count})` : name
-                            }
-
-                            return grouped.map((event) => (
-                                <div key={event.id} className="ml-4 relative">
-                                    {/* Timeline Dot */}
-                                    <div className="absolute -left-[25px] top-1 h-4 w-4 rounded-full bg-card border border-border flex items-center justify-center z-10">
-                                        <div className={`h-2 w-2 rounded-full ${event.type === 'open' ? 'bg-amber-500' :
-                                            event.type === 'click' ? 'bg-emerald-500' :
-                                                event.type === 'page_view' ? 'bg-blue-500' :
-                                                    'bg-zinc-600'
-                                            }`} />
+                                <div className="flex items-start justify-between gap-2">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                        {getIcon(event.type)}
+                                        <span className="text-xs font-medium text-foreground">
+                                            {label(event.type, event.count)}
+                                        </span>
                                     </div>
-
-                                    {/* Content */}
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="p-1 rounded-md bg-muted/50 border border-border/50">
-                                                {getIcon(event.type)}
-                                            </span>
-                                            <span className="text-sm font-medium text-foreground">
-                                                {label(event.type, event.count)}
-                                            </span>
-                                            <span className="text-xs text-muted-foreground ml-auto">
-                                                {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
-                                            </span>
-                                        </div>
-
-                                        {/* Details Box */}
-                                        <div className="mt-1 p-3 rounded-lg bg-muted/30 border border-border/50 text-sm">
-
-                                            {/* Campaign Context */}
-                                            {event.campaigns?.name && (
-                                                <div className="mb-1 text-xs text-muted-foreground uppercase tracking-wider">
-                                                    Campaign: {event.campaigns.name}
-                                                </div>
-                                            )}
-
-                                            {/* Action Context */}
-                                            {event.url && (
-                                                <a href={event.url} target="_blank" className="flex items-center gap-1 text-blue-400 hover:underline break-all">
-                                                    {new URL(event.url).pathname}
-                                                    <ArrowUpRight className="w-3 h-3" />
-                                                </a>
-                                            )}
-
-                                            {/* Metadata (Duration / IP) */}
-                                            <div className="mt-2 flex gap-2">
-                                                {event.metadata?.duration_seconds && (
-                                                    <Badge variant="secondary" className="text-[10px] h-5 bg-purple-500/10 text-purple-400 border-purple-500/20">
-                                                        Time on site: {formatDuration(event.metadata.duration_seconds)}
-                                                    </Badge>
-                                                )}
-                                                {event.ip_address && (
-                                                    <Badge variant="outline" className="text-[10px] h-5 text-zinc-500">
-                                                        IP: {event.ip_address}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
+                                    <span className="text-[10px] text-muted-foreground whitespace-nowrap flex-shrink-0">
+                                        {formatDistanceToNow(new Date(event.created_at), { addSuffix: true })}
+                                    </span>
                                 </div>
-                            ))
-                        })()}
-                    </div>
 
-                    {/* ─── Campaigns Sent ─── */}
-                    <div className="mt-10 pt-6 border-t border-border">
-                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
-                            <Send className="w-4 h-4 text-primary" />
-                            Campaigns Received ({campaigns.length})
-                        </h3>
-                        {campaigns.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">No campaigns sent to this subscriber yet.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {campaigns.map((c) => (
-                                    <div key={c.campaign_id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="p-1.5 rounded-md bg-blue-500/10 border border-blue-500/20 flex-shrink-0">
-                                                <Mail className="w-3.5 h-3.5 text-blue-400" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <Link
-                                                    href={`/dashboard/${c.campaign_id}`}
-                                                    className="text-sm font-medium text-foreground hover:underline truncate block"
-                                                >
-                                                    {c.campaigns?.name || "Unknown Campaign"}
-                                                </Link>
-                                                <span className="text-[11px] text-muted-foreground">
-                                                    Sent {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        {c.campaigns?.status && (
-                                            <Badge variant="outline" className="text-[10px] capitalize ml-2 flex-shrink-0">
-                                                {c.campaigns.status}
-                                            </Badge>
+                                {/* Compact details */}
+                                {(event.campaigns?.name || event.url || event.ip_address || event.metadata?.duration_seconds) && (
+                                    <div className="mt-0.5 ml-5 text-[11px] text-muted-foreground space-y-0.5">
+                                        {event.campaigns?.name && (
+                                            <div className="truncate">{event.campaigns.name}</div>
                                         )}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ─── Chain Enrollments ─── */}
-                    <div className="mt-8 pt-6 border-t border-border">
-                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
-                            <Link2 className="w-4 h-4 text-primary" />
-                            Chain Enrollments ({chains.length})
-                        </h3>
-                        {chains.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">Not enrolled in any chains.</p>
-                        ) : (
-                            <div className="space-y-2">
-                                {chains.map((ch) => (
-                                    <div key={ch.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-                                        <div className="flex items-center gap-3 min-w-0">
-                                            <div className="p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20 flex-shrink-0">
-                                                <Link2 className="w-3.5 h-3.5 text-purple-400" />
-                                            </div>
-                                            <div className="min-w-0">
-                                                <span className="text-sm font-medium text-foreground truncate block">
-                                                    {ch.email_chains?.name || "Unknown Chain"}
-                                                </span>
-                                                <span className="text-[11px] text-muted-foreground">
-                                                    Step {ch.current_step_index + 1} · Started {formatDistanceToNow(new Date(ch.created_at), { addSuffix: true })}
-                                                </span>
-                                            </div>
+                                        {event.url && (
+                                            <a href={event.url} target="_blank" className="flex items-center gap-0.5 text-blue-400 hover:underline truncate">
+                                                {(() => { try { return new URL(event.url).pathname } catch { return event.url } })()}
+                                                <ArrowUpRight className="w-2.5 h-2.5 flex-shrink-0" />
+                                            </a>
+                                        )}
+                                        <div className="flex gap-1.5">
+                                            {event.metadata?.duration_seconds && (
+                                                <Badge variant="secondary" className="text-[9px] h-4 px-1 bg-purple-500/10 text-purple-400 border-purple-500/20">
+                                                    {formatDuration(event.metadata.duration_seconds)}
+                                                </Badge>
+                                            )}
+                                            {event.ip_address && (
+                                                <Badge variant="outline" className="text-[9px] h-4 px-1 text-zinc-500">
+                                                    {event.ip_address}
+                                                </Badge>
+                                            )}
                                         </div>
-                                        <Badge
-                                            variant="outline"
-                                            className={`text-[10px] capitalize ml-2 flex-shrink-0 ${chainStatusStyle[ch.status] || ""}`}
-                                        >
-                                            {ch.status}
-                                        </Badge>
                                     </div>
-                                ))}
+                                )}
                             </div>
-                        )}
+                        ))}
                     </div>
+                )}
+            </div>
+
+            {/* ─── Right column: Campaigns + Chains ─── */}
+            <div className="space-y-4">
+                {/* Campaigns Received */}
+                <div>
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Send className="w-3.5 h-3.5" />
+                        Campaigns Received ({campaigns.length})
+                    </h3>
+                    {campaigns.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No campaigns sent yet.</p>
+                    ) : (
+                        <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
+                            {campaigns.map((c) => (
+                                <div key={c.campaign_id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-border/50">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <Mail className="w-3 h-3 text-blue-400 flex-shrink-0" />
+                                        <div className="min-w-0">
+                                            <Link
+                                                href={`/dashboard/${c.campaign_id}`}
+                                                className="text-xs font-medium text-foreground hover:underline truncate block"
+                                            >
+                                                {c.campaigns?.name || "Unknown Campaign"}
+                                            </Link>
+                                            <span className="text-[10px] text-muted-foreground">
+                                                {formatDistanceToNow(new Date(c.created_at), { addSuffix: true })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    {c.campaigns?.status && (
+                                        <Badge variant="outline" className="text-[9px] capitalize ml-1 flex-shrink-0 h-4 px-1">
+                                            {c.campaigns.status}
+                                        </Badge>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
-            </ScrollArea>
-        </Card>
+
+                {/* Chain Enrollments */}
+                <div>
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                        <Link2 className="w-3.5 h-3.5" />
+                        Chain Enrollments ({chains.length})
+                    </h3>
+                    {chains.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">Not enrolled in any chains.</p>
+                    ) : (
+                        <div className="space-y-1.5 max-h-[160px] overflow-y-auto">
+                            {chains.map((ch) => (
+                                <div key={ch.id} className="flex items-center justify-between p-2 rounded-md bg-muted/30 border border-border/50">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <Link2 className="w-3 h-3 text-purple-400 flex-shrink-0" />
+                                        <div className="min-w-0">
+                                            <span className="text-xs font-medium text-foreground truncate block">
+                                                {ch.email_chains?.name || "Unknown Chain"}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground">
+                                                Step {ch.current_step_index + 1} · {formatDistanceToNow(new Date(ch.created_at), { addSuffix: true })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <Badge
+                                        variant="outline"
+                                        className={`text-[9px] capitalize ml-1 flex-shrink-0 h-4 px-1 ${chainStatusStyle[ch.status] || ""}`}
+                                    >
+                                        {ch.status}
+                                    </Badge>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
     )
 }

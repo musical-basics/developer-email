@@ -25,17 +25,16 @@ export async function getSubscriberHistory(subscriberId: string) {
 export async function getSubscriberCampaigns(subscriberId: string) {
     const supabase = await createClient()
 
-    // Get unique campaigns this subscriber received (type = 'sent')
+    // Get campaigns sent to this subscriber from sent_history
     const { data, error } = await supabase
-        .from('subscriber_events')
+        .from('sent_history')
         .select(`
             campaign_id,
-            created_at,
+            sent_at,
             campaigns ( id, name, status )
         `)
         .eq('subscriber_id', subscriberId)
-        .eq('type', 'sent')
-        .order('created_at', { ascending: false })
+        .order('sent_at', { ascending: false })
 
     if (error) {
         console.error("Error fetching subscriber campaigns:", error)
@@ -48,7 +47,7 @@ export async function getSubscriberCampaigns(subscriberId: string) {
     for (const row of data || []) {
         if (row.campaign_id && !seen.has(row.campaign_id)) {
             seen.add(row.campaign_id)
-            unique.push(row)
+            unique.push({ ...row, created_at: row.sent_at })
         }
     }
     return unique
