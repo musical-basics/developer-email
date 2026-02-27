@@ -1003,11 +1003,31 @@ export default function AudienceManagerPage() {
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             {/* Header */}
             <div className="mb-8">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
-                        <Users className="h-5 w-5 text-amber-500" />
+                <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+                            <Users className="h-5 w-5 text-amber-500" />
+                        </div>
+                        <h1 className="text-2xl font-bold text-foreground">Audience Manager</h1>
                     </div>
-                    <h1 className="text-2xl font-bold text-foreground">Audience Manager</h1>
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="sm" className="gap-2" onClick={handleExportCsv}>
+                            <Download className="h-4 w-4" />
+                            Export
+                        </Button>
+                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => setIsCsvImportOpen(true)}>
+                            <FileUp className="h-4 w-4" />
+                            Import CSV
+                        </Button>
+                        <Button variant="secondary" size="sm" className="gap-2" onClick={() => setIsBulkAddOpen(true)}>
+                            <UsersRound className="h-4 w-4" />
+                            Bulk Add
+                        </Button>
+                        <Button size="sm" onClick={handleAddSubscriber} className="gap-2 bg-amber-500 text-zinc-900 hover:bg-amber-400">
+                            <Plus className="h-4 w-4" />
+                            Add Subscriber
+                        </Button>
+                    </div>
                 </div>
                 <p className="text-muted-foreground">
                     Manage your subscribers, tags, and segmentation for your email campaigns.
@@ -1128,7 +1148,7 @@ export default function AudienceManagerPage() {
                 )}
             </div>
 
-            {/* Toolbar */}
+            {/* Toolbar — Filters & View Toggle */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
                 <div className="flex flex-1 items-center gap-3">
                     <div className="relative flex-1 max-w-sm">
@@ -1229,76 +1249,55 @@ export default function AudienceManagerPage() {
                     </Tabs>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {selectedIds.length > 0 ? (
-                        <>
-                            <Button variant="ghost" onClick={() => setSelectedIds([])}>
-                                Cancel ({selectedIds.length})
-                            </Button>
-                            <Popover open={isBulkTagOpen} onOpenChange={(open) => { setIsBulkTagOpen(open); if (!open) setBulkTagSelections([]) }}>
-                                <PopoverTrigger asChild>
-                                    <Button variant="secondary" className="gap-2">
-                                        <Tag className="h-4 w-4" />
-                                        Bulk Tag
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent align="end" className="w-64 p-3">
-                                    <div className="space-y-3">
-                                        <p className="text-sm font-medium">Apply tags to {selectedIds.length} subscribers</p>
-                                        <div className="max-h-[200px] overflow-y-auto space-y-1">
-                                            {allTags.length === 0 ? (
-                                                <p className="text-xs text-muted-foreground py-2">No tags defined yet.</p>
-                                            ) : allTags.map(tag => (
-                                                <label key={tag} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
-                                                    <Checkbox
-                                                        checked={bulkTagSelections.includes(tag)}
-                                                        onCheckedChange={(checked) => {
-                                                            setBulkTagSelections(prev =>
-                                                                checked ? [...prev, tag] : prev.filter(t => t !== tag)
-                                                            )
-                                                        }}
-                                                    />
-                                                    {tag}
-                                                </label>
-                                            ))}
-                                        </div>
-                                        <Button
-                                            size="sm"
-                                            className="w-full bg-amber-500 text-zinc-900 hover:bg-amber-400"
-                                            disabled={bulkTagSelections.length === 0 || bulkTagging}
-                                            onClick={handleBulkTag}
-                                        >
-                                            {bulkTagging ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying...</> : `Apply ${bulkTagSelections.length} Tag${bulkTagSelections.length !== 1 ? 's' : ''}`}
-                                        </Button>
+                {selectedIds.length > 0 && (
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" onClick={() => setSelectedIds([])}>
+                            Cancel ({selectedIds.length})
+                        </Button>
+                        <Popover open={isBulkTagOpen} onOpenChange={(open) => { setIsBulkTagOpen(open); if (!open) setBulkTagSelections([]) }}>
+                            <PopoverTrigger asChild>
+                                <Button variant="secondary" className="gap-2">
+                                    <Tag className="h-4 w-4" />
+                                    Bulk Tag
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-64 p-3">
+                                <div className="space-y-3">
+                                    <p className="text-sm font-medium">Apply tags to {selectedIds.length} subscribers</p>
+                                    <div className="max-h-[200px] overflow-y-auto space-y-1">
+                                        {allTags.length === 0 ? (
+                                            <p className="text-xs text-muted-foreground py-2">No tags defined yet.</p>
+                                        ) : allTags.map(tag => (
+                                            <label key={tag} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted cursor-pointer text-sm">
+                                                <Checkbox
+                                                    checked={bulkTagSelections.includes(tag)}
+                                                    onCheckedChange={(checked) => {
+                                                        setBulkTagSelections(prev =>
+                                                            checked ? [...prev, tag] : prev.filter(t => t !== tag)
+                                                        )
+                                                    }}
+                                                />
+                                                {tag}
+                                            </label>
+                                        ))}
                                     </div>
-                                </PopoverContent>
-                            </Popover>
-                            <Button variant="destructive" onClick={() => setIsDeleteAlertOpen(true)} className="gap-2">
-                                <Trash2 className="h-4 w-4" />
-                                Delete Selected
-                            </Button>
-                        </>
-                    ) : (
-                        <>
-                            <Button variant="ghost" className="gap-2" onClick={handleExportCsv}>
-                                <Download className="h-4 w-4" />
-                                Export
-                            </Button>
-                            <Button variant="secondary" className="gap-2" onClick={() => setIsCsvImportOpen(true)}>
-                                <FileUp className="h-4 w-4" />
-                                Import CSV
-                            </Button>
-                            <Button variant="secondary" className="gap-2" onClick={() => setIsBulkAddOpen(true)}>
-                                <UsersRound className="h-4 w-4" />
-                                Bulk Add
-                            </Button>
-                            <Button onClick={handleAddSubscriber} className="gap-2 bg-amber-500 text-zinc-900 hover:bg-amber-400">
-                                <Plus className="h-4 w-4" />
-                                Add Subscriber
-                            </Button>
-                        </>
-                    )}
-                </div>
+                                    <Button
+                                        size="sm"
+                                        className="w-full bg-amber-500 text-zinc-900 hover:bg-amber-400"
+                                        disabled={bulkTagSelections.length === 0 || bulkTagging}
+                                        onClick={handleBulkTag}
+                                    >
+                                        {bulkTagging ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying...</> : `Apply ${bulkTagSelections.length} Tag${bulkTagSelections.length !== 1 ? 's' : ''}`}
+                                    </Button>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                        <Button variant="destructive" onClick={() => setIsDeleteAlertOpen(true)} className="gap-2">
+                            <Trash2 className="h-4 w-4" />
+                            Delete Selected
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Content */}
