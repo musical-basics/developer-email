@@ -99,6 +99,7 @@ import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { softDeleteSubscriber, bulkSoftDeleteSubscribers } from "@/app/actions/subscribers"
+import { getSavedViews, createSavedView, deleteSavedView, type SavedView } from "@/app/actions/saved-views"
 
 const statusStyles: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -107,19 +108,7 @@ const statusStyles: Record<string, string> = {
     unsubscribed: "bg-zinc-500/20 text-zinc-400 border-zinc-500/30",
 }
 
-const SAVED_VIEWS_KEY = "audience_saved_views"
 const ACTIVE_VIEW_KEY = "audience_active_view"
-
-interface SavedView {
-    id: string
-    name: string
-    searchQuery: string
-    selectedTags: string[]
-    excludedTags: string[]
-    statusFilter: string[]
-    showTestOnly: boolean
-    lastEmailedSort: "asc" | "desc" | null
-}
 
 function getInitials(firstName: string, lastName: string): string {
     return `${(firstName || "").charAt(0)}${(lastName || "").charAt(0)}`.toUpperCase()
@@ -155,14 +144,8 @@ export default function AudienceManagerPage() {
     const [lastEmailedSort, setLastEmailedSort] = useState<"asc" | "desc" | null>(null)
     const [statusFilter, setStatusFilter] = useState<string[]>([])
 
-    // Saved Views — initialize directly from localStorage to avoid race conditions
-    const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
-        if (typeof window === 'undefined') return []
-        try {
-            const stored = localStorage.getItem(SAVED_VIEWS_KEY)
-            return stored ? JSON.parse(stored) : []
-        } catch { return [] }
-    })
+    // Saved Views — loaded from DB on mount
+    const [savedViews, setSavedViews] = useState<SavedView[]>([])
     const [activeViewId, setActiveViewId] = useState<string | null>(() => {
         if (typeof window === 'undefined') return null
         return localStorage.getItem(ACTIVE_VIEW_KEY)
@@ -276,32 +259,33 @@ export default function AudienceManagerPage() {
     useEffect(() => {
         fetchSubscribers()
         fetchTagDefinitions()
-        // Apply active view filters on mount
-        if (activeViewId) {
-            const view = savedViews.find(v => v.id === activeViewId)
-            if (view) {
-                setSearchQuery(view.searchQuery)
-                setSelectedTags(view.selectedTags)
-                setExcludedTags(view.excludedTags || [])
-                setStatusFilter(view.statusFilter)
-                setShowTestOnly(view.showTestOnly)
-                setLastEmailedSort(view.lastEmailedSort)
+        // Load saved views from DB
+        getSavedViews().then(views => {
+            setSavedViews(views)
+            // Apply active view filters
+            const activeId = localStorage.getItem(ACTIVE_VIEW_KEY)
+            if (activeId) {
+                const view = views.find(v => v.id === activeId)
+                if (view) {
+                    setSearchQuery(view.search_query)
+                    setSelectedTags(view.selected_tags)
+                    setExcludedTags(view.excluded_tags || [])
+                    setStatusFilter(view.status_filter)
+                    setShowTestOnly(view.show_test_only)
+                    setLastEmailedSort(view.last_emailed_sort as "asc" | "desc" | null)
+                    setActiveViewId(view.id)
+                }
             }
-        }
+        })
     }, [])
 
-    // Persist views to localStorage whenever they change
-    useEffect(() => {
-        localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(savedViews))
-    }, [savedViews])
-
     const applyView = (view: SavedView) => {
-        setSearchQuery(view.searchQuery)
-        setSelectedTags(view.selectedTags)
-        setExcludedTags(view.excludedTags || [])
-        setStatusFilter(view.statusFilter)
-        setShowTestOnly(view.showTestOnly)
-        setLastEmailedSort(view.lastEmailedSort)
+        setSearchQuery(view.search_query)
+        setSelectedTags(view.selected_tags)
+        setExcludedTags(view.excluded_tags || [])
+        setStatusFilter(view.status_filter)
+        setShowTestOnly(view.show_test_only)
+        setLastEmailedSort(view.last_emailed_sort as "asc" | "desc" | null)
         setActiveViewId(view.id)
         localStorage.setItem(ACTIVE_VIEW_KEY, view.id)
     }
@@ -311,28 +295,32 @@ export default function AudienceManagerPage() {
         localStorage.removeItem(ACTIVE_VIEW_KEY)
     }
 
-    const handleSaveView = () => {
+    const handleSaveView = async () => {
         if (!newViewName.trim()) return
-        const view: SavedView = {
-            id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        const created = await createSavedView({
             name: newViewName.trim(),
-            searchQuery,
-            selectedTags,
-            excludedTags,
-            statusFilter,
-            showTestOnly,
-            lastEmailedSort,
+            search_query: searchQuery,
+            selected_tags: selectedTags,
+            excluded_tags: excludedTags,
+            status_filter: statusFilter,
+            show_test_only: showTestOnly,
+            last_emailed_sort: lastEmailedSort,
+        })
+        if (created) {
+            setSavedViews(prev => [...prev, created])
+            setActiveViewId(created.id)
+            localStorage.setItem(ACTIVE_VIEW_KEY, created.id)
         }
-        setSavedViews(prev => [...prev, view])
-        setActiveViewId(view.id)
-        localStorage.setItem(ACTIVE_VIEW_KEY, view.id)
         setNewViewName("")
         setSavingViewName(false)
     }
 
-    const handleDeleteView = (viewId: string) => {
-        setSavedViews(prev => prev.filter(v => v.id !== viewId))
-        if (activeViewId === viewId) clearActiveView()
+    const handleDeleteView = async (viewId: string) => {
+        const ok = await deleteSavedView(viewId)
+        if (ok) {
+            setSavedViews(prev => prev.filter(v => v.id !== viewId))
+            if (activeViewId === viewId) clearActiveView()
+        }
     }
 
     // Stats
