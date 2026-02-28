@@ -15,6 +15,7 @@ import {
     ChevronDown,
 } from "lucide-react"
 import { processMigration, processMigrationToDnd, analyzeMailchimpFile } from "@/app/actions/migrations"
+import { compressImages } from "@/lib/utils/compress-image"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -51,6 +52,8 @@ export default function MigratePage() {
     const [isConverting, setIsConverting] = useState(false)
     const [analysis, setAnalysis] = useState<AnalysisResult | null>(null)
     const [error, setError] = useState<string | null>(null)
+    const [isCompressing, setIsCompressing] = useState(false)
+    const [compressionStatus, setCompressionStatus] = useState("")
     const [aiMode, setAiMode] = useState<AiMode>("both")
     const [importMode, setImportMode] = useState<ImportMode>("dnd")
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
@@ -149,9 +152,39 @@ export default function MigratePage() {
 
     const handleConvert = async () => {
         if (!htmlFile) return
-        setIsConverting(true)
         setError(null)
 
+        // Step 1: Compress images over 300KB before sending
+        let filesToSend = assetFiles
+        const oversized = assetFiles.filter((f) => f.size > 300 * 1024)
+        if (oversized.length > 0) {
+            setIsCompressing(true)
+            setCompressionStatus(`Compressing ${oversized.length} large image${oversized.length > 1 ? "s" : ""}...`)
+            try {
+                const { files: compressed, stats } = await compressImages(
+                    assetFiles,
+                    300 * 1024,
+                    (index, total, filename) => {
+                        setCompressionStatus(`Compressing ${index + 1}/${total}: ${filename}`)
+                    }
+                )
+                filesToSend = compressed
+                setAssetFiles(compressed) // Update UI with compressed files
+                if (stats.compressedCount > 0) {
+                    const savedMB = ((stats.originalTotalBytes - stats.compressedTotalBytes) / (1024 * 1024)).toFixed(1)
+                    console.log(`[Compress] Compressed ${stats.compressedCount} images, saved ${savedMB} MB`)
+                }
+            } catch (err) {
+                console.error("Compression error:", err)
+                // Fall through — try with original files
+            } finally {
+                setIsCompressing(false)
+                setCompressionStatus("")
+            }
+        }
+
+        // Step 2: Build FormData and send
+        setIsConverting(true)
         try {
             const formData = new FormData()
             formData.append("htmlFile", htmlFile)
@@ -159,7 +192,7 @@ export default function MigratePage() {
             formData.append("aiMode", aiMode)
             formData.append("geminiModel", selectedGeminiModel)
             formData.append("claudeModel", selectedClaudeModel)
-            assetFiles.forEach((f, i) => formData.append(`asset_${i}`, f))
+            filesToSend.forEach((f, i) => formData.append(`asset_${i}`, f))
 
             if (importMode === "dnd") {
                 // DnD block import — deterministic, no AI
@@ -496,11 +529,16 @@ export default function MigratePage() {
                         {/* Convert Button */}
                         <Button
                             onClick={handleConvert}
-                            disabled={isConverting || !htmlFile}
+                            disabled={isCompressing || isConverting || !htmlFile}
                             className="w-full h-12 text-base"
                             size="lg"
                         >
-                            {isConverting ? (
+                            {isCompressing ? (
+                                <>
+                                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                                    Compressing Images...
+                                </>
+                            ) : isConverting ? (
                                 <>
                                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
                                     {importMode === "dnd" ? "Importing Blocks..." : "Converting with AI..."}
@@ -513,6 +551,11 @@ export default function MigratePage() {
                             )}
                         </Button>
 
+                        {isCompressing && compressionStatus && (
+                            <p className="text-xs text-amber-400 text-center">
+                                {compressionStatus}
+                            </p>
+                        )}
                         {isConverting && (
                             <p className="text-xs text-muted-foreground text-center">
                                 {importMode === "dnd"
