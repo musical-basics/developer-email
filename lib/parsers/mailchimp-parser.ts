@@ -153,8 +153,8 @@ export function generateContentSummary(parsed: ParsedEmail): string {
                 sections.push(`${i + 1}. LOGO IMAGE: ${block.src}`)
                 break
             case "text":
-                const preview = (block.content || "").replace(/<[^>]+>/g, "").substring(0, 100)
-                sections.push(`${i + 1}. TEXT BLOCK: "${preview}..."`)
+                const preview = (block.content || "").replace(/<[^>]+>/g, "")
+                sections.push(`${i + 1}. TEXT BLOCK: "${preview}"`)
                 break
             case "button":
                 sections.push(`${i + 1}. CTA BUTTON: "${block.content}" → ${block.href}`)
