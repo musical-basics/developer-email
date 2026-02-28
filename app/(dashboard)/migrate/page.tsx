@@ -195,14 +195,14 @@ export default function MigratePage() {
             filesToSend.forEach((f, i) => formData.append(`asset_${i}`, f))
 
             if (importMode === "dnd") {
-                // DnD block import — deterministic, no AI
+                // Direct HTML import — faithful carbon copy, no AI
                 const result = await processMigrationToDnd(formData)
                 if (result.success && result.campaignId) {
                     toast({
                         title: "Import Complete",
-                        description: `"${templateName}" has been imported as DnD blocks.`,
+                        description: `"${templateName}" has been imported as a carbon copy.`,
                     })
-                    router.push(`/dnd-editor?id=${result.campaignId}`)
+                    router.push(`/editor?id=${result.campaignId}`)
                 } else {
                     setError(result.error || "Import failed")
                 }
@@ -374,7 +374,7 @@ export default function MigratePage() {
                                                 ? "bg-primary text-primary-foreground"
                                                 : "text-muted-foreground hover:text-foreground"}`}
                                     >
-                                        DnD Blocks
+                                        Direct Import
                                     </button>
                                     <button
                                         onClick={() => setImportMode("ai")}
@@ -388,7 +388,7 @@ export default function MigratePage() {
                                 </div>
                                 <p className="text-[10px] text-muted-foreground">
                                     {importMode === "dnd"
-                                        ? "Converts directly to editable blocks. Fast, no AI needed."
+                                        ? "Carbon copy of original HTML. Replaces image URLs with uploaded assets. Fast, no AI."
                                         : "Uses AI to generate clean HTML template. Takes 30-60s."}
                                 </p>
 
@@ -541,12 +541,12 @@ export default function MigratePage() {
                             ) : isConverting ? (
                                 <>
                                     <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                                    {importMode === "dnd" ? "Importing Blocks..." : "Converting with AI..."}
+                                    {importMode === "dnd" ? "Importing..." : "Converting with AI..."}
                                 </>
                             ) : (
                                 <>
                                     <Sparkles className="w-5 h-5 mr-2" />
-                                    {importMode === "dnd" ? "Import as DnD Blocks" : "Convert & Save as Template"}
+                                    {importMode === "dnd" ? "Import as Carbon Copy" : "Convert & Save as Template"}
                                 </>
                             )}
                         </Button>
@@ -559,7 +559,7 @@ export default function MigratePage() {
                         {isConverting && (
                             <p className="text-xs text-muted-foreground text-center">
                                 {importMode === "dnd"
-                                    ? "Parsing structure and uploading images..."
+                                    ? "Uploading images and processing HTML..."
                                     : "Uploading images, analyzing structure, and generating HTML. This may take 30–60 seconds."}
                             </p>
                         )}

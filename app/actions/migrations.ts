@@ -3,11 +3,9 @@
 import { createHash } from "crypto"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createClient } from "@supabase/supabase-js"
+import * as cheerio from "cheerio"
 import { convertMailchimpToEmail, AssetMapping } from "@/lib/ai/email-generator"
 import { parseMailchimpHtml, generateContentSummary } from "@/lib/parsers/mailchimp-parser"
-import { convertMailchimpToBlocks } from "@/lib/parsers/mailchimp-to-blocks"
-import { serializeBlocks } from "@/lib/dnd-blocks/types"
-import { compileBlocksToHtml } from "@/lib/dnd-blocks/compiler"
 
 // Admin client that bypasses RLS for asset uploads
 function getAdminClient() {
@@ -206,11 +204,11 @@ export async function analyzeMailchimpFile(htmlContent: string): Promise<{
 }
 
 /**
- * Migration pipeline for DnD block editor (no AI needed):
- * 1. Upload all images with hash dedup
- * 2. Parse Mailchimp HTML → EmailBlock[] deterministically
- * 3. Merge uploaded asset URLs into the block assets
- * 4. Insert as DnD-format campaign
+ * Direct HTML import — faithful "carbon copy" of the Mailchimp email:
+ * 1. Upload all image assets to Supabase with hash dedup
+ * 2. Clean up Mailchimp boilerplate (MSO, archive bar, tracking)
+ * 3. Replace image src URLs with uploaded Supabase URLs (matched by filename)
+ * 4. Store the cleaned HTML directly — no AI rewriting, no block decomposition
  */
 export async function processMigrationToDnd(formData: FormData): Promise<{
     success: boolean
@@ -233,36 +231,85 @@ export async function processMigrationToDnd(formData: FormData): Promise<{
             }
         }
 
+        console.log(`[DirectImport] File: ${htmlFile.name}, ${imageFiles.length} assets`)
+
         // Step 1: Upload all images concurrently with hash dedup
         const assetMappings = await Promise.all(
             imageFiles.map((file) => uploadHashedAsset(file))
         )
+        console.log(`[DirectImport] Uploaded ${assetMappings.length} assets`)
 
-        // Step 2: Parse Mailchimp HTML → DnD blocks (deterministic, no AI)
-        const htmlContent = await htmlFile.text()
-        const result = convertMailchimpToBlocks(htmlContent)
+        // Step 2: Read the HTML and clean Mailchimp boilerplate
+        const rawHtml = await htmlFile.text()
+        const $ = cheerio.load(rawHtml)
 
-        // Step 3: Merge uploaded asset URLs into the block asset map
-        // Match uploaded files to parser-generated variable names by filename
-        const variableValues: Record<string, string> = { ...result.assets }
+        // Remove Mailchimp-specific elements
+        $("#awesomewrap").remove()        // Archive bar
+        $(".mcnPreviewText").remove()     // Preview text container
+        $("script").remove()              // Tracking scripts
+        // Remove MSO conditional comments from raw HTML
+        // (cheerio doesn't parse these, so we handle them on the string level later)
+
+        // Step 3: Build filename → Supabase URL map from uploaded assets
+        const filenameToUrl: Record<string, string> = {}
         for (const mapping of assetMappings) {
-            // The parser creates vars like "filename_png_src", the uploader creates the same
-            variableValues[mapping.variableName] = mapping.url
-
-            // Also try to match against parser-generated vars by partial filename match
-            const cleanName = mapping.originalName.toLowerCase().replace(/[^a-z0-9]/g, "_")
-            for (const key of Object.keys(variableValues)) {
-                if (key.includes(cleanName.split("_")[0]) && key.endsWith("_src") && !variableValues[key]) {
-                    variableValues[key] = mapping.url
-                }
-            }
+            // Map by original filename (e.g., "hero-image.png" → "https://supabase.../hash-hero-image.png")
+            filenameToUrl[mapping.originalName.toLowerCase()] = mapping.url
+            // Also map without extension for fuzzy matching
+            const nameNoExt = mapping.originalName.replace(/\.[^.]+$/, "").toLowerCase()
+            filenameToUrl[nameNoExt] = mapping.url
         }
 
-        // Step 4: Serialize blocks and compile HTML backup
-        const blocksJson = serializeBlocks(result.blocks)
-        const compiledHtml = compileBlocksToHtml(result.blocks)
+        // Step 4: Replace image src attributes with uploaded Supabase URLs
+        const variableValues: Record<string, string> = {}
+        $("img").each((_: number, el: any) => {
+            const $img = $(el)
+            const originalSrc = $img.attr("src") || ""
+            if (!originalSrc) return
 
-        // Step 5: Insert campaign using admin client
+            // Extract the filename from the original src URL
+            const srcFilename = originalSrc.split("/").pop()?.split("?")[0]?.toLowerCase() || ""
+
+            // Try exact filename match first
+            let newUrl = filenameToUrl[srcFilename]
+
+            // If no exact match, try matching without extension
+            if (!newUrl) {
+                const srcNoExt = srcFilename.replace(/\.[^.]+$/, "")
+                newUrl = filenameToUrl[srcNoExt]
+            }
+
+            // If no match, try partial match (uploaded filename contained in src filename or vice versa)
+            if (!newUrl) {
+                for (const [uploadedName, url] of Object.entries(filenameToUrl)) {
+                    if (srcFilename.includes(uploadedName) || uploadedName.includes(srcFilename)) {
+                        newUrl = url
+                        break
+                    }
+                }
+            }
+
+            if (newUrl) {
+                $img.attr("src", newUrl)
+                console.log(`[DirectImport] Replaced: ${srcFilename} → uploaded URL`)
+                // Track in variable_values for reference
+                const varName = toVariableName(srcFilename || `image_${_}`)
+                variableValues[varName] = newUrl
+            }
+        })
+
+        // Step 5: Get the cleaned HTML
+        let cleanedHtml = $.html()
+
+        // Remove MSO conditional comments at the string level
+        cleanedHtml = cleanedHtml.replace(/<!--\[if mso\]>[\s\S]*?<!\[endif\]-->/gi, "")
+        cleanedHtml = cleanedHtml.replace(/<!--\[if !mso\]><!-->/gi, "")
+        cleanedHtml = cleanedHtml.replace(/<!--<!\[endif\]-->/gi, "")
+
+        // Extract title for the campaign
+        const title = $("title").text() || $('meta[property="og:title"]').attr("content") || templateName
+
+        // Step 6: Insert campaign with raw HTML
         const admin = getAdminClient()
         const { data, error } = await admin
             .from("campaigns")
@@ -270,25 +317,23 @@ export async function processMigrationToDnd(formData: FormData): Promise<{
                 name: templateName,
                 status: "draft",
                 is_template: true,
-                subject_line: result.title || templateName,
-                html_content: blocksJson,
-                variable_values: {
-                    ...variableValues,
-                    _compiled_html: compiledHtml,
-                },
+                subject_line: title,
+                html_content: cleanedHtml,
+                variable_values: variableValues,
             }])
             .select()
             .single()
 
         if (error) {
-            console.error("Insert campaign error:", error)
+            console.error("[DirectImport] Insert error:", error)
             return { success: false, error: error.message }
         }
 
+        console.log(`[DirectImport] Success! Campaign ID: ${data.id}`)
         return { success: true, campaignId: data.id }
     } catch (err) {
         const message = err instanceof Error ? err.message : "Unknown migration error"
-        console.error("DnD Migration error:", message)
+        console.error("[DirectImport] Error:", message)
         return { success: false, error: message }
     }
 }
