@@ -38,10 +38,24 @@
       "*repomix*",
       "components/ui/**",
       "scripts/**",
+      "supabase/**",
+      "hooks/**",
+      "inngest/**",
+      "_inngest_lessons.md",
       "all_campaigns.json",
       "campaign_record.json",
       "campaign_updated.json",
-      "recent_files.json"
+      "recent_files.json",
+      "postcss.config.mjs",
+      "tsconfig.json",
+      "tsconfig.tsbuildinfo",
+      "next-env.d.ts",
+      "tailwind.config.*",
+      "components/dnd-editor/**",
+      "lib/dnd-blocks/**",
+      "lib/parsers/**",
+      "app/dnd-editor/**",
+      "app/modular-editor/**"
     ]
   },
   "security": {
