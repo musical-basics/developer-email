@@ -49,54 +49,65 @@ export function parseMailchimpHtml(html: string): ParsedEmail {
     const links: ParsedEmail["links"] = []
     const socialLinks: ParsedEmail["socialLinks"] = []
 
-    // Extract images
-    $("img.mceImage, img.mceLogo, img.imageDropZone").each((_, el) => {
+    // Walk DOM in document order to preserve interleaved layout
+    // Each Mailchimp block sits inside a mceRow; we process child blocks
+    // (images, text, buttons) in the order they appear in the HTML.
+    $("[data-block-id]").each((_, el) => {
         const $el = $(el)
-        const src = $el.attr("src") || ""
-        const alt = $el.attr("alt") || ""
-        const width = $el.attr("width") || ""
-        const parentLink = $el.closest("a").attr("href") || ""
 
-        const filename = src.split("/").pop() || src
-        images.push({ filename, originalSrc: src, alt })
+        // Check if this block is an image
+        const isImage = $el.is("img.mceImage, img.mceLogo, img.imageDropZone")
+        // Or contains an image directly (e.g. a link wrapping an image table)
+        const $img = isImage ? $el : $el.find("img.mceImage, img.mceLogo, img.imageDropZone").first()
 
-        const isLogo = $el.hasClass("mceLogo")
-        blocks.push({
-            type: isLogo ? "logo" : "image",
-            src,
-            alt,
-            href: parentLink,
-            width,
-        })
-    })
+        if ($img.length) {
+            const src = $img.attr("src") || ""
+            const alt = $img.attr("alt") || ""
+            const width = $img.attr("width") || ""
+            const parentLink = $img.closest("a").attr("href") || ""
+            const filename = src.split("/").pop()?.split("?")[0] || src
 
-    // Extract text blocks
-    $(".mceText").each((_, el) => {
-        const $el = $(el)
-        const innerHtml = $el.html()?.trim()
-        if (innerHtml && innerHtml.length > 10) {
+            images.push({ filename, originalSrc: src, alt })
+
+            const isLogo = $img.hasClass("mceLogo")
             blocks.push({
-                type: "text",
-                content: innerHtml,
+                type: isLogo ? "logo" : "image",
+                src,
+                alt: alt || filename, // Use filename as fallback when alt is empty
+                href: parentLink,
+                width,
             })
+            return // done with this block
         }
-    })
 
-    // Extract buttons
-    $(".mceButtonLink").each((_, el) => {
-        const $el = $(el)
-        const href = $el.attr("href") || ""
-        const text = $el.text().trim()
-        const style = $el.attr("style") || ""
+        // Check if this block is text
+        if ($el.hasClass("mceText")) {
+            const innerHtml = $el.html()?.trim()
+            if (innerHtml && innerHtml.length > 10) {
+                blocks.push({
+                    type: "text",
+                    content: innerHtml,
+                })
+            }
+            return
+        }
 
-        if (text) {
-            blocks.push({
-                type: "button",
-                content: text,
-                href,
-                style,
-            })
-            links.push({ text, href })
+        // Check if this block is a button
+        const $btn = $el.find(".mceButtonLink").first()
+        if ($btn.length) {
+            const href = $btn.attr("href") || ""
+            const text = $btn.text().trim()
+            const style = $btn.attr("style") || ""
+            if (text) {
+                blocks.push({
+                    type: "button",
+                    content: text,
+                    href,
+                    style,
+                })
+                links.push({ text, href })
+            }
+            return
         }
     })
 
@@ -144,11 +155,13 @@ export function generateContentSummary(parsed: ParsedEmail): string {
     sections.push(`## Content Structure (${parsed.blocks.length} blocks):`)
     parsed.blocks.forEach((block, i) => {
         switch (block.type) {
-            case "image":
+            case "image": {
+                const label = block.alt || block.src?.split("/").pop()?.split("?")[0] || "unknown"
                 sections.push(
-                    `${i + 1}. IMAGE: "${block.alt || "no alt"}" (${block.width}px wide) ${block.href ? `→ links to: ${block.href}` : ""}`
+                    `${i + 1}. IMAGE: "${label}" (${block.width}px wide) ${block.href ? `→ links to: ${block.href}` : ""}`
                 )
                 break
+            }
             case "logo":
                 sections.push(`${i + 1}. LOGO IMAGE: ${block.src}`)
                 break
