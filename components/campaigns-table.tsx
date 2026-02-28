@@ -10,11 +10,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import { createClient } from "@/lib/supabase/client"
 import { duplicateCampaign, deleteCampaign, toggleTemplateStatus, toggleReadyStatus } from "@/app/actions/campaigns"
+import { exportToBlog } from "@/app/actions/export-to-blog"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -51,6 +52,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [togglingReadyId, setTogglingReadyId] = useState<string | null>(null)
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [bulkDeleting, setBulkDeleting] = useState(false)
+    const [exportingId, setExportingId] = useState<string | null>(null)
 
     const supabase = createClient()
     const { toast } = useToast()
@@ -139,6 +141,33 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
             })
         } finally {
             setDeletingId(null)
+        }
+    }
+
+    const handleExportToBlog = async (campaignId: string) => {
+        setExportingId(campaignId)
+        try {
+            const result = await exportToBlog(campaignId)
+
+            if (result.error) {
+                throw new Error(result.error)
+            }
+
+            toast({
+                title: "Exported to Blog",
+                description: `Draft post created. Open it in the Blog editor to convert it into a blog post.`,
+            })
+
+            router.refresh()
+        } catch (error: any) {
+            console.error("Error exporting to blog:", error)
+            toast({
+                title: "Export failed",
+                description: error.message || "Failed to export to blog",
+                variant: "destructive",
+            })
+        } finally {
+            setExportingId(null)
         }
     }
 
@@ -487,6 +516,17 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                 title="Duplicate"
                                             >
                                                 <Copy className="w-4 h-4" />
+                                            </Button>
+
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleExportToBlog(campaign.id)}
+                                                disabled={exportingId === campaign.id}
+                                                className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10"
+                                                title="Export to Blog"
+                                            >
+                                                <BookOpen className="w-4 h-4" />
                                             </Button>
 
                                             <Button
