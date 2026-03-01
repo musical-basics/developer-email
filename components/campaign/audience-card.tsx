@@ -1,11 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Users, User, Pencil, Loader2, Check, Tag } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Campaign, Subscriber } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
+import { createClient } from "@/lib/supabase/client"
 
 export interface Audience {
     total_subscribers: number
@@ -16,6 +18,13 @@ interface AudienceCardProps {
     audience: Audience
     campaign?: Campaign
     targetSubscriber?: Subscriber | null
+}
+
+interface BulkSubscriberInfo {
+    id: string
+    email: string
+    first_name: string | null
+    last_name: string | null
 }
 
 export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceCardProps) {
@@ -30,6 +39,25 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
     const [firstName, setFirstName] = useState(targetSubscriber?.first_name || "")
     const [lastName, setLastName] = useState(targetSubscriber?.last_name || "")
     const [email, setEmail] = useState(targetSubscriber?.email || "")
+
+    // Bulk send: fetch subscriber details
+    const [bulkSubscribers, setBulkSubscribers] = useState<BulkSubscriberInfo[]>([])
+    const [loadingBulk, setLoadingBulk] = useState(false)
+
+    useEffect(() => {
+        if (lockedSubscriberIds && lockedSubscriberIds.length > 0) {
+            setLoadingBulk(true)
+            const supabase = createClient()
+            supabase
+                .from("subscribers")
+                .select("id, email, first_name, last_name")
+                .in("id", lockedSubscriberIds)
+                .then(({ data }) => {
+                    setBulkSubscribers(data || [])
+                    setLoadingBulk(false)
+                })
+        }
+    }, [lockedSubscriberIds?.length])
 
     const handleSave = async () => {
         if (!lockedSubscriberId) return
@@ -52,7 +80,6 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
             if (result.error) {
                 toast({ title: "Error updating subscriber", description: result.error, variant: "destructive" })
             } else if (result.switched) {
-                // Email matched an existing subscriber — campaign was switched to them
                 const sub = result.subscriber
                 setFirstName(sub.first_name || "")
                 setLastName(sub.last_name || "")
@@ -72,6 +99,10 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
             toast({ title: "Error", description: "Failed to update subscriber.", variant: "destructive" })
         }
         setSaving(false)
+    }
+
+    const getInitials = (first: string | null, last: string | null) => {
+        return `${(first || "").charAt(0)}${(last || "").charAt(0)}`.toUpperCase() || "?"
     }
 
     return (
@@ -162,12 +193,39 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
                         </div>
                     </div>
                 ) : lockedSubscriberIds && lockedSubscriberIds.length > 0 ? (
-                    <div className="flex items-start gap-4 bg-purple-500/10 p-4 rounded-lg border border-purple-500/20">
-                        <Users className="h-8 w-8 text-purple-400 mt-1 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
+                    <div className="bg-purple-500/10 p-4 rounded-lg border border-purple-500/20">
+                        <div className="flex items-center gap-3 mb-3">
+                            <Users className="h-6 w-6 text-purple-400 flex-shrink-0" />
                             <p className="font-bold text-lg text-purple-400">{lockedSubscriberIds.length} Selected Subscriber{lockedSubscriberIds.length !== 1 ? 's' : ''}</p>
-                            <p className="mt-2 text-xs text-purple-300/60">Only the selected subscribers will receive this campaign.</p>
                         </div>
+                        {loadingBulk ? (
+                            <div className="flex justify-center py-3">
+                                <Loader2 className="h-5 w-5 animate-spin text-purple-400" />
+                            </div>
+                        ) : (
+                            <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                                {bulkSubscribers.map(sub => (
+                                    <div key={sub.id} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md bg-purple-500/5">
+                                        <Avatar className="h-6 w-6 text-[10px]">
+                                            <AvatarFallback className="bg-purple-500/20 text-purple-300 text-[10px]">
+                                                {getInitials(sub.first_name, sub.last_name)}
+                                            </AvatarFallback>
+                                        </Avatar>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="text-sm text-purple-200 truncate">
+                                                {sub.first_name || sub.last_name
+                                                    ? `${sub.first_name || ''} ${sub.last_name || ''}`.trim()
+                                                    : sub.email}
+                                            </p>
+                                            {(sub.first_name || sub.last_name) && (
+                                                <p className="text-[11px] text-purple-300/60 truncate">{sub.email}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                        <p className="mt-2 text-xs text-purple-300/60">Only these subscribers will receive this campaign.</p>
                     </div>
                 ) : (
                     <>
@@ -184,4 +242,3 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
         </Card>
     )
 }
-
