@@ -39,7 +39,7 @@ export function LaunchpadCard({ subscriberCount, onLaunch, isDisabled }: Launchp
                     size="lg"
                 >
                     <Rocket className="h-5 w-5" />
-                    Send Broadcast to All Subscribers
+                    Send Broadcast{subscriberCount === 1 ? '' : ` to ${subscriberCount.toLocaleString()} Subscribers`}
                 </Button>
 
                 {isDisabled && (

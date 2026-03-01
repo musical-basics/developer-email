@@ -36,6 +36,15 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
     const { toast } = useToast()
     const router = useRouter()
 
+    // Compute effective subscriber count based on targeting mode
+    const lockedSubscriberIds: string[] | undefined = campaign.variable_values?.subscriber_ids
+    const lockedSubscriberId = campaign.variable_values?.subscriber_id
+    const effectiveSubscriberCount = lockedSubscriberIds?.length
+        ? lockedSubscriberIds.length
+        : lockedSubscriberId
+            ? 1
+            : audience.active_subscribers
+
     const handleLaunchClick = () => {
         setShowConfirmDialog(true)
     }
@@ -141,7 +150,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                         />
                         <SendTestCard onSendTest={handleSendTest} />
                         <LaunchpadCard
-                            subscriberCount={audience.active_subscribers}
+                            subscriberCount={effectiveSubscriberCount}
                             onLaunch={handleLaunchClick}
                             isDisabled={campaign.status === "completed"}
                         />
@@ -189,7 +198,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
             <BroadcastConfirmDialog
                 open={showConfirmDialog}
                 onOpenChange={setShowConfirmDialog}
-                subscriberCount={audience.active_subscribers}
+                subscriberCount={effectiveSubscriberCount}
                 campaignName={campaign.name}
                 subjectLine={campaign.subject_line}
                 onConfirm={handleConfirmBroadcast}
