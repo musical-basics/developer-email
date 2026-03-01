@@ -20,6 +20,7 @@ interface AudienceCardProps {
 
 export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceCardProps) {
     const lockedSubscriberId = campaign?.variable_values?.subscriber_id
+    const lockedSubscriberIds: string[] | undefined = campaign?.variable_values?.subscriber_ids
     const targetTag = campaign?.variable_values?.target_tag
     const { toast } = useToast()
     const router = useRouter()
@@ -158,6 +159,14 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
                                 </span>
                             </p>
                             <p className="mt-2 text-xs text-amber-300/60">Only subscribers with this tag will receive this campaign.</p>
+                        </div>
+                    </div>
+                ) : lockedSubscriberIds && lockedSubscriberIds.length > 0 ? (
+                    <div className="flex items-start gap-4 bg-purple-500/10 p-4 rounded-lg border border-purple-500/20">
+                        <Users className="h-8 w-8 text-purple-400 mt-1 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-lg text-purple-400">{lockedSubscriberIds.length} Selected Subscriber{lockedSubscriberIds.length !== 1 ? 's' : ''}</p>
+                            <p className="mt-2 text-xs text-purple-300/60">Only the selected subscribers will receive this campaign.</p>
                         </div>
                     </div>
                 ) : (
