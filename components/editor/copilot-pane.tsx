@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2, FileText, History, Plus, LayoutTemplate } from "lucide-react"
+import { Sparkles, Send, X, Zap, Brain, Bot, Paperclip, Loader2, FileText, History, Plus, LayoutTemplate, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -176,6 +176,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
     const [capturingRef, setCapturingRef] = useState(false)
     const [referenceCSS, setReferenceCSS] = useState<string | null>(null)
     const [refTemplateName, setRefTemplateName] = useState<string | null>(null)
+    const [referenceMode, setReferenceMode] = useState<"style" | "adjust">("style")
     const refIframeRef = useRef<HTMLIFrameElement>(null)
 
     // Auto-scroll to bottom
@@ -235,7 +236,8 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
     }
 
     // ─── Reference Template Handlers ─────────────────
-    const handleOpenRefPicker = async () => {
+    const handleOpenRefPicker = async (mode: "style" | "adjust" = "style") => {
+        setReferenceMode(mode)
         setIsRefPickerOpen(true)
         setLoadingTemplates(true)
         try {
@@ -327,7 +329,8 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         // Prepend reference CSS context if present
         let fullMessage = userMessage
         if (referenceCSS) {
-            fullMessage = `[STYLE REFERENCE ATTACHED — CONTENT PRESERVATION MODE]
+            if (referenceMode === "style") {
+                fullMessage = `[STYLE REFERENCE ATTACHED — CONTENT PRESERVATION MODE]
 The CSS below and any attached screenshot are ONLY for visual/styling reference.
 
 ### STRICT RULES FOR THIS REQUEST:
@@ -342,8 +345,26 @@ ${referenceCSS}
 
 ### User's instruction:
 ${userMessage}`
+            } else {
+                fullMessage = `[STYLE REFERENCE ATTACHED — ADJUST MODE]
+The CSS below and any attached screenshot are for visual/styling reference. In this mode you may also ADJUST the content based on the user's instructions.
+
+### RULES FOR THIS REQUEST:
+1. Use the reference template's visual style: layout, colors, fonts, spacing, backgrounds, button styling.
+2. Keep the CURRENT HTML's existing image src URLs wherever possible — do not invent new image paths.
+3. You MAY rewrite, add, remove, or rephrase text content as the user's instruction requires.
+4. You MAY add new sections or remove sections if the user's instruction calls for it.
+5. Preserve the overall structure and branding of the reference style while adapting the content.
+
+### Reference CSS (apply this styling):
+${referenceCSS}
+
+### User's instruction:
+${userMessage}`
+            }
             setReferenceCSS(null)
             setRefTemplateName(null)
+            setReferenceMode("style")
         }
 
         // Determine which model to use
@@ -671,11 +692,24 @@ ${userMessage}`
                                     "shrink-0 hover:text-foreground h-8 w-8",
                                     refTemplateName ? "text-purple-400" : "text-muted-foreground"
                                 )}
-                                onClick={handleOpenRefPicker}
+                                onClick={() => handleOpenRefPicker("style")}
                                 disabled={isUploading || isLoading || capturingRef}
                                 title="Reference a template style"
                             >
                                 <LayoutTemplate className="w-4 h-4" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className={cn(
+                                    "shrink-0 hover:text-foreground h-8 w-8",
+                                    refTemplateName && referenceMode === "adjust" ? "text-amber-400" : "text-muted-foreground"
+                                )}
+                                onClick={() => handleOpenRefPicker("adjust")}
+                                disabled={isUploading || isLoading || capturingRef}
+                                title="Reference a template & adjust content"
+                            >
+                                <Wand2 className="w-4 h-4" />
                             </Button>
                         </div>
 
@@ -729,8 +763,13 @@ ${userMessage}`
             <Dialog open={isRefPickerOpen} onOpenChange={setIsRefPickerOpen}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Reference Template</DialogTitle>
-                        <DialogDescription>Select a master template to use as a style reference. A screenshot and CSS will be attached to your next prompt.</DialogDescription>
+                        <DialogTitle>{referenceMode === "style" ? "Reference Template Style" : "Reference Template & Adjust"}</DialogTitle>
+                        <DialogDescription>
+                            {referenceMode === "style"
+                                ? "Select a template to use as a STYLE reference. Your current text and images will be preserved exactly."
+                                : "Select a template to use as a style reference. You can then adjust content (add sections, rewrite copy, etc.) via your prompt."
+                            }
+                        </DialogDescription>
                     </DialogHeader>
                     <div className="py-2">
                         {loadingTemplates ? (

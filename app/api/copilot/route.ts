@@ -199,12 +199,20 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
     Examples of edits (DO modify HTML): "change the title to X", "make the button red", "add a new section"
     
     ### REFERENCE TEMPLATE / STYLE-ONLY EDITS:
-    When the user's message contains "[STYLE REFERENCE ATTACHED" or mentions "reference" + "style", this means they want to RE-STYLE the existing email using a different template's visual design. In this mode:
+    When the user's message contains "[STYLE REFERENCE ATTACHED — CONTENT PRESERVATION MODE]", they want to RE-STYLE the existing email using a different template's visual design while keeping content identical. In this mode:
     - **Preserve ALL original text VERBATIM** — do not rewrite, rephrase, add, or remove any text/copy
     - **Preserve ALL original image src URLs exactly** — do not change, rename, or generate new image paths
     - **Preserve ALL original link href URLs** — do not modify any link destinations
     - **ONLY change:** CSS styles, table layout structure, background colors, font families/sizes/weights, padding, spacing, border styles, button styling, section ordering/layout
     - Think of it as "pouring the existing content into a new visual container"
+    
+    ### REFERENCE TEMPLATE / ADJUST MODE:
+    When the user's message contains "[STYLE REFERENCE ATTACHED — ADJUST MODE]", they want to apply the reference style AND modify content according to their instructions. In this mode:
+    - Apply the reference template's visual style (layout, colors, fonts, spacing, backgrounds, button styling)
+    - Keep existing image src URLs wherever possible — do not invent new image paths
+    - You MAY rewrite, add, remove, or rephrase text content as the user's instruction requires
+    - You MAY add or remove sections if requested
+    - Balance the reference style with the content changes the user asks for
     
     ### COMPANY CONTEXT:
     ${dynamicContext}
