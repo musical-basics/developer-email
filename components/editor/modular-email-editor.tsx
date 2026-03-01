@@ -10,7 +10,7 @@ import { CopilotPane } from "./copilot-pane"
 import { BlockManager, Block } from "./block-manager"
 import { renderTemplate } from "@/lib/render-template"
 import { Monitor, Smartphone, Loader2, Check, ArrowLeft, Undo, Redo, History, TicketPercent } from "lucide-react"
-import { generateShopifyDiscount, generateShopifyFixedDiscount, createShopifyDiscount } from "@/app/actions/shopify-discount"
+import { createShopifyDiscount } from "@/app/actions/shopify-discount"
 import { getActiveDiscountPresets, type DiscountPreset } from "@/app/actions/discount-presets"
 import { useToast } from "@/hooks/use-toast"
 import { saveVersion } from "@/app/actions/versions"
@@ -144,8 +144,6 @@ export function ModularEmailEditor({
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
     const { toast } = useToast()
-    const [generatingDiscount, setGeneratingDiscount] = useState(false)
-    const [generatingFixed, setGeneratingFixed] = useState(false)
     const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([])
     const [generatingPresetId, setGeneratingPresetId] = useState<string | null>(null)
 
@@ -360,62 +358,6 @@ export function ModularEmailEditor({
                             </select>
                         </div>
                         <div className="pt-3 border-t border-border mt-3">
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    setGeneratingDiscount(true);
-                                    const res = await generateShopifyDiscount(5);
-                                    if (!res.success) {
-                                        toast({ title: "Error", description: res.error, variant: "destructive" });
-                                    } else if (res.code) {
-                                        const baseCta = assets.main_cta_url || "https://dreamplaypianos.com/customize";
-                                        const sep = baseCta.includes("?") ? "&" : "?";
-                                        const finalCta = baseCta.includes("discount=")
-                                            ? baseCta.replace(/discount=[^&]+/, `discount=${res.code}`)
-                                            : `${baseCta}${sep}discount=${res.code}`;
-                                        onAssetsChange({
-                                            ...assets,
-                                            discount_code: res.code,
-                                            main_cta_url: finalCta
-                                        });
-                                        toast({ title: "Discount Created!", description: `${res.code} valid for 48 hours.` });
-                                    }
-                                    setGeneratingDiscount(false);
-                                }}
-                                disabled={generatingDiscount}
-                                className="w-full flex items-center justify-center gap-2 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20 border border-emerald-500/20 py-2 rounded text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer"
-                            >
-                                {generatingDiscount ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TicketPercent className="w-3.5 h-3.5" />}
-                                Generate 5% VIP Code
-                            </button>
-                            <button
-                                type="button"
-                                onClick={async () => {
-                                    setGeneratingFixed(true);
-                                    const res = await generateShopifyFixedDiscount(30);
-                                    if (!res.success) {
-                                        toast({ title: "Error", description: res.error, variant: "destructive" });
-                                    } else if (res.code) {
-                                        const baseActivate = assets.main_activate_url || "https://www.dreamplaypianos.com/activate";
-                                        const sep = baseActivate.includes("?") ? "&" : "?";
-                                        const finalActivate = baseActivate.includes("discount=")
-                                            ? baseActivate.replace(/discount=[^&]+/, `discount=${res.code}`)
-                                            : `${baseActivate}${sep}discount=${res.code}`;
-                                        onAssetsChange({
-                                            ...assets,
-                                            discount_code: res.code,
-                                            main_activate_url: finalActivate
-                                        });
-                                        toast({ title: "Discount Created!", description: `${res.code} — $30 off, valid 14 days.` });
-                                    }
-                                    setGeneratingFixed(false);
-                                }}
-                                disabled={generatingFixed}
-                                className="w-full flex items-center justify-center gap-2 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 py-2 rounded text-xs font-semibold transition-colors disabled:opacity-50 cursor-pointer mt-2"
-                            >
-                                {generatingFixed ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <TicketPercent className="w-3.5 h-3.5" />}
-                                Generate $30 Off Code
-                            </button>
                             {discountPresets.map(preset => (
                                 <button
                                     key={preset.id}
