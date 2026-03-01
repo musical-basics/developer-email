@@ -57,17 +57,24 @@ export async function getCampaigns() {
     // Fetch recipient emails for completed campaigns
     const { data: sentRows } = await supabase
         .from("sent_history")
-        .select("campaign_id, subscribers ( email )")
+        .select("campaign_id, subscriber_id, subscribers ( email )")
         .in("campaign_id", completedIds)
 
     // Build map: campaign_id -> list of recipient emails
     const recipientMap: Record<string, string[]> = {}
+    // Also build: campaign_id -> [{ subscriber_id, email }]
+    const recipientDetailMap: Record<string, { subscriber_id: string; email: string }[]> = {}
     sentRows?.forEach((row: any) => {
         const email = row.subscribers?.email
         if (email && row.campaign_id) {
             if (!recipientMap[row.campaign_id]) recipientMap[row.campaign_id] = []
+            if (!recipientDetailMap[row.campaign_id]) recipientDetailMap[row.campaign_id] = []
             if (!recipientMap[row.campaign_id].includes(email)) {
                 recipientMap[row.campaign_id].push(email)
+                recipientDetailMap[row.campaign_id].push({
+                    subscriber_id: row.subscriber_id,
+                    email,
+                })
             }
         }
     })
@@ -117,13 +124,28 @@ export async function getCampaigns() {
     })
 
     // Override the stored counters with computed unique counts
-    return campaigns.map(c => ({
-        ...c,
-        total_opens: uniqueOpens[c.id]?.size ?? c.total_opens ?? 0,
-        total_clicks: uniqueClicks[c.id]?.size ?? c.total_clicks ?? 0,
-        total_conversions: uniqueConversions[c.id]?.size ?? 0,
-        sent_to_emails: recipientMap[c.id] || [],
-    }))
+    return campaigns.map(c => {
+        // Build per-recipient breakdown for multi-recipient campaigns
+        const details = recipientDetailMap[c.id] || []
+        const breakdown = details.length > 1
+            ? details.map(d => ({
+                subscriber_id: d.subscriber_id,
+                email: d.email,
+                opened: uniqueOpens[c.id]?.has(d.subscriber_id) ?? false,
+                clicked: uniqueClicks[c.id]?.has(d.subscriber_id) ?? false,
+                converted: uniqueConversions[c.id]?.has(d.subscriber_id) ?? false,
+            }))
+            : undefined
+
+        return {
+            ...c,
+            total_opens: uniqueOpens[c.id]?.size ?? c.total_opens ?? 0,
+            total_clicks: uniqueClicks[c.id]?.size ?? c.total_clicks ?? 0,
+            total_conversions: uniqueConversions[c.id]?.size ?? 0,
+            sent_to_emails: recipientMap[c.id] || [],
+            recipient_breakdown: breakdown,
+        }
+    })
 }
 
 

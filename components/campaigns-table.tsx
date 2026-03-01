@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, ChevronDown, ChevronUp } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import { createClient } from "@/lib/supabase/client"
@@ -53,6 +53,16 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [bulkDeleting, setBulkDeleting] = useState(false)
     const [exportingId, setExportingId] = useState<string | null>(null)
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+    const toggleExpand = (id: string) => {
+        setExpandedRows(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) next.delete(id)
+            else next.add(id)
+            return next
+        })
+    }
 
     const supabase = createClient()
     const { toast } = useToast()
@@ -304,244 +314,291 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                             const clickRate = recipients > 0 ? Math.round((campaign.total_clicks / recipients) * 100) : 0
                             const conversions = campaign.total_conversions || 0
                             const checkoutRate = campaign.total_clicks > 0 ? Math.round((conversions / campaign.total_clicks) * 100) : 0
+                            const hasBreakdown = campaign.recipient_breakdown && campaign.recipient_breakdown.length > 1
+                            const isExpanded = expandedRows.has(campaign.id)
+                            const colCount = (showAnalytics ? 8 : 3) + (enableBulkDelete ? 1 : 0)
 
                             return (
-                                <TableRow key={campaign.id} className={`border-border ${selectedIds.has(campaign.id) ? 'bg-primary/5' : ''}`}>
-                                    {enableBulkDelete && (
-                                        <TableCell className="px-3">
-                                            <Checkbox
-                                                checked={selectedIds.has(campaign.id)}
-                                                onCheckedChange={() => toggleSelect(campaign.id)}
-                                                className="border-muted-foreground/50"
-                                            />
-                                        </TableCell>
-                                    )}
-                                    {/* Name & Metadata */}
-                                    <TableCell>
-                                        <div className="flex flex-col group">
+                                <>
+                                    <TableRow key={campaign.id} className={`border-border ${selectedIds.has(campaign.id) ? 'bg-primary/5' : ''} ${hasBreakdown ? 'cursor-pointer' : ''}`} onClick={hasBreakdown ? () => toggleExpand(campaign.id) : undefined}>
+                                        {enableBulkDelete && (
+                                            <TableCell className="px-3" onClick={(e) => e.stopPropagation()}>
+                                                <Checkbox
+                                                    checked={selectedIds.has(campaign.id)}
+                                                    onCheckedChange={() => toggleSelect(campaign.id)}
+                                                    className="border-muted-foreground/50"
+                                                />
+                                            </TableCell>
+                                        )}
+                                        {/* Name & Metadata */}
+                                        <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Link href={`/dashboard/${campaign.id}`} className="font-medium text-foreground hover:underline">
-                                                    {campaign.name || "Untitled Campaign"}
-                                                </Link>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.preventDefault()
-                                                        handleEditClick(campaign)
-                                                    }}
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                                                    title="Rename"
-                                                >
-                                                    <Pencil className="w-3.5 h-3.5" />
-                                                </button>
+                                                {hasBreakdown && (
+                                                    <button className="text-muted-foreground hover:text-foreground transition-colors flex-shrink-0" onClick={(e) => { e.stopPropagation(); toggleExpand(campaign.id) }}>
+                                                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                                    </button>
+                                                )}
+                                                <div className="flex flex-col group">
+                                                    <div className="flex items-center gap-2">
+                                                        <Link href={`/dashboard/${campaign.id}`} className="font-medium text-foreground hover:underline" onClick={(e) => e.stopPropagation()}>
+                                                            {campaign.name || "Untitled Campaign"}
+                                                        </Link>
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.preventDefault()
+                                                                e.stopPropagation()
+                                                                handleEditClick(campaign)
+                                                            }}
+                                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                                                            title="Rename"
+                                                        >
+                                                            <Pencil className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                    {campaign.subject_line && (
+                                                        <span className="text-xs text-muted-foreground/70 italic truncate max-w-[280px]">
+                                                            {campaign.subject_line}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-xs text-muted-foreground">
+                                                        Created {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true })}
+                                                    </span>
+                                                </div>
                                             </div>
-                                            {campaign.subject_line && (
-                                                <span className="text-xs text-muted-foreground/70 italic truncate max-w-[280px]">
-                                                    {campaign.subject_line}
-                                                </span>
-                                            )}
-                                            <span className="text-xs text-muted-foreground">
-                                                Created {formatDistanceToNow(new Date(campaign.created_at), { addSuffix: true })}
-                                            </span>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell className="text-center">
-                                        <Badge variant="outline" className={`
+                                        </TableCell>
+                                        <TableCell className="text-center">
+                                            <Badge variant="outline" className={`
                                             capitalize border-opacity-50
                                             ${campaign.is_template ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' : ''}
                                             ${!campaign.is_template && campaign.status === 'completed' ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : ''}
                                             ${!campaign.is_template && campaign.status === 'draft' ? 'text-zinc-400 border-zinc-500/50 bg-zinc-500/10' : ''}
                                         `}>
-                                            {campaign.is_template ? 'Master Template' : campaign.status}
-                                        </Badge>
-                                        {campaign.is_template && campaign.is_ready && (
-                                            <Badge variant="outline" className="ml-1 text-emerald-400 border-emerald-500/50 bg-emerald-500/10">
-                                                Ready
+                                                {campaign.is_template ? 'Master Template' : campaign.status}
                                             </Badge>
+                                            {campaign.is_template && campaign.is_ready && (
+                                                <Badge variant="outline" className="ml-1 text-emerald-400 border-emerald-500/50 bg-emerald-500/10">
+                                                    Ready
+                                                </Badge>
+                                            )}
+                                        </TableCell>
+
+                                        {/* METRICS */}
+                                        {showAnalytics && (
+                                            <>
+                                                <TableCell className="text-center">
+                                                    {(() => {
+                                                        const fromEmail = campaign.sent_from_email || campaign.variable_values?.from_email || "";
+                                                        const isMusicalBasics = fromEmail.toLowerCase().includes("musicalbasics");
+                                                        return (
+                                                            <Badge variant="outline" className={`text-xs ${isMusicalBasics
+                                                                ? "text-violet-400 border-violet-500/50 bg-violet-500/10"
+                                                                : "text-amber-400 border-amber-500/50 bg-amber-500/10"
+                                                                }`}>
+                                                                {isMusicalBasics ? "MusicalBasics" : "DreamPlay"}
+                                                            </Badge>
+                                                        );
+                                                    })()}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {(() => {
+                                                        const emails = (campaign as any).sent_to_emails || []
+                                                        if (emails.length === 0) return <span className="text-muted-foreground">—</span>
+                                                        if (emails.length === 1) return (
+                                                            <span className="text-xs text-foreground truncate block max-w-[150px]" title={emails[0]}>
+                                                                {emails[0]}
+                                                            </span>
+                                                        )
+                                                        return (
+                                                            <span className="text-xs text-foreground flex items-center gap-1" title={emails.join(', ')}>
+                                                                {emails.length} recipients
+                                                                {hasBreakdown && (
+                                                                    isExpanded
+                                                                        ? <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                                                                        : <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                                                                )}
+                                                            </span>
+                                                        )
+                                                    })()}
+                                                </TableCell>
+                                                <TableCell className="text-right font-mono">
+                                                    {recipients > 0 ? (
+                                                        <span className={openRate > 20 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
+                                                            {openRate}%
+                                                        </span>
+                                                    ) : "—"}
+                                                </TableCell>
+
+                                                <TableCell className="text-right font-mono">
+                                                    {recipients > 0 ? (
+                                                        <span className={clickRate > 2 ? "text-blue-400 font-bold" : "text-muted-foreground"}>
+                                                            {clickRate}%
+                                                        </span>
+                                                    ) : "—"}
+                                                </TableCell>
+
+                                                {/* Checkouts */}
+                                                <TableCell className="text-right font-mono">
+                                                    {campaign.total_clicks > 0 ? (
+                                                        <span className={checkoutRate > 0 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
+                                                            {checkoutRate}% ({conversions})
+                                                        </span>
+                                                    ) : "—"}
+                                                </TableCell>
+
+                                                <TableCell className="text-right font-mono text-amber-400">
+                                                    {formatDuration(campaign.average_read_time)}
+                                                </TableCell>
+                                            </>
                                         )}
-                                    </TableCell>
 
-                                    {/* METRICS */}
-                                    {showAnalytics && (
-                                        <>
-                                            <TableCell className="text-center">
-                                                {(() => {
-                                                    const fromEmail = campaign.sent_from_email || campaign.variable_values?.from_email || "";
-                                                    const isMusicalBasics = fromEmail.toLowerCase().includes("musicalbasics");
-                                                    return (
-                                                        <Badge variant="outline" className={`text-xs ${isMusicalBasics
-                                                            ? "text-violet-400 border-violet-500/50 bg-violet-500/10"
-                                                            : "text-amber-400 border-amber-500/50 bg-amber-500/10"
-                                                            }`}>
-                                                            {isMusicalBasics ? "MusicalBasics" : "DreamPlay"}
-                                                        </Badge>
-                                                    );
-                                                })()}
-                                            </TableCell>
-                                            <TableCell>
-                                                {(() => {
-                                                    const emails = (campaign as any).sent_to_emails || []
-                                                    if (emails.length === 0) return <span className="text-muted-foreground">—</span>
-                                                    if (emails.length === 1) return (
-                                                        <span className="text-xs text-foreground truncate block max-w-[150px]" title={emails[0]}>
-                                                            {emails[0]}
-                                                        </span>
-                                                    )
-                                                    return (
-                                                        <span className="text-xs text-foreground" title={emails.join(', ')}>
-                                                            {emails.length} recipients
-                                                        </span>
-                                                    )
-                                                })()}
-                                            </TableCell>
-                                            <TableCell className="text-right font-mono">
-                                                {recipients > 0 ? (
-                                                    <span className={openRate > 20 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
-                                                        {openRate}%
-                                                    </span>
-                                                ) : "—"}
-                                            </TableCell>
-
-                                            <TableCell className="text-right font-mono">
-                                                {recipients > 0 ? (
-                                                    <span className={clickRate > 2 ? "text-blue-400 font-bold" : "text-muted-foreground"}>
-                                                        {clickRate}%
-                                                    </span>
-                                                ) : "—"}
-                                            </TableCell>
-
-                                            {/* Checkouts */}
-                                            <TableCell className="text-right font-mono">
-                                                {campaign.total_clicks > 0 ? (
-                                                    <span className={checkoutRate > 0 ? "text-emerald-400 font-bold" : "text-muted-foreground"}>
-                                                        {checkoutRate}% ({conversions})
-                                                    </span>
-                                                ) : "—"}
-                                            </TableCell>
-
-                                            <TableCell className="text-right font-mono text-amber-400">
-                                                {formatDuration(campaign.average_read_time)}
-                                            </TableCell>
-                                        </>
-                                    )}
-
-                                    {/* Actions */}
-                                    <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={async () => {
-                                                    setTogglingTemplateId(campaign.id)
-                                                    await toggleTemplateStatus(campaign.id, !campaign.is_template)
-                                                    router.refresh()
-                                                    setTogglingTemplateId(null)
-                                                }}
-                                                disabled={togglingTemplateId === campaign.id}
-                                                className={`h-8 w-8 ${campaign.is_template
-                                                    ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                                                    : "text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
-                                                    }`}
-                                                title={campaign.is_template ? "Remove from Master Templates" : "Promote to Master Template"}
-                                            >
-                                                <Star className={`w-4 h-4 ${campaign.is_template ? "fill-current" : ""}`} />
-                                            </Button>
-                                            {campaign.is_template && (
+                                        {/* Actions */}
+                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-end gap-1">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
                                                     onClick={async () => {
-                                                        setTogglingReadyId(campaign.id)
-                                                        await toggleReadyStatus(campaign.id, !campaign.is_ready)
+                                                        setTogglingTemplateId(campaign.id)
+                                                        await toggleTemplateStatus(campaign.id, !campaign.is_template)
                                                         router.refresh()
-                                                        setTogglingReadyId(null)
+                                                        setTogglingTemplateId(null)
                                                     }}
-                                                    disabled={togglingReadyId === campaign.id}
-                                                    className={`h-8 w-8 ${campaign.is_ready
-                                                        ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                                                        : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
+                                                    disabled={togglingTemplateId === campaign.id}
+                                                    className={`h-8 w-8 ${campaign.is_template
+                                                        ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                                                        : "text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
                                                         }`}
-                                                    title={campaign.is_ready ? "Mark as Not Ready" : "Mark as Ready"}
+                                                    title={campaign.is_template ? "Remove from Master Templates" : "Promote to Master Template"}
                                                 >
-                                                    <CheckCircle2 className={`w-4 h-4 ${campaign.is_ready ? "fill-current" : ""}`} />
+                                                    <Star className={`w-4 h-4 ${campaign.is_template ? "fill-current" : ""}`} />
                                                 </Button>
-                                            )}
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                asChild
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                                title="Manage"
-                                            >
-                                                <Link href={`/dashboard/${campaign.id}`}>
-                                                    <ArrowRight className="w-4 h-4" />
-                                                </Link>
-                                            </Button>
-
-                                            {campaign.resend_email_id && (
+                                                {campaign.is_template && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        onClick={async () => {
+                                                            setTogglingReadyId(campaign.id)
+                                                            await toggleReadyStatus(campaign.id, !campaign.is_ready)
+                                                            router.refresh()
+                                                            setTogglingReadyId(null)
+                                                        }}
+                                                        disabled={togglingReadyId === campaign.id}
+                                                        className={`h-8 w-8 ${campaign.is_ready
+                                                            ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                                                            : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
+                                                            }`}
+                                                        title={campaign.is_ready ? "Mark as Not Ready" : "Mark as Ready"}
+                                                    >
+                                                        <CheckCircle2 className={`w-4 h-4 ${campaign.is_ready ? "fill-current" : ""}`} />
+                                                    </Button>
+                                                )}
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
                                                     asChild
                                                     className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                                    title="Show Email"
+                                                    title="Manage"
                                                 >
-                                                    <a href={`https://resend.com/emails/${campaign.resend_email_id}`} target="_blank" rel="noopener noreferrer">
-                                                        <ExternalLink className="w-4 h-4" />
-                                                    </a>
+                                                    <Link href={`/dashboard/${campaign.id}`}>
+                                                        <ArrowRight className="w-4 h-4" />
+                                                    </Link>
                                                 </Button>
-                                            )}
 
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                asChild
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                                title="Edit"
-                                            >
-                                                <Link href={
-                                                    campaign.html_content?.includes('"_marker":"__dnd_blocks__"')
-                                                        ? `/dnd-editor?id=${campaign.id}`
-                                                        : `/editor?id=${campaign.id}`
-                                                }>
-                                                    <PenLine className="w-4 h-4" />
-                                                </Link>
-                                            </Button>
+                                                {campaign.resend_email_id && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        asChild
+                                                        className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                                        title="Show Email"
+                                                    >
+                                                        <a href={`https://resend.com/emails/${campaign.resend_email_id}`} target="_blank" rel="noopener noreferrer">
+                                                            <ExternalLink className="w-4 h-4" />
+                                                        </a>
+                                                    </Button>
+                                                )}
 
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDuplicate(campaign.id)}
-                                                disabled={duplicatingId === campaign.id}
-                                                className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
-                                                title="Duplicate"
-                                            >
-                                                <Copy className="w-4 h-4" />
-                                            </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    asChild
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                                    title="Edit"
+                                                >
+                                                    <Link href={
+                                                        campaign.html_content?.includes('"_marker":"__dnd_blocks__"')
+                                                            ? `/dnd-editor?id=${campaign.id}`
+                                                            : `/editor?id=${campaign.id}`
+                                                    }>
+                                                        <PenLine className="w-4 h-4" />
+                                                    </Link>
+                                                </Button>
 
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleExportToBlog(campaign.id)}
-                                                disabled={exportingId === campaign.id}
-                                                className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10"
-                                                title="Export to Blog"
-                                            >
-                                                <BookOpen className="w-4 h-4" />
-                                            </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleDuplicate(campaign.id)}
+                                                    disabled={duplicatingId === campaign.id}
+                                                    className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary/50"
+                                                    title="Duplicate"
+                                                >
+                                                    <Copy className="w-4 h-4" />
+                                                </Button>
 
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDelete(campaign.id)}
-                                                disabled={deletingId === campaign.id}
-                                                className="h-8 w-8 text-red-500/70 hover:text-red-500 hover:bg-red-500/10"
-                                                title="Delete"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleExportToBlog(campaign.id)}
+                                                    disabled={exportingId === campaign.id}
+                                                    className="h-8 w-8 text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10"
+                                                    title="Export to Blog"
+                                                >
+                                                    <BookOpen className="w-4 h-4" />
+                                                </Button>
+
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleDelete(campaign.id)}
+                                                    disabled={deletingId === campaign.id}
+                                                    className="h-8 w-8 text-red-500/70 hover:text-red-500 hover:bg-red-500/10"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </Button>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                    {/* Per-recipient breakdown drawer */}
+                                    {hasBreakdown && isExpanded && (
+                                        <TableRow key={`${campaign.id}-breakdown`} className="border-border bg-neutral-900/50">
+                                            <TableCell colSpan={colCount} className="p-0">
+                                                <div className="px-6 py-3 space-y-1.5">
+                                                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Per-Recipient Breakdown</div>
+                                                    {campaign.recipient_breakdown!.map((r) => (
+                                                        <div key={r.subscriber_id} className="flex items-center gap-3 py-1.5 px-3 rounded-md bg-neutral-800/50 border border-neutral-700/50">
+                                                            <span className="text-xs text-foreground font-mono truncate min-w-[180px] max-w-[220px]" title={r.email}>{r.email}</span>
+                                                            <div className="flex items-center gap-2 ml-auto">
+                                                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${r.opened ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : 'text-neutral-500 border-neutral-600/50 bg-neutral-800/50'}`}>
+                                                                    <Eye className="w-3 h-3 mr-1" />
+                                                                    {r.opened ? 'Opened' : 'No Open'}
+                                                                </Badge>
+                                                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${r.clicked ? 'text-blue-400 border-blue-500/50 bg-blue-500/10' : 'text-neutral-500 border-neutral-600/50 bg-neutral-800/50'}`}>
+                                                                    <MousePointer2 className="w-3 h-3 mr-1" />
+                                                                    {r.clicked ? 'Clicked' : 'No Click'}
+                                                                </Badge>
+                                                                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${r.converted ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' : 'text-neutral-500 border-neutral-600/50 bg-neutral-800/50'}`}>
+                                                                    <ShoppingCart className="w-3 h-3 mr-1" />
+                                                                    {r.converted ? 'Checkout' : 'No Checkout'}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </>
                             )
                         })
                     )}

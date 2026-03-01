@@ -22,6 +22,13 @@ export interface Campaign {
     sent_from_email?: string | null
     sent_to_emails?: string[]
     parent_template_id?: string | null
+    recipient_breakdown?: {
+        subscriber_id: string
+        email: string
+        opened: boolean
+        clicked: boolean
+        converted: boolean
+    }[]
 }
 
 export interface Subscriber {
