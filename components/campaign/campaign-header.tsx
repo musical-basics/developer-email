@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ChevronRight, Pencil, Rocket } from "lucide-react"
+import { ChevronRight, Pencil, Rocket, CheckCircle2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Campaign } from "@/lib/types"
@@ -24,6 +24,8 @@ interface CampaignHeaderProps {
     campaign: Campaign
     onSendBroadcast?: () => void
     isSent?: boolean
+    broadcastStatus?: "idle" | "success" | "error"
+    broadcastMessage?: string
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -33,7 +35,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     sent: { label: "Sent", className: "bg-emerald-900/50 text-emerald-400 hover:bg-emerald-900/50" },
 }
 
-export function CampaignHeader({ campaign, onSendBroadcast, isSent }: CampaignHeaderProps) {
+export function CampaignHeader({ campaign, onSendBroadcast, isSent, broadcastStatus, broadcastMessage }: CampaignHeaderProps) {
     // Fallback for status if not in config
     const status = statusConfig[campaign.status] || statusConfig.draft
     const [isEditSubjectOpen, setIsEditSubjectOpen] = useState(false)
@@ -115,6 +117,20 @@ export function CampaignHeader({ campaign, onSendBroadcast, isSent }: CampaignHe
                         </Button>
                     )}
                 </div>
+
+                {broadcastStatus === "success" && broadcastMessage && (
+                    <div className="flex items-center gap-2 rounded-lg border border-green-500/50 bg-green-500/10 px-3 py-2 text-sm text-green-500 animate-in fade-in slide-in-from-top-2">
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                        <span>{broadcastMessage}</span>
+                    </div>
+                )}
+
+                {broadcastStatus === "error" && broadcastMessage && (
+                    <div className="flex items-center gap-2 rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-sm text-red-500 animate-in fade-in slide-in-from-top-2">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>{broadcastMessage}</span>
+                    </div>
+                )}
             </div>
 
             {/* Subject Line Preview */}

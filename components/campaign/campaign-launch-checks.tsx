@@ -133,7 +133,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
         <div className="min-h-screen bg-background">
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
                 {/* Header */}
-                <CampaignHeader campaign={campaign} onSendBroadcast={handleLaunchClick} isSent={campaign.status === "completed"} />
+                <CampaignHeader campaign={campaign} onSendBroadcast={handleLaunchClick} isSent={campaign.status === "completed"} broadcastStatus={broadcastStatus} broadcastMessage={broadcastMessage} />
 
 
 
