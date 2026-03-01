@@ -64,8 +64,11 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
 
     let finalHtml = rawHtml + unsubscribeFooter;
 
-    // Replace subscriber_id placeholder if present in links
+    // Replace subscriber-level placeholders if present in links
     finalHtml = finalHtml.replace(/{{subscriber_id}}/g, subscriberId);
+    finalHtml = finalHtml.replace(/{{unsubscribe_url}}/g, unsubscribeUrl);
+    finalHtml = finalHtml.replace(/{{unsubscribe_link_url}}/g, unsubscribeUrl);
+    finalHtml = finalHtml.replace(/{{unsubscribe_link}}/g, unsubscribeUrl);
 
     // Per-user discount: generate a unique Shopify code for this recipient
     if (templateVariableValues) {

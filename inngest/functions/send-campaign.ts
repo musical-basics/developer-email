@@ -89,6 +89,8 @@ export const sendCampaign = inngest.createFunction(
                         .replace(/{{last_name}}/g, sub.last_name || "")
                         .replace(/{{email}}/g, sub.email)
                         .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
+                        .replace(/{{unsubscribe_link_url}}/g, unsubscribeUrl)
+                        .replace(/{{unsubscribe_link}}/g, unsubscribeUrl)
                         .replace(/{{subscriber_id}}/g, sub.id);
 
                     // Per-user discount: generate a unique Shopify code for this recipient
