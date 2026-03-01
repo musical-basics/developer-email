@@ -502,52 +502,60 @@ export async function restoreCampaignBackup(campaignId: string, backupId: string
 }
 
 /**
- * Bulk Send Template — sends the same template to multiple subscribers.
- * Uses the same sendChainEmail logic as individual "Send Existing Campaign".
+ * Create a campaign copy for bulk sending to specific subscribers.
+ * Stores the subscriber IDs in variable_values so the broadcast page
+ * sends only to those people.
  */
-export async function bulkSendTemplate(
+export async function createBulkCampaign(
     campaignId: string,
     subscriberIds: string[]
-): Promise<{ success: boolean; sent: number; failed: number; total: number; error?: string }> {
+): Promise<{ data?: { id: string }; error?: string }> {
     if (!subscriberIds.length) {
-        return { success: false, sent: 0, failed: 0, total: 0, error: "No subscribers selected" }
+        return { error: "No subscribers selected" }
     }
 
     const supabase = await createClient()
 
-    // Fetch subscriber details
-    const { data: subs, error: subError } = await supabase
-        .from("subscribers")
-        .select("id, email, first_name, last_name")
-        .in("id", subscriberIds)
-        .eq("status", "active")
+    // 1. Fetch original template
+    const { data: original, error: fetchError } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("id", campaignId)
+        .single()
 
-    if (subError || !subs || subs.length === 0) {
-        return { success: false, sent: 0, failed: 0, total: subscriberIds.length, error: "No active subscribers found" }
+    if (fetchError || !original) {
+        console.error("Error fetching campaign for bulk send:", fetchError)
+        return { error: "Failed to fetch campaign" }
     }
 
-    // Dynamic import to avoid circular dependency
-    const { sendChainEmail } = await import("@/lib/chains/sender")
+    // 2. Build variable_values with subscriber_ids array
+    const newVars = {
+        ...original.variable_values,
+        subscriber_ids: subscriberIds,
+    }
+    // Remove any single subscriber_id lock
+    delete newVars.subscriber_id
 
-    let sent = 0
-    let failed = 0
+    // 3. Create child campaign
+    const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    const { data, error: insertError } = await supabase
+        .from("campaigns")
+        .insert([{
+            name: `${original.name} — Bulk Send ${today} (${subscriberIds.length} recipients)`,
+            status: "draft",
+            subject_line: original.subject_line,
+            html_content: original.html_content,
+            variable_values: newVars,
+            parent_template_id: original.is_template ? original.id : (original.parent_template_id || null),
+        }])
+        .select("id")
+        .single()
 
-    for (const sub of subs) {
-        try {
-            const firstName = sub.first_name || ""
-            const result = await sendChainEmail(sub.id, sub.email, firstName, campaignId)
-            if (result.success) {
-                sent++
-            } else {
-                console.error(`[BulkSend] Failed for ${sub.email}:`, result.error)
-                failed++
-            }
-        } catch (err) {
-            console.error(`[BulkSend] Error sending to ${sub.email}:`, err)
-            failed++
-        }
+    if (insertError) {
+        console.error("Error creating bulk send campaign:", insertError)
+        return { error: insertError.message }
     }
 
-    console.log(`[BulkSend] Done: ${sent} sent, ${failed} failed out of ${subs.length}`)
-    return { success: true, sent, failed, total: subs.length }
+    revalidatePath("/campaigns")
+    return { data }
 }

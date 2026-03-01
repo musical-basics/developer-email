@@ -153,8 +153,11 @@ export async function POST(request: Request) {
 
             // Fetch recipients
             const lockedSubscriberId = campaign.variable_values?.subscriber_id;
+            const lockedSubscriberIds: string[] | undefined = campaign.variable_values?.subscriber_ids;
             let query = supabaseAdmin.from("subscribers").select("*").eq("status", "active");
-            if (lockedSubscriberId) {
+            if (lockedSubscriberIds && lockedSubscriberIds.length > 0) {
+                query = query.in("id", lockedSubscriberIds);
+            } else if (lockedSubscriberId) {
                 query = query.eq("id", lockedSubscriberId);
             }
 

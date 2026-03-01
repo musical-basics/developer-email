@@ -31,10 +31,13 @@ export const sendCampaign = inngest.createFunction(
         // 2. Fetch Recipients
         const recipients = await step.run("fetch-recipients", async () => {
             const lockedSubscriberId = campaign.variable_values?.subscriber_id;
+            const lockedSubscriberIds: string[] | undefined = campaign.variable_values?.subscriber_ids;
             const targetTag = campaign.variable_values?.target_tag;
             let query = supabase.from("subscribers").select("*").eq("status", "active");
 
-            if (lockedSubscriberId) {
+            if (lockedSubscriberIds && lockedSubscriberIds.length > 0) {
+                query = query.in("id", lockedSubscriberIds);
+            } else if (lockedSubscriberId) {
                 query = query.eq("id", lockedSubscriberId);
             } else if (targetTag) {
                 // Filter by tag — only send to subscribers who have this tag

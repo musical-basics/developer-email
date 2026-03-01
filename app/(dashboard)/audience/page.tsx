@@ -92,7 +92,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
-import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, bulkSendTemplate } from "@/app/actions/campaigns"
+import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, createBulkCampaign } from "@/app/actions/campaigns"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
 import { getTags, type TagDefinition } from "@/app/actions/tags"
@@ -163,7 +163,6 @@ export default function AudienceManagerPage() {
 
     // Bulk Send State
     const [bulkSendMode, setBulkSendMode] = useState(false)
-    const [bulkSending, setBulkSending] = useState(false)
 
     // Start Chain State
     const [isChainPickerOpen, setIsChainPickerOpen] = useState(false)
@@ -619,32 +618,36 @@ export default function AudienceManagerPage() {
     }
 
     const handleSelectCampaign = async (campaign: Campaign) => {
-        // Bulk send mode — send to all selected subscribers
+        // Bulk send mode — create campaign locked to selected subscribers and redirect
         if (bulkSendMode) {
-            setBulkSending(true)
+            setDuplicating(true)
             try {
-                const result = await bulkSendTemplate(campaign.id, selectedIds)
+                const result = await createBulkCampaign(campaign.id, selectedIds)
 
                 if (result.error) {
                     throw new Error(result.error)
                 }
 
                 toast({
-                    title: "Bulk Send Complete",
-                    description: `Sent "${campaign.name}" to ${result.sent} of ${result.total} subscribers${result.failed > 0 ? ` (${result.failed} failed)` : ''}.`,
+                    title: "Bulk Campaign Created",
+                    description: `Created "${campaign.name}" for ${selectedIds.length} subscribers. Redirecting to manage...`,
                 })
 
                 setIsSelectCampaignOpen(false)
                 setSelectedIds([])
                 setBulkSendMode(false)
+
+                if (result.data?.id) {
+                    router.push(`/dashboard/${result.data.id}`)
+                }
             } catch (error: any) {
                 toast({
-                    title: "Error sending bulk email",
+                    title: "Error creating bulk campaign",
                     description: error.message,
                     variant: "destructive",
                 })
             } finally {
-                setBulkSending(false)
+                setDuplicating(false)
             }
             return
         }
@@ -1966,10 +1969,10 @@ export default function AudienceManagerPage() {
                                     {[...existingCampaigns].sort((a, b) => (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)).map(campaign => (
                                         <div
                                             key={campaign.id}
-                                            onClick={() => !(duplicating || bulkSending) && handleSelectCampaign(campaign)}
+                                            onClick={() => !duplicating && handleSelectCampaign(campaign)}
                                             className={cn(
                                                 "p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors",
-                                                (duplicating || bulkSending) && "opacity-50 pointer-events-none"
+                                                duplicating && "opacity-50 pointer-events-none"
                                             )}
                                         >
                                             <div className="space-y-1">
