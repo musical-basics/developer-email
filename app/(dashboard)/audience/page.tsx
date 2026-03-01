@@ -1218,7 +1218,7 @@ export default function AudienceManagerPage() {
 
             {/* Toolbar — Filters & View Toggle */}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-                <div className="flex flex-1 items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     <div className="relative flex-1 max-w-sm">
                         <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
@@ -1311,7 +1311,9 @@ export default function AudienceManagerPage() {
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
+                </div>
 
+                <div className="flex items-center gap-3">
                     <Button
                         variant={showTestOnly ? "default" : "outline"}
                         className={cn(
