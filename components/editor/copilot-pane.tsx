@@ -327,7 +327,21 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         // Prepend reference CSS context if present
         let fullMessage = userMessage
         if (referenceCSS) {
-            fullMessage = `[Reference template style attached. Match this CSS for fonts, colors, and spacing:]\n${referenceCSS}\n\n${userMessage}`
+            fullMessage = `[STYLE REFERENCE ATTACHED — CONTENT PRESERVATION MODE]
+The CSS below and any attached screenshot are ONLY for visual/styling reference.
+
+### STRICT RULES FOR THIS REQUEST:
+1. **DO NOT** rewrite, rephrase, summarize, or change ANY text content. Every word, sentence, and paragraph from the CURRENT HTML must appear EXACTLY as-is in your output.
+2. **DO NOT** change, remove, or regenerate ANY image src attributes. Keep every img src URL identical to the original.
+3. **DO NOT** change ANY link href attributes unless specifically requested.
+4. **ONLY** apply visual/structural changes: layout (table structure), colors, fonts, font sizes, spacing/padding, backgrounds, border styles, and button styling.
+5. If the reference uses sections the original doesn't have, DO NOT invent new content — skip those sections or leave them empty.
+
+### Reference CSS (apply this styling to the existing content):
+${referenceCSS}
+
+### User's instruction:
+${userMessage}`
             setReferenceCSS(null)
             setRefTemplateName(null)
         }

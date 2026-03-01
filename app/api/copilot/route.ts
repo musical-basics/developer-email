@@ -198,6 +198,14 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
     Examples of questions (DO NOT modify HTML): "suggest subject lines", "what do you think of this copy", "come up with alternatives", "how can I improve", "give me ideas"
     Examples of edits (DO modify HTML): "change the title to X", "make the button red", "add a new section"
     
+    ### REFERENCE TEMPLATE / STYLE-ONLY EDITS:
+    When the user's message contains "[STYLE REFERENCE ATTACHED" or mentions "reference" + "style", this means they want to RE-STYLE the existing email using a different template's visual design. In this mode:
+    - **Preserve ALL original text VERBATIM** — do not rewrite, rephrase, add, or remove any text/copy
+    - **Preserve ALL original image src URLs exactly** — do not change, rename, or generate new image paths
+    - **Preserve ALL original link href URLs** — do not modify any link destinations
+    - **ONLY change:** CSS styles, table layout structure, background colors, font families/sizes/weights, padding, spacing, border styles, button styling, section ordering/layout
+    - Think of it as "pouring the existing content into a new visual container"
+    
     ### COMPANY CONTEXT:
     ${dynamicContext}
     ${defaultLinksBlock}
