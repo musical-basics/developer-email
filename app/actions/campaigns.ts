@@ -500,3 +500,54 @@ export async function restoreCampaignBackup(campaignId: string, backupId: string
         }
     }
 }
+
+/**
+ * Bulk Send Template — sends the same template to multiple subscribers.
+ * Uses the same sendChainEmail logic as individual "Send Existing Campaign".
+ */
+export async function bulkSendTemplate(
+    campaignId: string,
+    subscriberIds: string[]
+): Promise<{ success: boolean; sent: number; failed: number; total: number; error?: string }> {
+    if (!subscriberIds.length) {
+        return { success: false, sent: 0, failed: 0, total: 0, error: "No subscribers selected" }
+    }
+
+    const supabase = await createClient()
+
+    // Fetch subscriber details
+    const { data: subs, error: subError } = await supabase
+        .from("subscribers")
+        .select("id, email, first_name, last_name")
+        .in("id", subscriberIds)
+        .eq("status", "active")
+
+    if (subError || !subs || subs.length === 0) {
+        return { success: false, sent: 0, failed: 0, total: subscriberIds.length, error: "No active subscribers found" }
+    }
+
+    // Dynamic import to avoid circular dependency
+    const { sendChainEmail } = await import("@/lib/chains/sender")
+
+    let sent = 0
+    let failed = 0
+
+    for (const sub of subs) {
+        try {
+            const firstName = sub.first_name || ""
+            const result = await sendChainEmail(sub.id, sub.email, firstName, campaignId)
+            if (result.success) {
+                sent++
+            } else {
+                console.error(`[BulkSend] Failed for ${sub.email}:`, result.error)
+                failed++
+            }
+        } catch (err) {
+            console.error(`[BulkSend] Error sending to ${sub.email}:`, err)
+            failed++
+        }
+    }
+
+    console.log(`[BulkSend] Done: ${sent} sent, ${failed} failed out of ${subs.length}`)
+    return { success: true, sent, failed, total: subs.length }
+}

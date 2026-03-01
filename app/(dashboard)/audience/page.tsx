@@ -34,6 +34,7 @@ import {
     Bookmark,
     Save,
     Eye,
+    Mail,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -91,7 +92,7 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
-import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
+import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, bulkSendTemplate } from "@/app/actions/campaigns"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
 import { getTags, type TagDefinition } from "@/app/actions/tags"
@@ -159,6 +160,10 @@ export default function AudienceManagerPage() {
     const [existingCampaigns, setExistingCampaigns] = useState<Campaign[]>([])
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
     const [duplicating, setDuplicating] = useState(false)
+
+    // Bulk Send State
+    const [bulkSendMode, setBulkSendMode] = useState(false)
+    const [bulkSending, setBulkSending] = useState(false)
 
     // Start Chain State
     const [isChainPickerOpen, setIsChainPickerOpen] = useState(false)
@@ -614,6 +619,37 @@ export default function AudienceManagerPage() {
     }
 
     const handleSelectCampaign = async (campaign: Campaign) => {
+        // Bulk send mode — send to all selected subscribers
+        if (bulkSendMode) {
+            setBulkSending(true)
+            try {
+                const result = await bulkSendTemplate(campaign.id, selectedIds)
+
+                if (result.error) {
+                    throw new Error(result.error)
+                }
+
+                toast({
+                    title: "Bulk Send Complete",
+                    description: `Sent "${campaign.name}" to ${result.sent} of ${result.total} subscribers${result.failed > 0 ? ` (${result.failed} failed)` : ''}.`,
+                })
+
+                setIsSelectCampaignOpen(false)
+                setSelectedIds([])
+                setBulkSendMode(false)
+            } catch (error: any) {
+                toast({
+                    title: "Error sending bulk email",
+                    description: error.message,
+                    variant: "destructive",
+                })
+            } finally {
+                setBulkSending(false)
+            }
+            return
+        }
+
+        // Individual mode — duplicate for single subscriber
         if (!targetSubscriber) return
 
         setDuplicating(true)
@@ -645,6 +681,23 @@ export default function AudienceManagerPage() {
             })
         } finally {
             setDuplicating(false)
+        }
+    }
+
+    const handleOpenBulkSend = async () => {
+        setBulkSendMode(true)
+        setTargetSubscriber(null)
+        setIsSelectCampaignOpen(true)
+        setLoadingCampaigns(true)
+
+        try {
+            const campaigns = await getCampaignList()
+            setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
+        } catch (error) {
+            console.error("Failed to load campaigns", error)
+            toast({ title: "Error loading campaigns", variant: "destructive" })
+        } finally {
+            setLoadingCampaigns(false)
         }
     }
 
@@ -1325,6 +1378,10 @@ export default function AudienceManagerPage() {
                                 </div>
                             </PopoverContent>
                         </Popover>
+                        <Button variant="secondary" onClick={handleOpenBulkSend} className="gap-2">
+                            <Mail className="h-4 w-4" />
+                            Bulk Send
+                        </Button>
                         <Button variant="destructive" onClick={() => setIsDeleteAlertOpen(true)} className="gap-2">
                             <Trash2 className="h-4 w-4" />
                             Delete Selected
@@ -1884,12 +1941,15 @@ export default function AudienceManagerPage() {
             </AlertDialog>
 
             {/* Select Campaign Dialog */}
-            <Dialog open={isSelectCampaignOpen} onOpenChange={setIsSelectCampaignOpen}>
+            <Dialog open={isSelectCampaignOpen} onOpenChange={(open) => { setIsSelectCampaignOpen(open); if (!open) setBulkSendMode(false) }}>
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>Send Existing Campaign</DialogTitle>
+                        <DialogTitle>{bulkSendMode ? 'Bulk Send Template' : 'Send Existing Campaign'}</DialogTitle>
                         <DialogDescription>
-                            Select a campaign to duplicate and send to {targetSubscriber?.email}.
+                            {bulkSendMode
+                                ? `Select a template to send to ${selectedIds.length} selected subscriber${selectedIds.length !== 1 ? 's' : ''}.`
+                                : `Select a campaign to duplicate and send to ${targetSubscriber?.email}.`
+                            }
                         </DialogDescription>
                     </DialogHeader>
 
@@ -1906,10 +1966,10 @@ export default function AudienceManagerPage() {
                                     {[...existingCampaigns].sort((a, b) => (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)).map(campaign => (
                                         <div
                                             key={campaign.id}
-                                            onClick={() => !duplicating && handleSelectCampaign(campaign)}
+                                            onClick={() => !(duplicating || bulkSending) && handleSelectCampaign(campaign)}
                                             className={cn(
                                                 "p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors",
-                                                duplicating && "opacity-50 pointer-events-none"
+                                                (duplicating || bulkSending) && "opacity-50 pointer-events-none"
                                             )}
                                         >
                                             <div className="space-y-1">
