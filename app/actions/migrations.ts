@@ -4,8 +4,84 @@ import { createHash } from "crypto"
 import { createClient as createServerClient } from "@/lib/supabase/server"
 import { createClient } from "@supabase/supabase-js"
 import * as cheerio from "cheerio"
+import sharp from "sharp"
 import { convertMailchimpToEmail, AssetMapping } from "@/lib/ai/email-generator"
 import { parseMailchimpHtml, generateContentSummary } from "@/lib/parsers/mailchimp-parser"
+
+const MAX_IMAGE_SIZE = 300 * 1024 // 300KB
+const MAX_DIMENSION = 1200
+
+/**
+ * Download a remote image, compress it with sharp if >300KB,
+ * and return a File object ready for uploadHashedAsset.
+ */
+async function downloadAndCompressRemoteImage(url: string, fallbackFilename: string): Promise<File | null> {
+    try {
+        const response = await fetch(url, { signal: AbortSignal.timeout(15000) })
+        if (!response.ok) {
+            console.warn(`[RemoteImg] Failed to fetch ${url}: ${response.status}`)
+            return null
+        }
+
+        const contentType = response.headers.get("content-type") || "image/jpeg"
+        if (!contentType.startsWith("image/")) {
+            console.warn(`[RemoteImg] Not an image: ${contentType} for ${url}`)
+            return null
+        }
+
+        let buffer = Buffer.from(await response.arrayBuffer()) as Buffer<ArrayBuffer>
+        const originalSize = buffer.length
+        let outputType = contentType
+
+        // Compress if over 300KB
+        if (buffer.length > MAX_IMAGE_SIZE) {
+            console.log(`[RemoteImg] Compressing ${fallbackFilename}: ${(originalSize / 1024).toFixed(0)}KB → target <300KB`)
+
+            try {
+                // Get metadata to decide on resizing
+                const metadata = await sharp(buffer).metadata()
+                let pipeline = sharp(buffer)
+
+                // Resize if dimensions are too large
+                if (metadata.width && metadata.height) {
+                    if (metadata.width > MAX_DIMENSION || metadata.height > MAX_DIMENSION) {
+                        pipeline = pipeline.resize(MAX_DIMENSION, MAX_DIMENSION, { fit: "inside", withoutEnlargement: true })
+                    }
+                }
+
+                // Try progressively lower quality
+                const qualities = [80, 60, 40, 20]
+                for (const quality of qualities) {
+                    const compressed = await pipeline.clone().jpeg({ quality, progressive: true }).toBuffer()
+                    if (compressed.length <= MAX_IMAGE_SIZE) {
+                        buffer = compressed
+                        outputType = "image/jpeg"
+                        break
+                    }
+                    // On last attempt, use whatever we got
+                    if (quality === qualities[qualities.length - 1]) {
+                        buffer = compressed
+                        outputType = "image/jpeg"
+                    }
+                }
+
+                console.log(`[RemoteImg] Compressed ${fallbackFilename}: ${(originalSize / 1024).toFixed(0)}KB → ${(buffer.length / 1024).toFixed(0)}KB`)
+            } catch (compressErr) {
+                console.warn(`[RemoteImg] Compression failed for ${fallbackFilename}, using original:`, compressErr)
+            }
+        }
+
+        // Ensure the filename has the right extension
+        const ext = outputType === "image/jpeg" ? ".jpg" : outputType === "image/png" ? ".png" : ".jpg"
+        const baseName = fallbackFilename.replace(/\.[^.]+$/, "")
+        const filename = `${baseName}${ext}`
+
+        return new File([buffer], filename, { type: outputType, lastModified: Date.now() })
+    } catch (err) {
+        console.warn(`[RemoteImg] Error downloading ${url}:`, err)
+        return null
+    }
+}
 
 // Admin client that bypasses RLS for asset uploads
 function getAdminClient() {
@@ -205,10 +281,12 @@ export async function analyzeMailchimpFile(htmlContent: string): Promise<{
 
 /**
  * Direct HTML import — faithful "carbon copy" of the Mailchimp email:
- * 1. Upload all image assets to Supabase with hash dedup
- * 2. Clean up Mailchimp boilerplate (MSO, archive bar, tracking)
- * 3. Replace image src URLs with uploaded Supabase URLs (matched by filename)
- * 4. Store the cleaned HTML directly — no AI rewriting, no block decomposition
+ * 1. Upload local image assets to Supabase with hash dedup
+ * 2. Download & compress remote images (mcusercontent, etc.) server-side
+ * 3. Clean up Mailchimp boilerplate (MSO, archive bar, tracking)
+ * 4. Replace image src with {{mustache_src}} variables for the Asset Loader
+ * 5. Replace wrapping <a href> with {{mustache_link_url}} variables
+ * 6. Auto-fill variable_values so all images/links are pre-populated
  */
 export async function processMigrationToDnd(formData: FormData): Promise<{
     success: boolean
@@ -223,7 +301,7 @@ export async function processMigrationToDnd(formData: FormData): Promise<{
             return { success: false, error: "No HTML file provided" }
         }
 
-        // Collect image files from the form
+        // Collect local image files from the form
         const imageFiles: File[] = []
         for (const [key, value] of formData.entries()) {
             if (key.startsWith("asset_") && value instanceof File) {
@@ -231,74 +309,124 @@ export async function processMigrationToDnd(formData: FormData): Promise<{
             }
         }
 
-        console.log(`[DirectImport] File: ${htmlFile.name}, ${imageFiles.length} assets`)
+        console.log(`[DirectImport] File: ${htmlFile.name}, ${imageFiles.length} local assets`)
 
-        // Step 1: Upload all images concurrently with hash dedup
-        const assetMappings = await Promise.all(
+        // Step 1: Upload local images concurrently with hash dedup
+        const localAssetMappings = await Promise.all(
             imageFiles.map((file) => uploadHashedAsset(file))
         )
-        console.log(`[DirectImport] Uploaded ${assetMappings.length} assets`)
+        console.log(`[DirectImport] Uploaded ${localAssetMappings.length} local assets`)
+
+        // Build filename → Supabase URL map from local uploads
+        const filenameToUrl: Record<string, string> = {}
+        for (const mapping of localAssetMappings) {
+            filenameToUrl[mapping.originalName.toLowerCase()] = mapping.url
+            const nameNoExt = mapping.originalName.replace(/\.[^.]+$/, "").toLowerCase()
+            filenameToUrl[nameNoExt] = mapping.url
+        }
 
         // Step 2: Read the HTML and clean Mailchimp boilerplate
         const rawHtml = await htmlFile.text()
         const $ = cheerio.load(rawHtml)
 
         // Remove Mailchimp-specific elements
-        $("#awesomewrap").remove()        // Archive bar
-        $(".mcnPreviewText").remove()     // Preview text container
-        $("script").remove()              // Tracking scripts
-        // Remove MSO conditional comments from raw HTML
-        // (cheerio doesn't parse these, so we handle them on the string level later)
+        $("#awesomewrap").remove()
+        $(".mcnPreviewText").remove()
+        $("script").remove()
 
-        // Step 3: Build filename → Supabase URL map from uploaded assets
-        const filenameToUrl: Record<string, string> = {}
-        for (const mapping of assetMappings) {
-            // Map by original filename (e.g., "hero-image.png" → "https://supabase.../hash-hero-image.png")
-            filenameToUrl[mapping.originalName.toLowerCase()] = mapping.url
-            // Also map without extension for fuzzy matching
-            const nameNoExt = mapping.originalName.replace(/\.[^.]+$/, "").toLowerCase()
-            filenameToUrl[nameNoExt] = mapping.url
+        // Step 3: Process ALL images — download remotes, match locals, build variables
+        const variableValues: Record<string, string> = {}
+        const usedVarNames = new Set<string>()
+        let imgIndex = 0
+
+        // Helper: generate a unique variable name from a filename
+        const makeUniqueVarName = (filename: string): string => {
+            let base = toVariableName(filename)
+            // Ensure uniqueness
+            if (usedVarNames.has(base)) {
+                let counter = 2
+                while (usedVarNames.has(`${base.replace(/_src$/, "")}_${counter}_src`)) {
+                    counter++
+                }
+                base = `${base.replace(/_src$/, "")}_${counter}_src`
+            }
+            usedVarNames.add(base)
+            return base
         }
 
-        // Step 4: Replace image src attributes with uploaded Supabase URLs
-        const variableValues: Record<string, string> = {}
+        // Collect all img elements with their data for processing
+        const imgElements: { el: any; src: string; index: number }[] = []
         $("img").each((_: number, el: any) => {
+            const src = $(el).attr("src") || ""
+            if (!src) return
+            imgElements.push({ el, src, index: imgIndex++ })
+        })
+
+        console.log(`[DirectImport] Found ${imgElements.length} images to process`)
+
+        // Process images: download remotes, match locals
+        for (const { el, src, index } of imgElements) {
             const $img = $(el)
-            const originalSrc = $img.attr("src") || ""
-            if (!originalSrc) return
+            const srcFilename = src.split("/").pop()?.split("?")[0]?.toLowerCase() || `image_${index}`
+            let supabaseUrl: string | null = null
 
-            // Extract the filename from the original src URL
-            const srcFilename = originalSrc.split("/").pop()?.split("?")[0]?.toLowerCase() || ""
-
-            // Try exact filename match first
-            let newUrl = filenameToUrl[srcFilename]
-
-            // If no exact match, try matching without extension
-            if (!newUrl) {
+            // Try matching against locally uploaded files first
+            supabaseUrl = filenameToUrl[srcFilename]
+            if (!supabaseUrl) {
                 const srcNoExt = srcFilename.replace(/\.[^.]+$/, "")
-                newUrl = filenameToUrl[srcNoExt]
+                supabaseUrl = filenameToUrl[srcNoExt]
             }
-
-            // If no match, try partial match (uploaded filename contained in src filename or vice versa)
-            if (!newUrl) {
+            if (!supabaseUrl) {
                 for (const [uploadedName, url] of Object.entries(filenameToUrl)) {
                     if (srcFilename.includes(uploadedName) || uploadedName.includes(srcFilename)) {
-                        newUrl = url
+                        supabaseUrl = url
                         break
                     }
                 }
             }
 
-            if (newUrl) {
-                $img.attr("src", newUrl)
-                console.log(`[DirectImport] Replaced: ${srcFilename} → uploaded URL`)
-                // Track in variable_values for reference
-                const varName = toVariableName(srcFilename || `image_${_}`)
-                variableValues[varName] = newUrl
+            // If no local match and it's a remote URL, download + compress + upload
+            if (!supabaseUrl && (src.startsWith("http://") || src.startsWith("https://"))) {
+                console.log(`[DirectImport] Downloading remote image: ${srcFilename}`)
+                const file = await downloadAndCompressRemoteImage(src, srcFilename)
+                if (file) {
+                    const mapping = await uploadHashedAsset(file)
+                    supabaseUrl = mapping.url
+                    // Also add to local map for dedup if same image appears again
+                    filenameToUrl[srcFilename] = supabaseUrl
+                }
             }
-        })
 
-        // Step 5: Get the cleaned HTML
+            if (supabaseUrl) {
+                // Generate mustache variable name
+                const varName = makeUniqueVarName(srcFilename)
+                const linkVarName = varName.replace(/_src$/, "_link_url")
+
+                // Replace src with mustache variable
+                $img.attr("src", `{{${varName}}}`)
+
+                // Store the Supabase URL in variable_values (auto-fills the Asset Loader)
+                variableValues[varName] = supabaseUrl
+
+                // Handle wrapping <a> link — replace href with mustache variable
+                const $parentLink = $img.closest("a")
+                if ($parentLink.length) {
+                    const originalHref = $parentLink.attr("href") || ""
+                    $parentLink.attr("href", `{{${linkVarName}}}`)
+                    // Auto-fill the link value
+                    if (originalHref && !originalHref.startsWith("{{")) {
+                        variableValues[linkVarName] = originalHref
+                    }
+                }
+
+                console.log(`[DirectImport] ${srcFilename} → {{${varName}}}`)
+            } else {
+                // Leave as-is for relative/local paths that couldn't be resolved
+                console.warn(`[DirectImport] Could not resolve image: ${src}`)
+            }
+        }
+
+        // Step 4: Get the cleaned HTML
         let cleanedHtml = $.html()
 
         // Remove MSO conditional comments at the string level
@@ -309,7 +437,9 @@ export async function processMigrationToDnd(formData: FormData): Promise<{
         // Extract title for the campaign
         const title = $("title").text() || $('meta[property="og:title"]').attr("content") || templateName
 
-        // Step 6: Insert campaign with raw HTML
+        console.log(`[DirectImport] Processed ${Object.keys(variableValues).length} variables`)
+
+        // Step 5: Insert campaign with mustache-templated HTML
         const admin = getAdminClient()
         const { data, error } = await admin
             .from("campaigns")
