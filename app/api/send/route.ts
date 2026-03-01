@@ -76,7 +76,7 @@ export async function POST(request: Request) {
                 finalHtml = finalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
                     if (url.includes('/unsubscribe')) return match;
                     const sep = url.includes('?') ? '&' : '?';
-                    return `href=${quote}${url}${sep}sid=${simulationSubscriber.id}&em=${encodeURIComponent(simulationSubscriber.email)}${quote}`;
+                    return `href=${quote}${url}${sep}sid=${simulationSubscriber.id}${quote}`;
                 });
             } else {
                 finalHtml = finalHtml
@@ -242,7 +242,7 @@ export async function POST(request: Request) {
                         personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                             if (url.includes('/unsubscribe')) return match;
                             if (url.includes('/api/track/')) return match; // already tracked
-                            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${trackingCampaignId}&s=${sub.id}&em=${encodeURIComponent(sub.email)}`;
+                            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${trackingCampaignId}&s=${sub.id}`;
                             return `href=${quote}${trackUrl}${quote}`;
                         });
                     } else {
@@ -250,7 +250,7 @@ export async function POST(request: Request) {
                         personalHtml = personalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
                             if (url.includes('/unsubscribe')) return match;
                             const sep = url.includes('?') ? '&' : '?';
-                            return `href=${quote}${url}${sep}sid=${sub.id}&cid=${trackingCampaignId}&em=${encodeURIComponent(sub.email)}${quote}`;
+                            return `href=${quote}${url}${sep}sid=${sub.id}&cid=${trackingCampaignId}${quote}`;
                         });
                     }
 

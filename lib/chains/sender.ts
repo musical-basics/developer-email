@@ -105,7 +105,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         finalHtml = finalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
             if (url.includes('/unsubscribe')) return match;
             if (url.includes('/api/track/')) return match;
-            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${subscriberId}&em=${encodeURIComponent(email)}`;
+            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${subscriberId}`;
             return `href=${quote}${trackUrl}${quote}`;
         });
     } else {
@@ -113,7 +113,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         finalHtml = finalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
             if (url.includes('/unsubscribe')) return match;
             const sep = url.includes('?') ? '&' : '?';
-            return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaignId}&em=${encodeURIComponent(email)}${quote}`;
+            return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaignId}${quote}`;
         });
     }
 

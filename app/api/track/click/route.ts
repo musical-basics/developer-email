@@ -58,7 +58,6 @@ export async function GET(request: Request) {
             destination.hostname === "localhost") {
             if (subscriberId) destination.searchParams.set("sid", subscriberId);
             if (campaignId) destination.searchParams.set("cid", campaignId);
-            if (email) destination.searchParams.set("em", email);
         }
     } catch (e) {
         // Fallback for relative URLs or malformed URLs
