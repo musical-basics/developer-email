@@ -35,6 +35,7 @@ import {
     Save,
     Eye,
     Mail,
+    MailX,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -144,6 +145,7 @@ export default function AudienceManagerPage() {
     const [expandedSubscriberId, setExpandedSubscriberId] = useState<string | null>(null)
     const [lastEmailedSort, setLastEmailedSort] = useState<"asc" | "desc" | null>(null)
     const [statusFilter, setStatusFilter] = useState<string[]>([])
+    const [neverEmailedFilter, setNeverEmailedFilter] = useState(false)
 
     // Saved Views — loaded from DB on mount
     const [savedViews, setSavedViews] = useState<SavedView[]>([])
@@ -351,7 +353,9 @@ export default function AudienceManagerPage() {
 
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(subscriber.status)
 
-            return matchesSearch && matchesIncludeTags && matchesExcludeTags && matchesTest && matchesStatus
+            const matchesNeverEmailed = !neverEmailedFilter || !lastSentSubjects[subscriber.id]
+
+            return matchesSearch && matchesIncludeTags && matchesExcludeTags && matchesTest && matchesStatus && matchesNeverEmailed
         })
 
         if (lastEmailedSort) {
@@ -368,7 +372,7 @@ export default function AudienceManagerPage() {
         }
 
         return filtered
-    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects])
+    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects, neverEmailedFilter])
 
     // Build tagColors lookup from tag_definitions DB (hex colors)
     const tagColors = useMemo(() => {
@@ -1320,6 +1324,20 @@ export default function AudienceManagerPage() {
                     >
                         <FlaskConical className="h-4 w-4" />
                         Test Accounts
+                    </Button>
+
+                    <Button
+                        variant={neverEmailedFilter ? "default" : "outline"}
+                        className={cn(
+                            "gap-2 border-border",
+                            neverEmailedFilter
+                                ? "bg-blue-500 text-white hover:bg-blue-400"
+                                : "bg-transparent"
+                        )}
+                        onClick={() => setNeverEmailedFilter(!neverEmailedFilter)}
+                    >
+                        <MailX className="h-4 w-4" />
+                        Not Yet Emailed
                     </Button>
 
                     <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
