@@ -26,6 +26,8 @@ import {
     ArrowUp,
     ArrowDown,
     ChevronDown,
+    ChevronLeft,
+    ChevronRight,
     FilterX,
     FileUp,
     UsersRound,
@@ -146,6 +148,10 @@ export default function AudienceManagerPage() {
     const [lastEmailedSort, setLastEmailedSort] = useState<"asc" | "desc" | null>(null)
     const [statusFilter, setStatusFilter] = useState<string[]>([])
     const [neverEmailedFilter, setNeverEmailedFilter] = useState(false)
+
+    // Pagination
+    const [pageSize, setPageSize] = useState(25)
+    const [currentPage, setCurrentPage] = useState(1)
 
     // Saved Views — loaded from DB on mount
     const [savedViews, setSavedViews] = useState<SavedView[]>([])
@@ -373,6 +379,18 @@ export default function AudienceManagerPage() {
 
         return filtered
     }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects, neverEmailedFilter])
+
+    // Reset page when filters change
+    useEffect(() => {
+        setCurrentPage(1)
+    }, [searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, neverEmailedFilter, pageSize])
+
+    // Paginated slice
+    const totalPages = Math.max(1, Math.ceil(filteredSubscribers.length / pageSize))
+    const paginatedSubscribers = useMemo(() => {
+        const start = (currentPage - 1) * pageSize
+        return filteredSubscribers.slice(start, start + pageSize)
+    }, [filteredSubscribers, currentPage, pageSize])
 
     // Build tagColors lookup from tag_definitions DB (hex colors)
     const tagColors = useMemo(() => {
@@ -1415,236 +1433,286 @@ export default function AudienceManagerPage() {
 
             {/* Content */}
             {viewMode === "list" && (
-                <div className="rounded-lg border border-border bg-card">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="border-border hover:bg-transparent">
-                                <TableHead className="w-12">
-                                    <Checkbox
-                                        checked={allSelected}
-                                        ref={(el) => {
-                                            if (el) {
-                                                const element = el as HTMLButtonElement & { indeterminate: boolean }
-                                                element.indeterminate = someSelected
-                                            }
-                                        }}
-                                        onCheckedChange={handleSelectAll}
-                                    />
-                                </TableHead>
-                                <TableHead>Profile</TableHead>
-                                <TableHead className="w-[100px]"></TableHead>
-                                <TableHead>Tags</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>
-                                    <button
-                                        className="flex items-center gap-1 hover:text-foreground transition-colors"
-                                        onClick={() => setLastEmailedSort(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null)}
-                                    >
-                                        Last Emailed
-                                        {lastEmailedSort === "desc" ? (
-                                            <ArrowDown className="h-3.5 w-3.5 text-amber-400" />
-                                        ) : lastEmailedSort === "asc" ? (
-                                            <ArrowUp className="h-3.5 w-3.5 text-amber-400" />
-                                        ) : (
-                                            <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
-                                        )}
-                                    </button>
-                                </TableHead>
-                                <TableHead>Added</TableHead>
-                                <TableHead className="w-12">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {loading ? (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                                        Loading subscribers...
-                                    </TableCell>
+                <>
+                    <div className="rounded-lg border border-border bg-card">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="border-border hover:bg-transparent">
+                                    <TableHead className="w-12">
+                                        <Checkbox
+                                            checked={allSelected}
+                                            ref={(el) => {
+                                                if (el) {
+                                                    const element = el as HTMLButtonElement & { indeterminate: boolean }
+                                                    element.indeterminate = someSelected
+                                                }
+                                            }}
+                                            onCheckedChange={handleSelectAll}
+                                        />
+                                    </TableHead>
+                                    <TableHead>Profile</TableHead>
+                                    <TableHead className="w-[100px]"></TableHead>
+                                    <TableHead>Tags</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>
+                                        <button
+                                            className="flex items-center gap-1 hover:text-foreground transition-colors"
+                                            onClick={() => setLastEmailedSort(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null)}
+                                        >
+                                            Last Emailed
+                                            {lastEmailedSort === "desc" ? (
+                                                <ArrowDown className="h-3.5 w-3.5 text-amber-400" />
+                                            ) : lastEmailedSort === "asc" ? (
+                                                <ArrowUp className="h-3.5 w-3.5 text-amber-400" />
+                                            ) : (
+                                                <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+                                            )}
+                                        </button>
+                                    </TableHead>
+                                    <TableHead>Added</TableHead>
+                                    <TableHead className="w-12">Actions</TableHead>
                                 </TableRow>
-                            ) : filteredSubscribers.length === 0 ? (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                                        No subscribers found.
-                                    </TableCell>
-                                </TableRow>
-                            ) : (
-                                filteredSubscribers.map((subscriber) => {
-                                    const isExpanded = expandedSubscriberId === subscriber.id
-                                    return (
-                                        <>
-                                            <TableRow
-                                                key={subscriber.id}
-                                                className={cn(
-                                                    "border-border cursor-pointer hover:bg-muted/50",
-                                                    isExpanded && "bg-muted/30"
-                                                )}
-                                                onClick={() => setExpandedSubscriberId(isExpanded ? null : subscriber.id)}
-                                            >
-                                                <TableCell onClick={(e) => { e.stopPropagation(); const idx = filteredSubscribers.indexOf(subscriber); handleSelectOne(subscriber.id, idx, e.shiftKey) }} className="cursor-pointer">
-                                                    <Checkbox
-                                                        checked={selectedIds.includes(subscriber.id)}
-                                                        className="pointer-events-none"
-                                                    />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-3">
-                                                        <Avatar className="h-9 w-9 border border-border">
-                                                            <AvatarFallback className="bg-muted text-muted-foreground text-sm">
-                                                                {getInitials(subscriber.first_name, subscriber.last_name)}
-                                                            </AvatarFallback>
-                                                        </Avatar>
-                                                        <div>
-                                                            <p className="font-medium text-foreground">{subscriber.email}</p>
-                                                            {subscriber.first_name && (
-                                                                <p className="text-sm text-muted-foreground">
-                                                                    {subscriber.first_name} {subscriber.last_name}
-                                                                </p>
-                                                            )}
-                                                            {lastSentSubjects[subscriber.id] && (
-                                                                <p className="text-xs text-muted-foreground/70 italic truncate max-w-[300px]">
-                                                                    Last sent: {lastSentSubjects[subscriber.id].subject} · {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                                                                </p>
+                            </TableHeader>
+                            <TableBody>
+                                {loading ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                            Loading subscribers...
+                                        </TableCell>
+                                    </TableRow>
+                                ) : filteredSubscribers.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
+                                            No subscribers found.
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    paginatedSubscribers.map((subscriber) => {
+                                        const isExpanded = expandedSubscriberId === subscriber.id
+                                        return (
+                                            <>
+                                                <TableRow
+                                                    key={subscriber.id}
+                                                    className={cn(
+                                                        "border-border cursor-pointer hover:bg-muted/50",
+                                                        isExpanded && "bg-muted/30"
+                                                    )}
+                                                    onClick={() => setExpandedSubscriberId(isExpanded ? null : subscriber.id)}
+                                                >
+                                                    <TableCell onClick={(e) => { e.stopPropagation(); const idx = filteredSubscribers.indexOf(subscriber); handleSelectOne(subscriber.id, idx, e.shiftKey) }} className="cursor-pointer">
+                                                        <Checkbox
+                                                            checked={selectedIds.includes(subscriber.id)}
+                                                            className="pointer-events-none"
+                                                        />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-3">
+                                                            <Avatar className="h-9 w-9 border border-border">
+                                                                <AvatarFallback className="bg-muted text-muted-foreground text-sm">
+                                                                    {getInitials(subscriber.first_name, subscriber.last_name)}
+                                                                </AvatarFallback>
+                                                            </Avatar>
+                                                            <div>
+                                                                <p className="font-medium text-foreground">{subscriber.email}</p>
+                                                                {subscriber.first_name && (
+                                                                    <p className="text-sm text-muted-foreground">
+                                                                        {subscriber.first_name} {subscriber.last_name}
+                                                                    </p>
+                                                                )}
+                                                                {lastSentSubjects[subscriber.id] && (
+                                                                    <p className="text-xs text-muted-foreground/70 italic truncate max-w-[300px]">
+                                                                        Last sent: {lastSentSubjects[subscriber.id].subject} · {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <div className="flex items-center gap-1">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    handleEdit(subscriber)
+                                                                }}
+                                                            >
+                                                                <Pencil className="h-4 w-4" />
+                                                                <span className="sr-only">Edit</span>
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    confirmDelete(subscriber.id)
+                                                                }}
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                                <span className="sr-only">Delete</span>
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {(subscriber.tags || []).length > 0 ? (
+                                                                (subscriber.tags || []).map((tag) => {
+                                                                    const hex = tagColors[tag]
+                                                                    return (
+                                                                        <Badge
+                                                                            key={tag}
+                                                                            variant="outline"
+                                                                            className="text-xs"
+                                                                            style={hex ? {
+                                                                                backgroundColor: `${hex}20`,
+                                                                                color: hex,
+                                                                                borderColor: `${hex}50`,
+                                                                            } : undefined}
+                                                                        >
+                                                                            {tag}
+                                                                        </Badge>
+                                                                    )
+                                                                })
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">-</span>
                                                             )}
                                                         </div>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell onClick={(e) => e.stopPropagation()}>
-                                                    <div className="flex items-center gap-1">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                handleEdit(subscriber)
-                                                            }}
-                                                        >
-                                                            <Pencil className="h-4 w-4" />
-                                                            <span className="sr-only">Edit</span>
-                                                        </Button>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8 text-muted-foreground hover:text-red-400"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                confirmDelete(subscriber.id)
-                                                            }}
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                            <span className="sr-only">Delete</span>
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex flex-wrap gap-1.5">
-                                                        {(subscriber.tags || []).length > 0 ? (
-                                                            (subscriber.tags || []).map((tag) => {
-                                                                const hex = tagColors[tag]
-                                                                return (
-                                                                    <Badge
-                                                                        key={tag}
-                                                                        variant="outline"
-                                                                        className="text-xs"
-                                                                        style={hex ? {
-                                                                            backgroundColor: `${hex}20`,
-                                                                            color: hex,
-                                                                            borderColor: `${hex}50`,
-                                                                        } : undefined}
-                                                                    >
-                                                                        {tag}
-                                                                    </Badge>
-                                                                )
-                                                            })
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline" className={statusStyles[subscriber.status] || "bg-muted"}>
+                                                            {subscriber.status.charAt(0).toUpperCase() + subscriber.status.slice(1)}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">
+                                                        {lastSentSubjects[subscriber.id] ? (
+                                                            <>
+                                                                <div>{formatDate(lastSentSubjects[subscriber.id].sentAt)}</div>
+                                                                <div className="text-[10px] text-muted-foreground/60">
+                                                                    {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                                                                </div>
+                                                            </>
                                                         ) : (
-                                                            <span className="text-xs text-muted-foreground">-</span>
+                                                            <span className="text-xs text-muted-foreground/40">—</span>
                                                         )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className={statusStyles[subscriber.status] || "bg-muted"}>
-                                                        {subscriber.status.charAt(0).toUpperCase() + subscriber.status.slice(1)}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                    {lastSentSubjects[subscriber.id] ? (
-                                                        <>
-                                                            <div>{formatDate(lastSentSubjects[subscriber.id].sentAt)}</div>
-                                                            <div className="text-[10px] text-muted-foreground/60">
-                                                                {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                                                            </div>
-                                                        </>
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground/40">—</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground">
-                                                    <div>{formatDate(subscriber.created_at)}</div>
-                                                    <div className="text-[10px] text-muted-foreground/60">
-                                                        {new Date(subscriber.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell onClick={(e) => e.stopPropagation()}>
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
-                                                                >
-                                                                    <Send className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    handleSendToSubscriber(subscriber)
-                                                                }}>
-                                                                    <Pencil className="mr-2 h-4 w-4" />
-                                                                    Draft New Campaign
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    handleOpenSelectCampaign(subscriber)
-                                                                }}>
-                                                                    <Copy className="mr-2 h-4 w-4" />
-                                                                    Send Existing Campaign
-                                                                </DropdownMenuItem>
-                                                                <DropdownMenuItem onClick={(e) => {
-                                                                    e.stopPropagation()
-                                                                    handleOpenChainPicker(subscriber)
-                                                                }}>
-                                                                    <GitBranch className="mr-2 h-4 w-4" />
-                                                                    Start Chain
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                        <ChevronDown className={cn(
-                                                            "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
-                                                            isExpanded && "rotate-180"
-                                                        )} />
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                            {isExpanded && (
-                                                <TableRow key={`${subscriber.id}-expanded`} className="border-border bg-muted/20 hover:bg-muted/20">
-                                                    <TableCell colSpan={8} className="p-0">
-                                                        <div className="px-6 py-4 border-t border-border/50">
-                                                            <SubscriberHistoryTimeline subscriberId={subscriber.id} />
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">
+                                                        <div>{formatDate(subscriber.created_at)}</div>
+                                                        <div className="text-[10px] text-muted-foreground/60">
+                                                            {new Date(subscriber.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        className="h-8 w-8 text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"
+                                                                    >
+                                                                        <Send className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        handleSendToSubscriber(subscriber)
+                                                                    }}>
+                                                                        <Pencil className="mr-2 h-4 w-4" />
+                                                                        Draft New Campaign
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        handleOpenSelectCampaign(subscriber)
+                                                                    }}>
+                                                                        <Copy className="mr-2 h-4 w-4" />
+                                                                        Send Existing Campaign
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={(e) => {
+                                                                        e.stopPropagation()
+                                                                        handleOpenChainPicker(subscriber)
+                                                                    }}>
+                                                                        <GitBranch className="mr-2 h-4 w-4" />
+                                                                        Start Chain
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                            <ChevronDown className={cn(
+                                                                "h-4 w-4 text-muted-foreground/50 transition-transform duration-200",
+                                                                isExpanded && "rotate-180"
+                                                            )} />
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>
-                                            )}
-                                        </>
-                                    )
-                                })
-                            )}
-                        </TableBody>
-                    </Table>
-                </div>
-            )
-            }
+                                                {isExpanded && (
+                                                    <TableRow key={`${subscriber.id}-expanded`} className="border-border bg-muted/20 hover:bg-muted/20">
+                                                        <TableCell colSpan={8} className="p-0">
+                                                            <div className="px-6 py-4 border-t border-border/50">
+                                                                <SubscriberHistoryTimeline subscriberId={subscriber.id} />
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </>
+                                        )
+                                    })
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {/* Pagination Footer */}
+                    <div className="flex items-center justify-between border-t border-border pt-4 mt-2">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <span>Show</span>
+                            {[25, 50, 100].map(size => (
+                                <Button
+                                    key={size}
+                                    variant={pageSize === size ? "default" : "outline"}
+                                    size="sm"
+                                    className={cn(
+                                        "h-7 px-2.5 text-xs",
+                                        pageSize === size
+                                            ? "bg-amber-500 text-zinc-900 hover:bg-amber-400"
+                                            : "bg-transparent border-border"
+                                    )}
+                                    onClick={() => setPageSize(size)}
+                                >
+                                    {size}
+                                </Button>
+                            ))}
+                        </div>
+
+                        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                            <span>
+                                {filteredSubscribers.length === 0 ? "0" : `${(currentPage - 1) * pageSize + 1}–${Math.min(currentPage * pageSize, filteredSubscribers.length)}`} of {filteredSubscribers.length}
+                            </span>
+                            <div className="flex items-center gap-1">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 bg-transparent border-border"
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage <= 1}
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 bg-transparent border-border"
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                    disabled={currentPage >= totalPages}
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {
                 viewMode === "tags" && (
