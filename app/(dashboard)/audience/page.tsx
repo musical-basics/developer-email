@@ -362,10 +362,10 @@ export default function AudienceManagerPage() {
             filtered.sort((a, b) => {
                 const aDate = lastSentSubjects[a.id]?.sentAt
                 const bDate = lastSentSubjects[b.id]?.sentAt
-                // Push subscribers with no sent history to the bottom
+                // Never-emailed: top when ascending (oldest first), bottom when descending
                 if (!aDate && !bDate) return 0
-                if (!aDate) return 1
-                if (!bDate) return -1
+                if (!aDate) return lastEmailedSort === "asc" ? -1 : 1
+                if (!bDate) return lastEmailedSort === "asc" ? 1 : -1
                 const diff = new Date(aDate).getTime() - new Date(bDate).getTime()
                 return lastEmailedSort === "asc" ? diff : -diff
             })
