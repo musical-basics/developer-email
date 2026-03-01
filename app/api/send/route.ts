@@ -297,6 +297,11 @@ export async function POST(request: Request) {
                     console.error(`Unexpected error for ${sub.email}:`, e);
                     failureCount++;
                 }
+
+                // Rate-limit buffer: Resend allows 2 req/sec, so 600ms gap is safe
+                if (ri < recipients.length - 1) {
+                    await new Promise(r => setTimeout(r, 600));
+                }
             }
 
             // Insert history
