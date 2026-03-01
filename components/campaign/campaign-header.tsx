@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ChevronRight, Pencil } from "lucide-react"
+import { ChevronRight, Pencil, Rocket } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Campaign } from "@/lib/types"
@@ -22,6 +22,8 @@ import { useToast } from "@/hooks/use-toast"
 
 interface CampaignHeaderProps {
     campaign: Campaign
+    onSendBroadcast?: () => void
+    isSent?: boolean
 }
 
 const statusConfig: Record<string, { label: string; className: string }> = {
@@ -31,7 +33,7 @@ const statusConfig: Record<string, { label: string; className: string }> = {
     sent: { label: "Sent", className: "bg-emerald-900/50 text-emerald-400 hover:bg-emerald-900/50" },
 }
 
-export function CampaignHeader({ campaign }: CampaignHeaderProps) {
+export function CampaignHeader({ campaign, onSendBroadcast, isSent }: CampaignHeaderProps) {
     // Fallback for status if not in config
     const status = statusConfig[campaign.status] || statusConfig.draft
     const [isEditSubjectOpen, setIsEditSubjectOpen] = useState(false)
@@ -90,16 +92,29 @@ export function CampaignHeader({ campaign }: CampaignHeaderProps) {
                     </Badge>
                 </div>
 
-                <Button variant="outline" asChild className="w-fit gap-2 border-border hover:bg-secondary bg-transparent">
-                    <Link href={
-                        campaign.html_content?.includes('"_marker":"__dnd_blocks__"')
-                            ? `/dnd-editor?id=${campaign.id}`
-                            : `/editor?id=${campaign.id}`
-                    }>
-                        <Pencil className="h-4 w-4" />
-                        Edit Design
-                    </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" asChild className="w-fit gap-2 border-border hover:bg-secondary bg-transparent">
+                        <Link href={
+                            campaign.html_content?.includes('"_marker":"__dnd_blocks__"')
+                                ? `/dnd-editor?id=${campaign.id}`
+                                : `/editor?id=${campaign.id}`
+                        }>
+                            <Pencil className="h-4 w-4" />
+                            Edit Design
+                        </Link>
+                    </Button>
+
+                    {onSendBroadcast && (
+                        <Button
+                            onClick={onSendBroadcast}
+                            disabled={isSent}
+                            className="w-fit gap-2 bg-[#D4AF37] text-[#050505] hover:bg-[#b8962e] disabled:opacity-50"
+                        >
+                            <Rocket className="h-4 w-4" />
+                            Send Broadcast
+                        </Button>
+                    )}
+                </div>
             </div>
 
             {/* Subject Line Preview */}
