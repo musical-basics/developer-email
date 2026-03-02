@@ -1,6 +1,5 @@
 // lib/chains/sender.ts
 import { Resend } from "resend";
-import { CHAIN_TEMPLATES } from "./templates";
 import { createClient } from "@supabase/supabase-js";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
@@ -16,42 +15,33 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     let templateFromEmail = "";
     let templateVariableValues: Record<string, any> | null = null;
 
-    const template = CHAIN_TEMPLATES[templateKeyOrId as keyof typeof CHAIN_TEMPLATES];
+    // Dynamic Database Template — templateKeyOrId is a campaign UUID
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!
+    );
+    const { data: dbTemplate, error } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("id", templateKeyOrId)
+        .single();
 
-    if (template) {
-        // Legacy hardcoded template
-        rawHtml = template.generateHtml(firstName || "there");
-        subject = template.subject;
-        campaignId = template.campaign_id;
-    } else {
-        // Dynamic Database Template — templateKeyOrId is a UUID
-        const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.SUPABASE_SERVICE_KEY!
-        );
-        const { data: dbTemplate, error } = await supabase
-            .from("campaigns")
-            .select("*")
-            .eq("id", templateKeyOrId)
-            .single();
-
-        if (error || !dbTemplate) {
-            console.error("Failed to load template for chain:", templateKeyOrId, error);
-            return { success: false, campaignId: "", error: "Template not found" };
-        }
-
-        const vars: Record<string, string> = {
-            ...dbTemplate.variable_values,
-            first_name: firstName || "there",
-            email: email,
-        };
-        rawHtml = renderTemplate(dbTemplate.html_content || "", vars);
-        subject = dbTemplate.subject_line || "No Subject";
-        campaignId = dbTemplate.id;
-        templateFromName = dbTemplate.variable_values?.from_name || "";
-        templateFromEmail = dbTemplate.variable_values?.from_email || "";
-        templateVariableValues = dbTemplate.variable_values || null;
+    if (error || !dbTemplate) {
+        console.error("Failed to load template for chain:", templateKeyOrId, error);
+        return { success: false, campaignId: "", error: "Template not found" };
     }
+
+    const vars: Record<string, string> = {
+        ...dbTemplate.variable_values,
+        first_name: firstName || "there",
+        email: email,
+    };
+    rawHtml = renderTemplate(dbTemplate.html_content || "", vars);
+    subject = dbTemplate.subject_line || "No Subject";
+    campaignId = dbTemplate.id;
+    templateFromName = dbTemplate.variable_values?.from_name || "";
+    templateFromEmail = dbTemplate.variable_values?.from_email || "";
+    templateVariableValues = dbTemplate.variable_values || null;
 
 
     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${campaignId}`;

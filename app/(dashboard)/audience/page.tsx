@@ -2034,7 +2034,7 @@ export default function AudienceManagerPage() {
 
             {/* Select Campaign Dialog */}
             <Dialog open={isSelectCampaignOpen} onOpenChange={(open) => { setIsSelectCampaignOpen(open); if (!open) setBulkSendMode(false) }}>
-                <DialogContent className="sm:max-w-md">
+                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{bulkSendMode ? 'Bulk Send Template' : 'Send Existing Campaign'}</DialogTitle>
                         <DialogDescription>

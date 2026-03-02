@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { CHAIN_TEMPLATES } from "@/lib/chains/templates"
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -43,13 +43,10 @@ const emptyBranch = (): BranchForm => ({ label: "", condition: "", action: "", d
 
 const TRIGGER_EVENT_OPTIONS = [
     { value: "chain.run", label: "chain.run (generic — recommended)" },
-    { value: "chain.dreamplay.start", label: "chain.dreamplay.start (custom)" },
-    { value: "chain.educational.start", label: "chain.educational.start (custom)" },
 ]
 
 const TRIGGER_LABEL_OPTIONS = [
     { value: "New subscriber signup (webhook)", label: "New subscriber signup (webhook)" },
-    { value: "Handed off from DreamPlay chain (low interest / ghosted)", label: "Handed off from DreamPlay chain" },
     { value: "Manual trigger via dashboard", label: "Manual trigger via dashboard" },
     { value: "Tag added to subscriber", label: "Tag added to subscriber" },
     { value: "Purchase completed (Shopify webhook)", label: "Purchase completed (Shopify webhook)" },
@@ -149,7 +146,6 @@ function ChainCard({
                     {/* Steps Timeline */}
                     <div className="space-y-0">
                         {steps.map((step, i) => {
-                            const template = CHAIN_TEMPLATES[step.template_key as keyof typeof CHAIN_TEMPLATES]
                             const isPreviewOpen = previewIndex === i
 
                             return (
@@ -171,38 +167,14 @@ function ChainCard({
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <p className="text-sm font-medium text-foreground">{step.label}</p>
-                                                    {template && (
-                                                        <div className="flex items-center gap-2 mt-0.5">
-                                                            <Mail className="h-3 w-3 text-muted-foreground" />
-                                                            <p className="text-xs text-muted-foreground font-mono">
-                                                                {template.subject}
-                                                            </p>
-                                                        </div>
-                                                    )}
+                                                    <div className="flex items-center gap-2 mt-0.5">
+                                                        <Mail className="h-3 w-3 text-muted-foreground" />
+                                                        <p className="text-xs text-muted-foreground font-mono">
+                                                            {step.template_key}
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                                {template && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setPreviewIndex(isPreviewOpen ? null : i)
-                                                        }}
-                                                        className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted"
-                                                    >
-                                                        {isPreviewOpen ? "Hide Preview" : "Preview"}
-                                                    </button>
-                                                )}
                                             </div>
-
-                                            {/* Email Preview */}
-                                            {isPreviewOpen && template && (
-                                                <div className="mt-3 rounded-lg border border-border bg-white p-4 text-sm">
-                                                    <div
-                                                        dangerouslySetInnerHTML={{
-                                                            __html: template.generateHtml("Alex")
-                                                        }}
-                                                    />
-                                                </div>
-                                            )}
                                         </div>
                                     </div>
 
@@ -280,18 +252,14 @@ function ChainCard({
                             Tracking Campaign IDs
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                            {steps.map(step => {
-                                const template = CHAIN_TEMPLATES[step.template_key as keyof typeof CHAIN_TEMPLATES]
-                                if (!template) return null
-                                return (
-                                    <div key={step.id || step.template_key} className="flex items-center gap-2 text-xs">
-                                        <span className="text-muted-foreground">{step.label}:</span>
-                                        <code className="font-mono text-foreground/70 text-[10px]">
-                                            {template.campaign_id}
-                                        </code>
-                                    </div>
-                                )
-                            })}
+                            {steps.map(step => (
+                                <div key={step.id || step.template_key} className="flex items-center gap-2 text-xs">
+                                    <span className="text-muted-foreground">{step.label}:</span>
+                                    <code className="font-mono text-foreground/70 text-[10px]">
+                                        {step.template_key}
+                                    </code>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </CardContent>
@@ -656,11 +624,7 @@ function ChainFormDialog({
                                                                 {c.name}
                                                             </SelectItem>
                                                         ))}
-                                                        {Object.keys(CHAIN_TEMPLATES).map(k => (
-                                                            <SelectItem key={k} value={k} className="text-xs font-mono">
-                                                                {k}
-                                                            </SelectItem>
-                                                        ))}
+
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -817,11 +781,7 @@ function ChainFormDialog({
                                                             {c.name}
                                                         </SelectItem>
                                                     ))}
-                                                    {Object.keys(CHAIN_TEMPLATES).map(k => (
-                                                        <SelectItem key={k} value={k} className="text-xs font-mono">
-                                                            {k}
-                                                        </SelectItem>
-                                                    ))}
+
                                                 </SelectContent>
                                             </Select>
                                         </div>
