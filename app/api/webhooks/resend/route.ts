@@ -1,10 +1,13 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { Webhook } from "svix";
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
 );
+
+const webhookSecret = process.env.RESEND_WEBHOOK_SECRET!;
 
 // Look up subscriber + most recent campaign from email address
 async function resolveSubscriber(email: string) {
@@ -34,8 +37,32 @@ async function resolveSubscriber(email: string) {
 
 export async function POST(request: Request) {
     try {
-        const payload = await request.json();
-        console.log(`[Resend Webhook] Raw payload:`, JSON.stringify(payload).substring(0, 500));
+        const rawBody = await request.text();
+
+        // Verify webhook signature
+        const svixId = request.headers.get("svix-id");
+        const svixTimestamp = request.headers.get("svix-timestamp");
+        const svixSignature = request.headers.get("svix-signature");
+
+        if (!svixId || !svixTimestamp || !svixSignature) {
+            console.error("[Resend Webhook] Missing svix headers");
+            return NextResponse.json({ error: "Missing signature headers" }, { status: 401 });
+        }
+
+        const wh = new Webhook(webhookSecret);
+        let payload: any;
+        try {
+            payload = wh.verify(rawBody, {
+                "svix-id": svixId,
+                "svix-timestamp": svixTimestamp,
+                "svix-signature": svixSignature,
+            });
+        } catch (err) {
+            console.error("[Resend Webhook] Invalid signature:", err);
+            return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+        }
+
+        console.log(`[Resend Webhook] Verified payload:`, JSON.stringify(payload).substring(0, 500));
 
         const events = Array.isArray(payload) ? payload : [payload];
 
