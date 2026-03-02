@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, ChevronDown, ChevronUp } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, Download, ChevronDown, ChevronUp } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 
 import { createClient } from "@/lib/supabase/client"
@@ -53,6 +53,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
     const [bulkDeleting, setBulkDeleting] = useState(false)
     const [exportingId, setExportingId] = useState<string | null>(null)
+    const [downloadingId, setDownloadingId] = useState<string | null>(null)
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
     const toggleExpand = (id: string) => {
@@ -178,6 +179,38 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
             })
         } finally {
             setExportingId(null)
+        }
+    }
+
+    const handleDownloadHtml = async (campaign: Campaign) => {
+        setDownloadingId(campaign.id)
+        try {
+            const html = campaign.html_content
+            if (!html) {
+                throw new Error("No HTML content found for this campaign")
+            }
+            const blob = new Blob([html], { type: "text/html" })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `${(campaign.name || "campaign").replace(/[^a-zA-Z0-9-_ ]/g, "")}.html`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+            toast({
+                title: "Downloaded",
+                description: `HTML file saved as ${a.download}`,
+            })
+        } catch (error: any) {
+            console.error("Error downloading HTML:", error)
+            toast({
+                title: "Download failed",
+                description: error.message || "Failed to download HTML",
+                variant: "destructive",
+            })
+        } finally {
+            setDownloadingId(null)
         }
     }
 
@@ -554,6 +587,17 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                     title="Export to Blog"
                                                 >
                                                     <BookOpen className="w-4 h-4" />
+                                                </Button>
+
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleDownloadHtml(campaign)}
+                                                    disabled={downloadingId === campaign.id}
+                                                    className="h-8 w-8 text-muted-foreground hover:text-orange-400 hover:bg-orange-500/10"
+                                                    title="Download as HTML"
+                                                >
+                                                    <Download className="w-4 h-4" />
                                                 </Button>
 
                                                 <Button
