@@ -170,3 +170,48 @@ export async function ensureTagDefinitions(tagNames: string[]): Promise<{ error?
     if (insertError) return { error: insertError.message }
     return {}
 }
+
+/**
+ * One-time sync: scans all subscriber tags and creates missing tag_definitions.
+ */
+export async function syncAllSubscriberTags(): Promise<{ created: string[]; error?: string }> {
+    // Get all subscriber tags
+    const { data: subscribers, error: fetchError } = await supabase
+        .from("subscribers")
+        .select("tags")
+        .not("tags", "is", null)
+
+    if (fetchError) return { created: [], error: fetchError.message }
+
+    const allTags = new Set<string>()
+    for (const sub of subscribers || []) {
+        for (const tag of sub.tags || []) {
+            if (tag.trim()) allTags.add(tag.trim())
+        }
+    }
+
+    if (allTags.size === 0) return { created: [] }
+
+    // Get existing definitions
+    const { data: existing } = await supabase
+        .from("tag_definitions")
+        .select("name")
+
+    const existingNames = new Set((existing || []).map((t: any) => t.name))
+    const missing = [...allTags].filter(name => !existingNames.has(name))
+
+    if (missing.length === 0) return { created: [] }
+
+    const defaultColors = ["#6b7280", "#9ca3af", "#78716c", "#a1a1aa", "#737373"]
+    const rows = missing.map((name, i) => ({
+        name,
+        color: defaultColors[i % defaultColors.length],
+    }))
+
+    const { error: insertError } = await supabase
+        .from("tag_definitions")
+        .insert(rows)
+
+    if (insertError) return { created: [], error: insertError.message }
+    return { created: missing }
+}
