@@ -98,7 +98,7 @@ import { createClient } from "@/lib/supabase/client"
 import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, createBulkCampaign } from "@/app/actions/campaigns"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
-import { getTags, type TagDefinition } from "@/app/actions/tags"
+import { getTags, ensureTagDefinitions, type TagDefinition } from "@/app/actions/tags"
 import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -492,6 +492,11 @@ export default function AudienceManagerPage() {
         }
 
         let error
+
+        // Ensure any new tags have a tag_definitions entry
+        if (payload.tags.length > 0) {
+            await ensureTagDefinitions(payload.tags)
+        }
 
         if (isNewSubscriber) {
             const { error: insertError } = await supabase
