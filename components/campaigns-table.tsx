@@ -185,7 +185,18 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const handleDownloadHtml = async (campaign: Campaign) => {
         setDownloadingId(campaign.id)
         try {
-            const html = campaign.html_content
+            // Fetch html_content on-demand since the list query may not include it
+            const { data, error: fetchError } = await supabase
+                .from("campaigns")
+                .select("html_content")
+                .eq("id", campaign.id)
+                .single()
+
+            if (fetchError || !data) {
+                throw new Error("Failed to fetch campaign HTML")
+            }
+
+            const html = data.html_content
             if (!html) {
                 throw new Error("No HTML content found for this campaign")
             }
