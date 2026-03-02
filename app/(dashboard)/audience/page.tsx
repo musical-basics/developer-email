@@ -1260,7 +1260,7 @@ export default function AudienceManagerPage() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-48">
-                            {allTags.map((tag) => (
+                            {availableTags.map((tag) => (
                                 <DropdownMenuCheckboxItem
                                     key={tag}
                                     checked={selectedTags.includes(tag)}
@@ -1285,7 +1285,7 @@ export default function AudienceManagerPage() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-48">
-                            {allTags.map((tag) => (
+                            {availableTags.map((tag) => (
                                 <DropdownMenuCheckboxItem
                                     key={tag}
                                     checked={excludedTags.includes(tag)}
