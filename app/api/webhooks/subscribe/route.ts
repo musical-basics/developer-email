@@ -179,14 +179,32 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                 };
 
                 // Inject discount code into URL if configured
-                if (discountCode && campaign.variable_values?.discount_preset_config?.targetUrlKey) {
-                    const urlKey = campaign.variable_values.discount_preset_config.targetUrlKey;
-                    const baseUrl = assets[urlKey] || "";
+                // Check multiple sources for targetUrlKey:
+                // 1. Trigger's own discount_config (if it has targetUrlKey)
+                // 2. Campaign's discount_preset_config (set via editor discount dropdown)
+                // 3. Campaign's variable_values matching the discount preset
+                const targetUrlKey = trigger.discount_config?.targetUrlKey
+                    || campaign.variable_values?.discount_preset_config?.targetUrlKey
+                    || null;
+
+                if (discountCode && targetUrlKey) {
+                    const baseUrl = assets[targetUrlKey] || "";
                     if (baseUrl) {
                         const sep = baseUrl.includes("?") ? "&" : "?";
-                        assets[urlKey] = baseUrl.includes("discount=")
+                        assets[targetUrlKey] = baseUrl.includes("discount=")
                             ? baseUrl.replace(/discount=[^&]+/, `discount=${discountCode}`)
                             : `${baseUrl}${sep}discount=${discountCode}`;
+                    }
+                } else if (discountCode && !targetUrlKey) {
+                    // Fallback: scan all URL-like asset values and append discount to CTA URLs
+                    for (const [key, value] of Object.entries(assets)) {
+                        if (typeof value === "string"
+                            && (key.includes("cta") || key.includes("activate"))
+                            && value.startsWith("http")
+                            && !value.includes("discount=")) {
+                            const sep = value.includes("?") ? "&" : "?";
+                            assets[key] = `${value}${sep}discount=${discountCode}`;
+                        }
                     }
                 }
 
