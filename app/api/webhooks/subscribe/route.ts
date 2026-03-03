@@ -352,9 +352,7 @@ export async function POST(request: Request) {
                 new_tags: newTags,
                 existing_tags: existingUser?.tags || [],
             });
-            executeTriggers(newTags, data.id, email).catch(err =>
-                console.error("[Webhook] Trigger execution error:", err)
-            );
+            await executeTriggers(newTags, data.id, email);
         } else {
             await logTriggerEvent("warn", "No new tags — skipping trigger execution", {
                 email,
