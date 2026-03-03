@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare, ArrowDownToLine } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
@@ -18,6 +18,7 @@ const navGroups: NavGroup[] = [
             { name: "Home", href: "/", icon: Home },
             { name: "Campaigns", href: "/campaigns", icon: Mail },
             { name: "Automated Emails", href: "/automated-emails", icon: BotMessageSquare },
+            { name: "Triggers", href: "/triggers", icon: Zap },
             { name: "Audience", href: "/audience", icon: Users },
             { name: "Email Builder", href: "/editor", icon: PenTool },
         ],
@@ -30,7 +31,7 @@ const navGroups: NavGroup[] = [
             { name: "Analytics", href: "/analytics", icon: BarChart3 },
             { name: "Journeys", href: "/journeys", icon: Route },
             { name: "Discounts", href: "/discounts", icon: TicketPercent },
-            { name: "Mailchimp Import", href: "/migrate", icon: Zap },
+            { name: "Mailchimp Import", href: "/migrate", icon: ArrowDownToLine },
         ],
     },
     {

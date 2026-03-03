@@ -1,11 +1,16 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import { Resend } from "resend";
+import { renderTemplate } from "@/lib/render-template";
+import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
 );
+
+const resend = new Resend(process.env.RESEND_API_KEY!);
 
 // 1. Define your Safe List
 const allowedOrigins = [
@@ -32,6 +37,118 @@ function getCorsHeaders(request: Request) {
 
 export async function OPTIONS(request: Request) {
     return NextResponse.json({}, { headers: getCorsHeaders(request) });
+}
+
+// ─── Trigger execution (fire-and-forget) ──────────────────────────────
+async function executeTriggers(subscriberTags: string[], subscriberId: string, subscriberEmail: string) {
+    try {
+        // Find active triggers matching any of the subscriber's tags
+        const { data: triggers, error: tErr } = await supabase
+            .from("email_triggers")
+            .select("*")
+            .eq("trigger_type", "subscriber_tag")
+            .eq("is_active", true)
+            .in("trigger_value", subscriberTags);
+
+        if (tErr || !triggers || triggers.length === 0) return;
+
+        for (const trigger of triggers) {
+            try {
+                if (!trigger.campaign_id) {
+                    console.log(`[Trigger] "${trigger.name}" has no linked campaign, skipping.`);
+                    continue;
+                }
+
+                // Fetch the linked automated email template
+                const { data: campaign } = await supabase
+                    .from("campaigns")
+                    .select("id, name, subject_line, html_content, variable_values")
+                    .eq("id", trigger.campaign_id)
+                    .single();
+
+                if (!campaign || !campaign.html_content) {
+                    console.log(`[Trigger] "${trigger.name}" linked campaign has no HTML content, skipping.`);
+                    continue;
+                }
+
+                // Generate Shopify discount code if configured
+                let discountCode = "";
+                if (trigger.generate_discount && trigger.discount_config) {
+                    const cfg = trigger.discount_config;
+                    const result = await createShopifyDiscount({
+                        type: cfg.type,
+                        value: cfg.value,
+                        durationDays: cfg.durationDays,
+                        codePrefix: cfg.codePrefix,
+                        usageLimit: cfg.usageLimit ?? 1,
+                    });
+                    if (result.success && result.code) {
+                        discountCode = result.code;
+                        console.log(`[Trigger] Generated Shopify code: ${discountCode} for ${subscriberEmail}`);
+                    } else {
+                        console.error(`[Trigger] Shopify discount generation failed:`, result.error);
+                    }
+                }
+
+                // Build template variables: merge campaign assets + trigger-specific vars
+                const assets: Record<string, string> = {
+                    ...(campaign.variable_values || {}),
+                    subscriber_email: subscriberEmail,
+                    discount_code: discountCode,
+                };
+
+                // If there's a discount code and a target URL key, inject into URL
+                if (discountCode && campaign.variable_values?.discount_preset_config?.targetUrlKey) {
+                    const urlKey = campaign.variable_values.discount_preset_config.targetUrlKey;
+                    const baseUrl = assets[urlKey] || "";
+                    if (baseUrl) {
+                        const sep = baseUrl.includes("?") ? "&" : "?";
+                        assets[urlKey] = baseUrl.includes("discount=")
+                            ? baseUrl.replace(/discount=[^&]+/, `discount=${discountCode}`)
+                            : `${baseUrl}${sep}discount=${discountCode}`;
+                    }
+                }
+
+                // Render template
+                const renderedHtml = renderTemplate(campaign.html_content, assets, subscriberTags);
+
+                // Determine sender
+                const fromName = campaign.variable_values?.from_name || "Lionel Yu";
+                const fromEmail = campaign.variable_values?.from_email || "lionel@email.dreamplaypianos.com";
+                const subjectLine = campaign.subject_line || trigger.name;
+
+                // Send via Resend
+                const { data: emailResult, error: emailError } = await resend.emails.send({
+                    from: `${fromName} <${fromEmail}>`,
+                    to: [subscriberEmail],
+                    subject: subjectLine,
+                    html: renderedHtml,
+                });
+
+                if (emailError) {
+                    console.error(`[Trigger] Failed to send "${trigger.name}" to ${subscriberEmail}:`, emailError);
+                    continue;
+                }
+
+                console.log(`[Trigger] Sent "${trigger.name}" to ${subscriberEmail} (Resend ID: ${emailResult?.id})`);
+
+                // Log to sent_history
+                await supabase.from("sent_history").insert({
+                    campaign_id: campaign.id,
+                    subscriber_id: subscriberId,
+                    resend_email_id: emailResult?.id || null,
+                });
+
+                // Update campaign status to reflect it's been sent at least once
+                await supabase.from("campaigns").update({ status: "active" }).eq("id", campaign.id);
+
+            } catch (innerErr) {
+                console.error(`[Trigger] Error executing trigger "${trigger.name}":`, innerErr);
+            }
+        }
+    } catch (err) {
+        console.error("[Trigger] Fatal error in executeTriggers:", err);
+    }
 }
 
 export async function POST(request: Request) {
@@ -90,6 +207,18 @@ export async function POST(request: Request) {
             } else {
                 console.log(`[Webhook] Stitched ${count || 0} anonymous events for ${data.email}`);
             }
+        }
+
+        // 🔥 TRIGGER EXECUTION: Fire-and-forget — check for matching triggers  
+        // Use only the NEW tags (not pre-existing ones) to avoid re-triggering
+        const newTags = existingUser?.tags
+            ? finalTags.filter((t: string) => !existingUser.tags.includes(t))
+            : finalTags;
+
+        if (newTags.length > 0) {
+            executeTriggers(newTags, data.id, email).catch(err =>
+                console.error("[Webhook] Trigger execution error:", err)
+            );
         }
 
         return NextResponse.json(
