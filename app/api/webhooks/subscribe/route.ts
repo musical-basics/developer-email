@@ -164,6 +164,27 @@ export async function POST(request: Request) {
 
         const finalTags = tags && Array.isArray(tags) ? tags : ["Website Import"];
 
+        // 🏷️ Auto-create tag_definitions for any new tags
+        // This ensures tags sent from external sources (website popups etc.) appear in the tags manager
+        if (finalTags.length > 0) {
+            const { data: existingDefs } = await supabase
+                .from("tag_definitions")
+                .select("name")
+                .in("name", finalTags);
+
+            const existingNames = new Set((existingDefs || []).map((d: any) => d.name));
+            const missingTags = finalTags.filter((t: string) => !existingNames.has(t));
+
+            if (missingTags.length > 0) {
+                const newDefs = missingTags.map((name: string) => ({
+                    name,
+                    color: "#6b7280", // default gray
+                }));
+                await supabase.from("tag_definitions").insert(newDefs);
+                console.log(`[Webhook] Auto-created tag definitions: ${missingTags.join(", ")}`);
+            }
+        }
+
         // Check for existing user to merge tags
         const { data: existingUser } = await supabase
             .from("subscribers")
