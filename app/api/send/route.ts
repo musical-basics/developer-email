@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { addPlayButtonsToVideoThumbnails } from "@/lib/video-overlay";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
+import { applyMergeTags, getMergeTagDefaults } from "@/lib/merge-tags";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -66,11 +67,8 @@ export async function POST(request: Request) {
             // Replace Variables
             let finalHtml = htmlContent;
             if (simulationSubscriber) {
-                finalHtml = finalHtml
-                    .replace(/{{first_name}}/g, simulationSubscriber.first_name || "Musical Family")
-                    .replace(/{{last_name}}/g, simulationSubscriber.last_name || "")
-                    .replace(/{{email}}/g, simulationSubscriber.email)
-                    .replace(/{{subscriber_id}}/g, simulationSubscriber.id);
+                const mergeDefaults = await getMergeTagDefaults();
+                finalHtml = applyMergeTags(finalHtml, simulationSubscriber, mergeDefaults);
 
                 // Auto-append sid and em to all links
                 finalHtml = finalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
@@ -198,15 +196,12 @@ export async function POST(request: Request) {
                 try {
                     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${trackingCampaignId}`;
 
-                    // Personalize content
-                    let personalHtml = htmlWithVideoOverlay
-                        .replace(/{{first_name}}/g, sub.first_name || "Musical Family")
-                        .replace(/{{last_name}}/g, sub.last_name || "")
-                        .replace(/{{email}}/g, sub.email)
-                        .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
-                        .replace(/{{unsubscribe_link_url}}/g, unsubscribeUrl)
-                        .replace(/{{unsubscribe_link}}/g, unsubscribeUrl)
-                        .replace(/{{subscriber_id}}/g, sub.id);
+                    // Personalize content with merge tags
+                    const mergeDefaults = await getMergeTagDefaults();
+                    let personalHtml = applyMergeTags(htmlWithVideoOverlay, {
+                        ...sub,
+                        _unsubscribe_url: unsubscribeUrl,
+                    }, mergeDefaults);
 
                     // Per-user discount: generate a unique Shopify code for this recipient
                     if (isPerUserDiscount) {

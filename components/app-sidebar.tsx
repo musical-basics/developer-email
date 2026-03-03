@@ -28,6 +28,7 @@ const navGroups: NavGroup[] = [
         items: [
             { name: "Assets Library", href: "/assets", icon: ImageIcon },
             { name: "Tags", href: "/tags", icon: Tag },
+            { name: "Merge Tags", href: "/merge-tags", icon: Layers },
             { name: "Analytics", href: "/analytics", icon: BarChart3 },
             { name: "Journeys", href: "/journeys", icon: Route },
             { name: "Discounts", href: "/discounts", icon: TicketPercent },

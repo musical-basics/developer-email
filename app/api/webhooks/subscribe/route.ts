@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
+import { applyMergeTags, getMergeTagDefaults } from "@/lib/merge-tags";
 
 
 const supabase = createClient(
@@ -189,8 +190,20 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     }
                 }
 
-                // Render template
-                const renderedHtml = renderTemplate(campaign.html_content, assets, subscriberTags);
+                // Render template (campaign variables + smart blocks)
+                let renderedHtml = renderTemplate(campaign.html_content, assets, subscriberTags);
+
+                // Apply merge tags (subscriber personalization with defaults)
+                const { data: subscriberData } = await supabase
+                    .from("subscribers")
+                    .select("*")
+                    .eq("id", subscriberId)
+                    .single();
+
+                if (subscriberData) {
+                    const mergeDefaults = await getMergeTagDefaults();
+                    renderedHtml = applyMergeTags(renderedHtml, subscriberData, mergeDefaults);
+                }
 
                 // Determine sender
                 const fromName = campaign.variable_values?.from_name || "Lionel Yu";
