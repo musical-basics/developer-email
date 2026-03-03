@@ -35,6 +35,7 @@ function EditorPageContent() {
     const [fromName, setFromName] = useState("Lionel Yu")
     const [fromEmail, setFromEmail] = useState("lionel@email.dreamplaypianos.com")
     const [audienceContext, setAudienceContext] = useState<"dreamplay" | "musicalbasics" | "both">("dreamplay")
+    const [emailType, setEmailType] = useState<"campaign" | "automated">("campaign")
     const [aiDossier, setAiDossier] = useState("")
 
     const [loading, setLoading] = useState(!!id)
@@ -59,6 +60,7 @@ function EditorPageContent() {
                 setAssets(data.variable_values || DEFAULT_ASSETS)
                 setName(data.name || "Untitled Campaign")
                 setStatus(data.status || "draft")
+                setEmailType(data.email_type || "campaign")
 
                 // Load Settings
                 setSubjectLine(data.subject_line || "")
@@ -89,6 +91,7 @@ function EditorPageContent() {
                 audience_context: audienceContext
             },
             status: status,
+            email_type: emailType,
         }
 
         let error
@@ -169,6 +172,7 @@ function EditorPageContent() {
                 fromName={fromName}
                 fromEmail={fromEmail}
                 audienceContext={audienceContext}
+                emailType={emailType}
                 aiDossier={aiDossier}
                 onHtmlChange={setHtml}
                 onAssetsChange={setAssets}
@@ -178,6 +182,7 @@ function EditorPageContent() {
                     if (field === "email") setFromEmail(value)
                 }}
                 onAudienceChange={setAudienceContext}
+                onEmailTypeChange={setEmailType}
                 campaignName={name}
                 onNameChange={setName}
                 onSave={handleSaveClick}

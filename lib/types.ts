@@ -6,7 +6,7 @@ export interface Campaign {
     updated_at: string
     name: string
     subject_line: string | null
-    html_content: string | null
+    html_content?: string | null
     variable_values: Record<string, any> | null
     status: CampaignStatus
 
@@ -19,6 +19,7 @@ export interface Campaign {
     resend_email_id?: string | null
     is_template?: boolean
     is_ready?: boolean
+    email_type?: string
     sent_from_email?: string | null
     sent_to_emails?: string[]
     parent_template_id?: string | null

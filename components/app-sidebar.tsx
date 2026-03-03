@@ -3,23 +3,43 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
-const navItems = [
-    { name: "Home", href: "/", icon: Home },
-    { name: "Campaigns", href: "/campaigns", icon: Mail },
-    { name: "Audience", href: "/audience", icon: Users },
-    { name: "Email Builder", href: "/editor", icon: PenTool },
-    { name: "Mailchimp Import", href: "/migrate", icon: Zap },
-    { name: "Modular Builder", href: "/modular-editor", icon: Layers },
-    { name: "Drag & Drop", href: "/dnd-editor", icon: MousePointerSquareDashed },
-    { name: "Assets Library", href: "/assets", icon: ImageIcon },
-    { name: "Tags", href: "/tags", icon: Tag },
-    { name: "Analytics", href: "/analytics", icon: BarChart3 },
-    { name: "Journeys", href: "/journeys", icon: Route },
-    { name: "Discounts", href: "/discounts", icon: TicketPercent },
+interface NavGroup {
+    label?: string
+    items: { name: string; href: string; icon: any }[]
+}
+
+const navGroups: NavGroup[] = [
+    {
+        items: [
+            { name: "Home", href: "/", icon: Home },
+            { name: "Campaigns", href: "/campaigns", icon: Mail },
+            { name: "Automated Emails", href: "/automated-emails", icon: BotMessageSquare },
+            { name: "Audience", href: "/audience", icon: Users },
+            { name: "Email Builder", href: "/editor", icon: PenTool },
+        ],
+    },
+    {
+        label: "Tools",
+        items: [
+            { name: "Assets Library", href: "/assets", icon: ImageIcon },
+            { name: "Tags", href: "/tags", icon: Tag },
+            { name: "Analytics", href: "/analytics", icon: BarChart3 },
+            { name: "Journeys", href: "/journeys", icon: Route },
+            { name: "Discounts", href: "/discounts", icon: TicketPercent },
+            { name: "Mailchimp Import", href: "/migrate", icon: Zap },
+        ],
+    },
+    {
+        label: "Additional",
+        items: [
+            { name: "Modular Builder", href: "/modular-editor", icon: Layers },
+            { name: "Drag & Drop", href: "/dnd-editor", icon: MousePointerSquareDashed },
+        ],
+    },
 ]
 
 export function AppSidebar() {
@@ -62,28 +82,39 @@ export function AppSidebar() {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 space-y-1 px-3 py-4">
-                    {navItems.map((item) => {
-                        const isActive = pathname === item.href
-                        return (
-                            <Link
-                                key={item.name}
-                                href={item.href}
-                                className={cn(
-                                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                                    isActive
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                                )}
-                            >
-                                <item.icon className="h-5 w-5" />
-                                {item.name}
-                            </Link>
-                        )
-                    })}
+                <nav className="flex-1 overflow-y-auto px-3 py-4">
+                    {navGroups.map((group, gi) => (
+                        <div key={gi} className={gi > 0 ? "mt-4 pt-4 border-t border-border" : ""}>
+                            {group.label && (
+                                <p className="px-3 mb-2 text-[10px] uppercase tracking-wider font-semibold text-muted-foreground/60">
+                                    {group.label}
+                                </p>
+                            )}
+                            <div className="space-y-1">
+                                {group.items.map((item) => {
+                                    const isActive = pathname === item.href
+                                    return (
+                                        <Link
+                                            key={item.name}
+                                            href={item.href}
+                                            className={cn(
+                                                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                                                isActive
+                                                    ? "bg-primary/10 text-primary"
+                                                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                                            )}
+                                        >
+                                            <item.icon className="h-5 w-5" />
+                                            {item.name}
+                                        </Link>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    ))}
 
                     {/* Below separator */}
-                    <div className="pt-2 mt-2 border-t border-border space-y-1">
+                    <div className="pt-4 mt-4 border-t border-border space-y-1">
                         <Link
                             href="/approvals"
                             className={cn(

@@ -1,22 +1,22 @@
 import { CampaignsTabs } from "@/components/campaigns/campaigns-tabs"
-import { CreateCampaignDialog } from "@/components/campaigns/create-campaign-dialog"
+import { CreateAutomatedDialog } from "@/components/campaigns/create-automated-dialog"
 import { getCampaigns } from "@/app/actions/campaigns"
 
 export const dynamic = "force-dynamic"
 
-export default async function CampaignsPage() {
-    const campaigns = await getCampaigns("campaign")
+export default async function AutomatedEmailsPage() {
+    const campaigns = await getCampaigns("automated")
 
     return (
         <div className="p-6 space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Campaigns</h1>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Automated Emails</h1>
                     <p className="text-muted-foreground mt-1">
-                        Manage your email campaigns and newsletters.
+                        Emails triggered automatically by subscriber actions (signups, tags, etc.).
                     </p>
                 </div>
-                <CreateCampaignDialog />
+                <CreateAutomatedDialog />
             </div>
 
             <CampaignsTabs campaigns={campaigns} />

@@ -7,6 +7,7 @@ import { redirect } from "next/navigation"
 export async function createCampaign(prevState: any, formData: FormData) {
     const supabase = await createClient()
     const name = formData.get("name") as string
+    const emailType = (formData.get("email_type") as string) || "campaign"
 
     if (!name || name.trim() === "") {
         return { error: "Campaign name is required" }
@@ -19,6 +20,7 @@ export async function createCampaign(prevState: any, formData: FormData) {
                 name: name.trim(),
                 status: "draft",
                 subject_line: "",
+                email_type: emailType,
             },
         ])
         .select()
@@ -30,17 +32,24 @@ export async function createCampaign(prevState: any, formData: FormData) {
     }
 
     revalidatePath("/campaigns")
+    revalidatePath("/automated-emails")
     return { data }
 }
 
-export async function getCampaigns() {
+export async function getCampaigns(emailType?: string) {
     const supabase = await createClient()
 
     // Fetch campaigns
-    const { data: campaigns, error } = await supabase
+    let query = supabase
         .from("campaigns")
-        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email")
+        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type")
         .order("created_at", { ascending: false })
+
+    if (emailType) {
+        query = query.eq("email_type", emailType)
+    }
+
+    const { data: campaigns, error } = await query
 
     if (error) {
         console.error("Error fetching campaigns:", error)

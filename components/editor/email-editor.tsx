@@ -31,6 +31,8 @@ interface EmailEditorProps {
     onSubjectChange: (value: string) => void
     onSenderChange: (field: "name" | "email", value: string) => void
     onAudienceChange: (value: "dreamplay" | "musicalbasics" | "both") => void
+    emailType: "campaign" | "automated"
+    onEmailTypeChange: (value: "campaign" | "automated") => void
     campaignName: string
     onNameChange: (name: string) => void
     onSave?: () => void
@@ -45,12 +47,14 @@ export function EmailEditor({
     fromName,
     fromEmail,
     audienceContext,
+    emailType,
     aiDossier,
     onHtmlChange,
     onAssetsChange,
     onSubjectChange,
     onSenderChange,
     onAudienceChange,
+    onEmailTypeChange,
     campaignName,
     onNameChange,
     onSave,
@@ -202,6 +206,17 @@ export function EmailEditor({
                                     <option value="dreamplay">DreamPlay</option>
                                     <option value="musicalbasics">MusicalBasics</option>
                                     <option value="both">Both (Crossover)</option>
+                                </select>
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Email Type</label>
+                                <select
+                                    value={emailType}
+                                    onChange={(e) => onEmailTypeChange(e.target.value as any)}
+                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary cursor-pointer"
+                                >
+                                    <option value="campaign">Campaign</option>
+                                    <option value="automated">Automated Email</option>
                                 </select>
                             </div>
                             <div className="pt-3 border-t border-border mt-3">
