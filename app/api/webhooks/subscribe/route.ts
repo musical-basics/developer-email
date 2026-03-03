@@ -139,21 +139,26 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                 }
 
                 // Generate Shopify discount code if configured
+                // Priority: campaign-level discount_preset_config > trigger-level discount_config
                 let discountCode = "";
-                if (trigger.generate_discount && trigger.discount_config) {
-                    const cfg = trigger.discount_config;
+                const campaignDiscountConfig = campaign.variable_values?.discount_preset_config;
+                const triggerDiscountConfig = trigger.discount_config;
+                const discountConfig = campaignDiscountConfig || (trigger.generate_discount ? triggerDiscountConfig : null);
+
+                if (discountConfig) {
                     await logTriggerEvent("info", `Generating Shopify discount code`, {
                         trigger_name: trigger.name,
-                        config: cfg,
+                        config_source: campaignDiscountConfig ? "campaign" : "trigger",
+                        config: discountConfig,
                         subscriber_email: subscriberEmail,
                     });
 
                     const result = await createShopifyDiscount({
-                        type: cfg.type,
-                        value: cfg.value,
-                        durationDays: cfg.durationDays,
-                        codePrefix: cfg.codePrefix,
-                        usageLimit: cfg.usageLimit ?? 1,
+                        type: discountConfig.type,
+                        value: discountConfig.value,
+                        durationDays: discountConfig.durationDays,
+                        codePrefix: discountConfig.codePrefix,
+                        usageLimit: discountConfig.usageLimit ?? 1,
                     });
 
                     if (result.success && result.code) {
@@ -178,33 +183,33 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     discount_code: discountCode,
                 };
 
-                // Inject discount code into URL if configured
-                // Check multiple sources for targetUrlKey:
-                // 1. Trigger's own discount_config (if it has targetUrlKey)
-                // 2. Campaign's discount_preset_config (set via editor discount dropdown)
-                // 3. Campaign's variable_values matching the discount preset
-                const targetUrlKey = trigger.discount_config?.targetUrlKey
-                    || campaign.variable_values?.discount_preset_config?.targetUrlKey
-                    || null;
+                // Inject discount code into target URL variable
+                if (discountCode) {
+                    const targetUrlKey = discountConfig?.targetUrlKey || null;
 
-                if (discountCode && targetUrlKey) {
-                    const baseUrl = assets[targetUrlKey] || "";
-                    if (baseUrl) {
+                    if (targetUrlKey && assets[targetUrlKey]) {
+                        const baseUrl = assets[targetUrlKey];
                         const sep = baseUrl.includes("?") ? "&" : "?";
                         assets[targetUrlKey] = baseUrl.includes("discount=")
                             ? baseUrl.replace(/discount=[^&]+/, `discount=${discountCode}`)
                             : `${baseUrl}${sep}discount=${discountCode}`;
-                    }
-                } else if (discountCode && !targetUrlKey) {
-                    // Fallback: scan all URL-like asset values and append discount to CTA URLs
-                    for (const [key, value] of Object.entries(assets)) {
-                        if (typeof value === "string"
-                            && (key.includes("cta") || key.includes("activate"))
-                            && value.startsWith("http")
-                            && !value.includes("discount=")) {
-                            const sep = value.includes("?") ? "&" : "?";
-                            assets[key] = `${value}${sep}discount=${discountCode}`;
+                    } else {
+                        // Fallback: scan all CTA/activate URL variables
+                        for (const [key, value] of Object.entries(assets)) {
+                            if (typeof value === "string"
+                                && (key.includes("cta") || key.includes("activate"))
+                                && value.startsWith("http")
+                                && !value.includes("discount=")) {
+                                const sep = value.includes("?") ? "&" : "?";
+                                assets[key] = `${value}${sep}discount=${discountCode}`;
+                            }
                         }
+                    }
+
+                    // Also replace preview discount code in the template if present
+                    const previewCode = campaign.variable_values?.discount_code;
+                    if (previewCode && previewCode !== discountCode) {
+                        campaign.html_content = campaign.html_content.replaceAll(previewCode, discountCode);
                     }
                 }
 
@@ -218,11 +223,23 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     .eq("id", subscriberId)
                     .single();
 
+                const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
+                const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${campaign.id}`;
+
                 if (subscriberData) {
                     renderedHtml = await applyAllMergeTags(renderedHtml, subscriberData, {
                         discount_code: discountCode,
+                        unsubscribe_url: unsubscribeUrl,
                     });
                 }
+
+                // Append sid and cid to all links (matching manual send behavior)
+                renderedHtml = renderedHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
+                    if (url.includes('/unsubscribe')) return match;
+                    if (url.includes('/api/track/')) return match;
+                    const sep = url.includes('?') ? '&' : '?';
+                    return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaign.id}${quote}`;
+                });
 
                 // Determine sender
                 const fromName = campaign.variable_values?.from_name || "Lionel Yu";
@@ -243,6 +260,10 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     to: [subscriberEmail],
                     subject: subjectLine,
                     html: renderedHtml,
+                    headers: {
+                        "List-Unsubscribe": `<${unsubscribeUrl}>`,
+                        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+                    },
                 });
 
                 if (emailError) {
