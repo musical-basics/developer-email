@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare, ArrowDownToLine } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare, ArrowDownToLine, ScrollText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
@@ -31,6 +31,7 @@ const navGroups: NavGroup[] = [
             { name: "Analytics", href: "/analytics", icon: BarChart3 },
             { name: "Journeys", href: "/journeys", icon: Route },
             { name: "Discounts", href: "/discounts", icon: TicketPercent },
+            { name: "Logs", href: "/logs", icon: ScrollText },
             { name: "Mailchimp Import", href: "/migrate", icon: ArrowDownToLine },
         ],
     },

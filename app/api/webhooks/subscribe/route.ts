@@ -39,8 +39,34 @@ export async function OPTIONS(request: Request) {
     return NextResponse.json({}, { headers: getCorsHeaders(request) });
 }
 
+// ─── DB Logger ────────────────────────────────────────────────────────
+async function logTriggerEvent(
+    level: "info" | "warn" | "error" | "success",
+    event: string,
+    details: Record<string, any> = {}
+) {
+    try {
+        await supabase.from("trigger_logs").insert({
+            level,
+            event,
+            details,
+        });
+    } catch (e) {
+        console.error("[TriggerLog] Failed to write log:", e);
+    }
+    // Also console.log for server-side visibility
+    const prefix = level === "error" ? "❌" : level === "warn" ? "⚠️" : level === "success" ? "✅" : "ℹ️";
+    console.log(`${prefix} [Trigger] ${event}`, Object.keys(details).length > 0 ? JSON.stringify(details) : "");
+}
+
 // ─── Trigger execution (fire-and-forget) ──────────────────────────────
 async function executeTriggers(subscriberTags: string[], subscriberId: string, subscriberEmail: string) {
+    await logTriggerEvent("info", "Trigger execution started", {
+        subscriber_email: subscriberEmail,
+        subscriber_id: subscriberId,
+        new_tags: subscriberTags,
+    });
+
     try {
         // Find active triggers matching any of the subscriber's tags
         const { data: triggers, error: tErr } = await supabase
@@ -50,24 +76,64 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
             .eq("is_active", true)
             .in("trigger_value", subscriberTags);
 
-        if (tErr || !triggers || triggers.length === 0) return;
+        if (tErr) {
+            await logTriggerEvent("error", "Failed to query email_triggers table", {
+                error: tErr.message,
+                hint: tErr.hint || "Does the email_triggers table exist? Run the SQL migration.",
+                subscriber_email: subscriberEmail,
+            });
+            return;
+        }
+
+        if (!triggers || triggers.length === 0) {
+            await logTriggerEvent("warn", "No matching triggers found", {
+                subscriber_email: subscriberEmail,
+                searched_tags: subscriberTags,
+                hint: "Create triggers on the Triggers page that match these tag names.",
+            });
+            return;
+        }
+
+        await logTriggerEvent("info", `Found ${triggers.length} matching trigger(s)`, {
+            subscriber_email: subscriberEmail,
+            triggers: triggers.map(t => ({ id: t.id, name: t.name, trigger_value: t.trigger_value })),
+        });
 
         for (const trigger of triggers) {
             try {
                 if (!trigger.campaign_id) {
-                    console.log(`[Trigger] "${trigger.name}" has no linked campaign, skipping.`);
+                    await logTriggerEvent("warn", `Trigger "${trigger.name}" has no linked campaign`, {
+                        trigger_id: trigger.id,
+                        subscriber_email: subscriberEmail,
+                        hint: "Link an automated email to this trigger on the Triggers page.",
+                    });
                     continue;
                 }
 
                 // Fetch the linked automated email template
-                const { data: campaign } = await supabase
+                const { data: campaign, error: campErr } = await supabase
                     .from("campaigns")
                     .select("id, name, subject_line, html_content, variable_values")
                     .eq("id", trigger.campaign_id)
                     .single();
 
-                if (!campaign || !campaign.html_content) {
-                    console.log(`[Trigger] "${trigger.name}" linked campaign has no HTML content, skipping.`);
+                if (campErr || !campaign) {
+                    await logTriggerEvent("error", `Failed to fetch linked campaign`, {
+                        trigger_name: trigger.name,
+                        campaign_id: trigger.campaign_id,
+                        error: campErr?.message || "Campaign not found",
+                        subscriber_email: subscriberEmail,
+                    });
+                    continue;
+                }
+
+                if (!campaign.html_content) {
+                    await logTriggerEvent("warn", `Campaign "${campaign.name}" has no HTML content`, {
+                        trigger_name: trigger.name,
+                        campaign_id: campaign.id,
+                        subscriber_email: subscriberEmail,
+                        hint: "Design the email template in the Email Builder first.",
+                    });
                     continue;
                 }
 
@@ -75,6 +141,12 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                 let discountCode = "";
                 if (trigger.generate_discount && trigger.discount_config) {
                     const cfg = trigger.discount_config;
+                    await logTriggerEvent("info", `Generating Shopify discount code`, {
+                        trigger_name: trigger.name,
+                        config: cfg,
+                        subscriber_email: subscriberEmail,
+                    });
+
                     const result = await createShopifyDiscount({
                         type: cfg.type,
                         value: cfg.value,
@@ -82,22 +154,30 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                         codePrefix: cfg.codePrefix,
                         usageLimit: cfg.usageLimit ?? 1,
                     });
+
                     if (result.success && result.code) {
                         discountCode = result.code;
-                        console.log(`[Trigger] Generated Shopify code: ${discountCode} for ${subscriberEmail}`);
+                        await logTriggerEvent("success", `Shopify code generated: ${discountCode}`, {
+                            trigger_name: trigger.name,
+                            subscriber_email: subscriberEmail,
+                        });
                     } else {
-                        console.error(`[Trigger] Shopify discount generation failed:`, result.error);
+                        await logTriggerEvent("error", `Shopify discount generation failed`, {
+                            trigger_name: trigger.name,
+                            error: result.error,
+                            subscriber_email: subscriberEmail,
+                        });
                     }
                 }
 
-                // Build template variables: merge campaign assets + trigger-specific vars
+                // Build template variables
                 const assets: Record<string, string> = {
                     ...(campaign.variable_values || {}),
                     subscriber_email: subscriberEmail,
                     discount_code: discountCode,
                 };
 
-                // If there's a discount code and a target URL key, inject into URL
+                // Inject discount code into URL if configured
                 if (discountCode && campaign.variable_values?.discount_preset_config?.targetUrlKey) {
                     const urlKey = campaign.variable_values.discount_preset_config.targetUrlKey;
                     const baseUrl = assets[urlKey] || "";
@@ -114,23 +194,40 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
 
                 // Determine sender
                 const fromName = campaign.variable_values?.from_name || "Lionel Yu";
-                const fromEmail = campaign.variable_values?.from_email || "lionel@email.dreamplaypianos.com";
+                const senderEmail = campaign.variable_values?.from_email || "lionel@email.dreamplaypianos.com";
                 const subjectLine = campaign.subject_line || trigger.name;
+
+                await logTriggerEvent("info", `Sending email via Resend`, {
+                    trigger_name: trigger.name,
+                    campaign_name: campaign.name,
+                    to: subscriberEmail,
+                    from: `${fromName} <${senderEmail}>`,
+                    subject: subjectLine,
+                });
 
                 // Send via Resend
                 const { data: emailResult, error: emailError } = await resend.emails.send({
-                    from: `${fromName} <${fromEmail}>`,
+                    from: `${fromName} <${senderEmail}>`,
                     to: [subscriberEmail],
                     subject: subjectLine,
                     html: renderedHtml,
                 });
 
                 if (emailError) {
-                    console.error(`[Trigger] Failed to send "${trigger.name}" to ${subscriberEmail}:`, emailError);
+                    await logTriggerEvent("error", `Resend email send failed`, {
+                        trigger_name: trigger.name,
+                        subscriber_email: subscriberEmail,
+                        error: emailError,
+                    });
                     continue;
                 }
 
-                console.log(`[Trigger] Sent "${trigger.name}" to ${subscriberEmail} (Resend ID: ${emailResult?.id})`);
+                await logTriggerEvent("success", `Email sent successfully`, {
+                    trigger_name: trigger.name,
+                    subscriber_email: subscriberEmail,
+                    resend_id: emailResult?.id,
+                    campaign_name: campaign.name,
+                });
 
                 // Log to sent_history
                 await supabase.from("sent_history").insert({
@@ -139,15 +236,24 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     resend_email_id: emailResult?.id || null,
                 });
 
-                // Update campaign status to reflect it's been sent at least once
+                // Update campaign status
                 await supabase.from("campaigns").update({ status: "active" }).eq("id", campaign.id);
 
-            } catch (innerErr) {
-                console.error(`[Trigger] Error executing trigger "${trigger.name}":`, innerErr);
+            } catch (innerErr: any) {
+                await logTriggerEvent("error", `Trigger execution error`, {
+                    trigger_name: trigger.name,
+                    subscriber_email: subscriberEmail,
+                    error: innerErr.message || String(innerErr),
+                    stack: innerErr.stack?.split("\n").slice(0, 3),
+                });
             }
         }
-    } catch (err) {
-        console.error("[Trigger] Fatal error in executeTriggers:", err);
+    } catch (err: any) {
+        await logTriggerEvent("error", "Fatal error in executeTriggers", {
+            subscriber_email: subscriberEmail,
+            error: err.message || String(err),
+            stack: err.stack?.split("\n").slice(0, 3),
+        });
     }
 }
 
@@ -164,8 +270,14 @@ export async function POST(request: Request) {
 
         const finalTags = tags && Array.isArray(tags) ? tags : ["Website Import"];
 
+        await logTriggerEvent("info", "Subscribe webhook received", {
+            email,
+            tags: finalTags,
+            city,
+            country,
+        });
+
         // 🏷️ Auto-create tag_definitions for any new tags
-        // This ensures tags sent from external sources (website popups etc.) appear in the tags manager
         if (finalTags.length > 0) {
             const { data: existingDefs } = await supabase
                 .from("tag_definitions")
@@ -178,10 +290,10 @@ export async function POST(request: Request) {
             if (missingTags.length > 0) {
                 const newDefs = missingTags.map((name: string) => ({
                     name,
-                    color: "#6b7280", // default gray
+                    color: "#6b7280",
                 }));
                 await supabase.from("tag_definitions").insert(newDefs);
-                console.log(`[Webhook] Auto-created tag definitions: ${missingTags.join(", ")}`);
+                await logTriggerEvent("info", `Auto-created tag definitions: ${missingTags.join(", ")}`, { tags: missingTags });
             }
         }
 
@@ -205,7 +317,6 @@ export async function POST(request: Request) {
                 last_name: last_name || "",
                 tags: mergedTags,
                 status: "active",
-                // 📍 NEW: Location Data
                 location_city: city,
                 location_country: country,
                 ip_address: ip_address
@@ -215,7 +326,7 @@ export async function POST(request: Request) {
 
         if (error) throw error;
 
-        // 📍 IDENTITY STITCHING: Link anonymous browsing history to new subscriber
+        // 📍 IDENTITY STITCHING
         if (temp_session_id && data.id) {
             const { error: stitchError, count } = await supabase
                 .from("subscriber_events")
@@ -230,16 +341,27 @@ export async function POST(request: Request) {
             }
         }
 
-        // 🔥 TRIGGER EXECUTION: Fire-and-forget — check for matching triggers  
-        // Use only the NEW tags (not pre-existing ones) to avoid re-triggering
+        // 🔥 TRIGGER EXECUTION
         const newTags = existingUser?.tags
             ? finalTags.filter((t: string) => !existingUser.tags.includes(t))
             : finalTags;
 
         if (newTags.length > 0) {
+            await logTriggerEvent("info", "New tags detected, executing triggers", {
+                email,
+                new_tags: newTags,
+                existing_tags: existingUser?.tags || [],
+            });
             executeTriggers(newTags, data.id, email).catch(err =>
                 console.error("[Webhook] Trigger execution error:", err)
             );
+        } else {
+            await logTriggerEvent("warn", "No new tags — skipping trigger execution", {
+                email,
+                incoming_tags: finalTags,
+                existing_tags: existingUser?.tags || [],
+                hint: "All incoming tags already existed on this subscriber. Triggers only fire on NEW tags.",
+            });
         }
 
         return NextResponse.json(
@@ -248,6 +370,7 @@ export async function POST(request: Request) {
         );
 
     } catch (error: any) {
+        await logTriggerEvent("error", "Webhook error", { error: error.message });
         console.error("Webhook Error:", error);
         return NextResponse.json(
             { error: error.message },
