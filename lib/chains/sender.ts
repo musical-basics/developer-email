@@ -3,6 +3,7 @@ import { Resend } from "resend";
 import { createClient } from "@supabase/supabase-js";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
+import { applyAllMergeTags } from "@/lib/merge-tags";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
@@ -54,11 +55,20 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
 
     let finalHtml = rawHtml + unsubscribeFooter;
 
-    // Replace subscriber-level placeholders if present in links
-    finalHtml = finalHtml.replace(/{{subscriber_id}}/g, subscriberId);
-    finalHtml = finalHtml.replace(/{{unsubscribe_url}}/g, unsubscribeUrl);
-    finalHtml = finalHtml.replace(/{{unsubscribe_link_url}}/g, unsubscribeUrl);
-    finalHtml = finalHtml.replace(/{{unsubscribe_link}}/g, unsubscribeUrl);
+    // Apply all merge tags (subscriber fields, global links, dynamic vars)
+    const supabaseForSub = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!
+    );
+    const { data: subscriberData } = await supabaseForSub
+        .from("subscribers")
+        .select("*")
+        .eq("id", subscriberId)
+        .single();
+
+    finalHtml = await applyAllMergeTags(finalHtml, subscriberData || { id: subscriberId, email, first_name: firstName }, {
+        unsubscribe_url: unsubscribeUrl,
+    });
 
     // Per-user discount: generate a unique Shopify code for this recipient
     if (templateVariableValues) {

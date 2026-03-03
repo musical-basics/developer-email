@@ -1,11 +1,19 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Loader2, Save, Tags, Copy, Check } from "lucide-react"
+import { Loader2, Save, Copy, Check, Users, Link2, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useToast } from "@/hooks/use-toast"
 import { getMergeTags, updateMergeTagDefault, type MergeTagRow } from "@/app/actions/merge-tags"
+
+const categoryConfig = {
+    subscriber: { icon: Users, label: "Subscriber Fields", color: "text-blue-400", description: "Pulled from the subscriber's profile. Falls back to the default value if the field is empty." },
+    global: { icon: Link2, label: "Global Links", color: "text-emerald-400", description: "Shared across all emails. These values are always used as-is." },
+    dynamic: { icon: Zap, label: "Dynamic Variables", color: "text-amber-400", description: "Auto-generated at send time. You cannot edit these values — they are injected by the system." },
+}
+
+const categoryOrder: ("subscriber" | "global" | "dynamic")[] = ["subscriber", "global", "dynamic"]
 
 export default function MergeTagsPage() {
     const [tags, setTags] = useState<MergeTagRow[]>([])
@@ -15,9 +23,7 @@ export default function MergeTagsPage() {
     const [copied, setCopied] = useState<string | null>(null)
     const { toast } = useToast()
 
-    useEffect(() => {
-        loadTags()
-    }, [])
+    useEffect(() => { loadTags() }, [])
 
     const loadTags = async () => {
         setLoading(true)
@@ -31,7 +37,7 @@ export default function MergeTagsPage() {
 
     const handleSave = async (tag: MergeTagRow) => {
         const newDefault = editedDefaults[tag.id]
-        if (newDefault === tag.default_value) return // no change
+        if (newDefault === tag.default_value) return
         setSaving(tag.id)
         try {
             await updateMergeTagDefault(tag.id, newDefault ?? "")
@@ -57,86 +63,120 @@ export default function MergeTagsPage() {
         )
     }
 
+    const grouped = categoryOrder.map(cat => ({
+        category: cat,
+        items: tags.filter(t => t.category === cat),
+    })).filter(g => g.items.length > 0)
+
     return (
         <div className="p-6 space-y-6 max-w-4xl">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight text-foreground">Merge Tags</h1>
                 <p className="text-muted-foreground mt-1">
-                    Define subscriber fields available in email templates. Use <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{"{{tag_name}}"}</code> in your emails to personalize content.
+                    All <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">{"{{variables}}"}</code> available in email templates. One place for subscriber fields, global links, and dynamic values.
                 </p>
             </div>
 
-            {tags.length === 0 ? (
+            {grouped.length === 0 ? (
                 <div className="border border-dashed border-border rounded-lg p-12 text-center">
-                    <Tags className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-                    <p className="text-muted-foreground">No merge tags configured.</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Run the SQL migration to seed the default merge tags.</p>
+                    <p className="text-muted-foreground">No merge tags configured. Run the SQL migration to seed defaults.</p>
                 </div>
             ) : (
-                <div className="border border-border rounded-lg overflow-hidden">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="border-b border-border bg-muted/30">
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Field Label</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Merge Tag</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subscriber Field</th>
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Default Value</th>
-                                <th className="w-20 px-4 py-3"></th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-border">
-                            {tags.map(tag => {
-                                const hasChanged = (editedDefaults[tag.id] ?? "") !== tag.default_value
-                                return (
-                                    <tr key={tag.id} className="hover:bg-muted/20 transition-colors">
-                                        <td className="px-4 py-3 text-sm font-medium text-foreground">{tag.field_label}</td>
-                                        <td className="px-4 py-3">
-                                            <button
-                                                onClick={() => copyTag(tag.tag)}
-                                                className="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-2.5 py-1 rounded font-mono text-xs hover:bg-primary/20 transition-colors cursor-pointer"
-                                                title="Click to copy"
-                                            >
-                                                {`{{${tag.tag}}}`}
-                                                {copied === tag.tag ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3 opacity-50" />}
-                                            </button>
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-muted-foreground font-mono">{tag.subscriber_field}</td>
-                                        <td className="px-4 py-3">
-                                            <Input
-                                                value={editedDefaults[tag.id] ?? ""}
-                                                onChange={e => setEditedDefaults(prev => ({ ...prev, [tag.id]: e.target.value }))}
-                                                placeholder="(empty)"
-                                                className="h-8 text-sm max-w-[200px]"
-                                            />
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {hasChanged && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleSave(tag)}
-                                                    disabled={saving === tag.id}
-                                                    className="h-7 px-2 text-xs"
-                                                >
-                                                    {saving === tag.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                                                </Button>
-                                            )}
-                                        </td>
-                                    </tr>
-                                )
-                            })}
-                        </tbody>
-                    </table>
+                <div className="space-y-8">
+                    {grouped.map(({ category, items }) => {
+                        const config = categoryConfig[category]
+                        const Icon = config.icon
+                        const isReadOnly = category === "dynamic"
+
+                        return (
+                            <div key={category}>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Icon className={`w-4 h-4 ${config.color}`} />
+                                    <h2 className="text-sm font-semibold text-foreground">{config.label}</h2>
+                                </div>
+                                <p className="text-xs text-muted-foreground mb-3">{config.description}</p>
+
+                                <div className="border border-border rounded-lg overflow-hidden">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b border-border bg-muted/30">
+                                                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Field</th>
+                                                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Merge Tag</th>
+                                                {category === "subscriber" && (
+                                                    <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Column</th>
+                                                )}
+                                                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                                                    {isReadOnly ? "Source" : "Default Value"}
+                                                </th>
+                                                {!isReadOnly && <th className="w-16 px-4 py-2.5"></th>}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                            {items.map(tag => {
+                                                const hasChanged = (editedDefaults[tag.id] ?? "") !== tag.default_value
+                                                return (
+                                                    <tr key={tag.id} className="hover:bg-muted/20 transition-colors">
+                                                        <td className="px-4 py-2.5 text-sm font-medium text-foreground">{tag.field_label}</td>
+                                                        <td className="px-4 py-2.5">
+                                                            <button
+                                                                onClick={() => copyTag(tag.tag)}
+                                                                className="inline-flex items-center gap-1.5 bg-primary/10 text-primary px-2 py-0.5 rounded font-mono text-xs hover:bg-primary/20 transition-colors cursor-pointer"
+                                                                title="Click to copy"
+                                                            >
+                                                                {`{{${tag.tag}}}`}
+                                                                {copied === tag.tag ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3 opacity-50" />}
+                                                            </button>
+                                                        </td>
+                                                        {category === "subscriber" && (
+                                                            <td className="px-4 py-2.5 text-xs text-muted-foreground font-mono">{tag.subscriber_field}</td>
+                                                        )}
+                                                        <td className="px-4 py-2.5">
+                                                            {isReadOnly ? (
+                                                                <span className="text-xs text-muted-foreground/60 italic">Auto-generated at send time</span>
+                                                            ) : (
+                                                                <Input
+                                                                    value={editedDefaults[tag.id] ?? ""}
+                                                                    onChange={e => setEditedDefaults(prev => ({ ...prev, [tag.id]: e.target.value }))}
+                                                                    placeholder="(empty)"
+                                                                    className="h-7 text-xs max-w-[300px]"
+                                                                />
+                                                            )}
+                                                        </td>
+                                                        {!isReadOnly && (
+                                                            <td className="px-4 py-2.5">
+                                                                {hasChanged && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        onClick={() => handleSave(tag)}
+                                                                        disabled={saving === tag.id}
+                                                                        className="h-6 px-2 text-[10px]"
+                                                                    >
+                                                                        {saving === tag.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                                                                    </Button>
+                                                                )}
+                                                            </td>
+                                                        )}
+                                                    </tr>
+                                                )
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )
+                    })}
                 </div>
             )}
 
             <div className="bg-muted/30 border border-border rounded-lg p-4 space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">How it works</p>
-                <ul className="text-sm text-muted-foreground space-y-1.5">
-                    <li>• Use <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">{"{{first_name}}"}</code> in your email templates to insert the subscriber&apos;s first name.</li>
-                    <li>• If the subscriber&apos;s field is empty, the <strong>default value</strong> will be used instead.</li>
-                    <li>• These merge tags work in both <strong>Campaigns</strong> and <strong>Automated Emails</strong>.</li>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                    <li>• <strong>Subscriber fields</strong> pull from the subscriber&apos;s profile. If empty, the default value is used.</li>
+                    <li>• <strong>Global links</strong> are replaced in every email with the configured URL.</li>
+                    <li>• <strong>Dynamic variables</strong> are injected at send time (e.g. unique discount codes, unsubscribe links).</li>
                     <li>• Click any merge tag to copy it to your clipboard.</li>
+                    <li>• These work in both <strong>Campaigns</strong> and <strong>Automated Emails</strong>.</li>
                 </ul>
             </div>
         </div>

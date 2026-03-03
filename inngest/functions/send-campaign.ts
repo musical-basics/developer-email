@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
+import { applyAllMergeTags } from "@/lib/merge-tags";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const supabase = createClient(
@@ -83,18 +84,11 @@ export const sendCampaign = inngest.createFunction(
             for (let ri = 0; ri < recipients.length; ri++) {
                 const sub = recipients[ri];
                 try {
-                    // Generate Unsubscribe Link
+                    // Personalize content with merge tags
                     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${campaignId}`;
-
-                    // Personalize content
-                    let personalHtml = htmlWithFooter
-                        .replace(/{{first_name}}/g, sub.first_name || "there")
-                        .replace(/{{last_name}}/g, sub.last_name || "")
-                        .replace(/{{email}}/g, sub.email)
-                        .replace(/{{unsubscribe_url}}/g, unsubscribeUrl)
-                        .replace(/{{unsubscribe_link_url}}/g, unsubscribeUrl)
-                        .replace(/{{unsubscribe_link}}/g, unsubscribeUrl)
-                        .replace(/{{subscriber_id}}/g, sub.id);
+                    let personalHtml = await applyAllMergeTags(htmlWithFooter, sub, {
+                        unsubscribe_url: unsubscribeUrl,
+                    });
 
                     // Per-user discount: generate a unique Shopify code for this recipient
                     if (isPerUserDiscount) {

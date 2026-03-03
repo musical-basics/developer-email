@@ -9,6 +9,7 @@ export interface MergeTagRow {
     field_label: string
     subscriber_field: string
     default_value: string
+    category: "subscriber" | "global" | "dynamic"
     created_at: string
 }
 

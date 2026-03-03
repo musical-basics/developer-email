@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
-import { applyMergeTags, getMergeTagDefaults } from "@/lib/merge-tags";
+import { applyAllMergeTags } from "@/lib/merge-tags";
 
 
 const supabase = createClient(
@@ -193,7 +193,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                 // Render template (campaign variables + smart blocks)
                 let renderedHtml = renderTemplate(campaign.html_content, assets, subscriberTags);
 
-                // Apply merge tags (subscriber personalization with defaults)
+                // Apply merge tags (subscriber fields, global links, dynamic vars)
                 const { data: subscriberData } = await supabase
                     .from("subscribers")
                     .select("*")
@@ -201,8 +201,9 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     .single();
 
                 if (subscriberData) {
-                    const mergeDefaults = await getMergeTagDefaults();
-                    renderedHtml = applyMergeTags(renderedHtml, subscriberData, mergeDefaults);
+                    renderedHtml = await applyAllMergeTags(renderedHtml, subscriberData, {
+                        discount_code: discountCode,
+                    });
                 }
 
                 // Determine sender
