@@ -357,20 +357,36 @@ export default function AudienceManagerPage() {
         })
 
         if (lastEmailedSort) {
+            // Tier: 0 = never emailed, 1 = emailed, 2 = scheduled
+            const getTier = (id: string) => {
+                if (scheduledCampaigns[id]) return 2
+                if (lastSentSubjects[id]) return 1
+                return 0
+            }
+            const getDate = (id: string) => {
+                if (scheduledCampaigns[id]) return new Date(scheduledCampaigns[id].scheduledAt).getTime()
+                if (lastSentSubjects[id]) return new Date(lastSentSubjects[id].sentAt).getTime()
+                return 0
+            }
+
             filtered.sort((a, b) => {
-                const aDate = lastSentSubjects[a.id]?.sentAt
-                const bDate = lastSentSubjects[b.id]?.sentAt
-                // Never-emailed: top when ascending (oldest first), bottom when descending
-                if (!aDate && !bDate) return 0
-                if (!aDate) return lastEmailedSort === "asc" ? -1 : 1
-                if (!bDate) return lastEmailedSort === "asc" ? 1 : -1
-                const diff = new Date(aDate).getTime() - new Date(bDate).getTime()
+                const aTier = getTier(a.id)
+                const bTier = getTier(b.id)
+
+                // Ascending: never-emailed (0) → emailed (1) → scheduled (2)
+                // Descending: scheduled (2) → emailed (1) → never-emailed (0)
+                if (aTier !== bTier) {
+                    return lastEmailedSort === "asc" ? aTier - bTier : bTier - aTier
+                }
+
+                // Within same tier, sort by date
+                const diff = getDate(a.id) - getDate(b.id)
                 return lastEmailedSort === "asc" ? diff : -diff
             })
         }
 
         return filtered
-    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects, neverEmailedFilter])
+    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects, scheduledCampaigns, neverEmailedFilter])
 
     // Reset page when filters change
     useEffect(() => {
