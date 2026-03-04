@@ -41,6 +41,7 @@ const navGroups: NavGroup[] = [
         items: [
             { name: "Modular Builder", href: "/modular-editor", icon: Layers },
             { name: "Drag & Drop", href: "/dnd-editor", icon: MousePointerSquareDashed },
+            { name: "Knowledge Builder", href: "/editor-v2", icon: Brain },
         ],
     },
 ]
