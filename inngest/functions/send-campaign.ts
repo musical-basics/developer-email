@@ -106,6 +106,21 @@ export const sendCampaign = inngest.createFunction(
                                     personalHtml = personalHtml.replaceAll(oldCode, discountRes.code);
                                 }
                                 personalHtml = personalHtml.replace(/discount=[A-Z0-9-]+/g, `discount=${discountRes.code}`);
+
+                                // Append ?discount=CODE to target URL if not already present
+                                const targetUrlKey = discountPresetConfig.targetUrlKey;
+                                if (targetUrlKey) {
+                                    const targetUrl = campaign.variable_values?.[targetUrlKey];
+                                    if (targetUrl && !targetUrl.includes('discount=')) {
+                                        const escapedUrl = targetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                        const urlRegex = new RegExp(`(href=["'])${escapedUrl}([^"']*)`, 'g');
+                                        personalHtml = personalHtml.replace(urlRegex, (match: string, prefix: string, suffix: string) => {
+                                            if (match.includes('discount=')) return match;
+                                            const sep = (targetUrl + suffix).includes('?') ? '&' : '?';
+                                            return `${prefix}${targetUrl}${suffix}${sep}discount=${discountRes.code}`;
+                                        });
+                                    }
+                                }
                             }
                             if (ri < recipients.length - 1) {
                                 await new Promise(r => setTimeout(r, 300));

@@ -216,8 +216,26 @@ export async function POST(request: Request) {
                                 if (oldCode) {
                                     personalHtml = personalHtml.replaceAll(oldCode, discountRes.code);
                                 }
-                                // Also replace discount= param in any URLs
+                                // Replace existing discount= param in any URLs
                                 personalHtml = personalHtml.replace(/discount=[A-Z0-9-]+/g, `discount=${discountRes.code}`);
+
+                                // If targetUrlKey is configured, find that URL in the HTML and append ?discount=CODE
+                                // This handles the case where the editor didn't set it (e.g. main_cta_url was empty at preset time)
+                                const targetUrlKey = discountPresetConfig.targetUrlKey;
+                                if (targetUrlKey) {
+                                    const targetUrl = campaign.variable_values?.[targetUrlKey];
+                                    if (targetUrl && !targetUrl.includes('discount=')) {
+                                        // Find the rendered URL in the HTML and append the discount param
+                                        const escapedUrl = targetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                        const urlRegex = new RegExp(`(href=["'])${escapedUrl}([^"']*)`, 'g');
+                                        personalHtml = personalHtml.replace(urlRegex, (match, prefix, suffix) => {
+                                            // Only append if discount= not already in this href
+                                            if (match.includes('discount=')) return match;
+                                            const sep = (targetUrl + suffix).includes('?') ? '&' : '?';
+                                            return `${prefix}${targetUrl}${suffix}${sep}discount=${discountRes.code}`;
+                                        });
+                                    }
+                                }
                             }
                             // Rate limit: small delay between Shopify API calls
                             if (ri < recipients.length - 1) {
