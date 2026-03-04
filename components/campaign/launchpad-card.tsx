@@ -1,9 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { Rocket, AlertTriangle, CalendarClock, X, Clock } from "lucide-react"
+import { Rocket, AlertTriangle, CalendarClock, X, Clock, CalendarIcon } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { cn } from "@/lib/utils"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface LaunchpadCardProps {
     subscriberCount: number
@@ -15,6 +19,9 @@ interface LaunchpadCardProps {
     scheduledStatus?: string | null
 }
 
+const HOURS = Array.from({ length: 24 }, (_, i) => i)
+const MINUTES = [0, 15, 30, 45]
+
 export function LaunchpadCard({
     subscriberCount,
     onLaunch,
@@ -25,28 +32,24 @@ export function LaunchpadCard({
     scheduledStatus,
 }: LaunchpadCardProps) {
     const [showSchedulePicker, setShowSchedulePicker] = useState(false)
-    const [scheduleDate, setScheduleDate] = useState("")
-    const [scheduleTime, setScheduleTime] = useState("")
+    const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined)
+    const [selectedHour, setSelectedHour] = useState<number | null>(null)
+    const [selectedMinute, setSelectedMinute] = useState<number | null>(null)
+    const [calendarOpen, setCalendarOpen] = useState(false)
+    const [timeOpen, setTimeOpen] = useState(false)
 
     const isScheduled = scheduledAt && scheduledStatus === "pending"
 
-    // Get minimum date/time (now + 5 minutes)
-    const getMinDateTime = () => {
-        const min = new Date(Date.now() + 5 * 60 * 1000)
-        return {
-            date: min.toISOString().split("T")[0],
-            time: min.toTimeString().slice(0, 5),
-        }
-    }
-
     const handleScheduleSubmit = () => {
-        if (!scheduleDate || !scheduleTime) return
-        const dt = new Date(`${scheduleDate}T${scheduleTime}`)
+        if (!selectedDate || selectedHour === null || selectedMinute === null) return
+        const dt = new Date(selectedDate)
+        dt.setHours(selectedHour, selectedMinute, 0, 0)
         if (dt <= new Date()) return
         onSchedule(dt)
         setShowSchedulePicker(false)
-        setScheduleDate("")
-        setScheduleTime("")
+        setSelectedDate(undefined)
+        setSelectedHour(null)
+        setSelectedMinute(null)
     }
 
     const formatScheduledTime = (isoString: string) => {
@@ -60,6 +63,23 @@ export function LaunchpadCard({
             hour12: true,
         })
     }
+
+    const formatSelectedDate = (date: Date) => {
+        return date.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+        })
+    }
+
+    const formatTime = (hour: number, minute: number) => {
+        const period = hour >= 12 ? "PM" : "AM"
+        const h = hour % 12 || 12
+        const m = minute.toString().padStart(2, "0")
+        return `${h}:${m} ${period}`
+    }
+
+    const canConfirm = selectedDate && selectedHour !== null && selectedMinute !== null
 
     return (
         <Card className="border-2 border-[#D4AF37]/30 bg-gradient-to-b from-[#D4AF37]/5 to-transparent">
@@ -134,24 +154,85 @@ export function LaunchpadCard({
                     <div className="rounded-lg border border-border bg-card/50 p-4 space-y-3">
                         <p className="text-sm font-medium text-foreground">Pick a date and time</p>
                         <div className="flex gap-2">
-                            <input
-                                type="date"
-                                value={scheduleDate}
-                                min={getMinDateTime().date}
-                                onChange={e => setScheduleDate(e.target.value)}
-                                className="flex-1 bg-background border border-border rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-[#D4AF37]"
-                            />
-                            <input
-                                type="time"
-                                value={scheduleTime}
-                                onChange={e => setScheduleTime(e.target.value)}
-                                className="w-32 bg-background border border-border rounded px-3 py-2 text-sm text-foreground focus:outline-none focus:border-[#D4AF37]"
-                            />
+                            {/* Date Picker */}
+                            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        className={cn(
+                                            "flex-1 justify-start text-left font-normal gap-2",
+                                            !selectedDate && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <CalendarIcon className="h-4 w-4 shrink-0" />
+                                        {selectedDate ? formatSelectedDate(selectedDate) : "Pick date"}
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0" align="start">
+                                    <Calendar
+                                        mode="single"
+                                        selected={selectedDate}
+                                        onSelect={(date) => {
+                                            setSelectedDate(date)
+                                            setCalendarOpen(false)
+                                        }}
+                                        disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
+                                    />
+                                </PopoverContent>
+                            </Popover>
+
+                            {/* Time Picker */}
+                            <Popover open={timeOpen} onOpenChange={setTimeOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        className={cn(
+                                            "w-[130px] justify-start text-left font-normal gap-2",
+                                            selectedHour === null && "text-muted-foreground"
+                                        )}
+                                    >
+                                        <Clock className="h-4 w-4 shrink-0" />
+                                        {selectedHour !== null && selectedMinute !== null
+                                            ? formatTime(selectedHour, selectedMinute)
+                                            : "Pick time"
+                                        }
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[200px] p-0" align="start">
+                                    <ScrollArea className="h-[240px]">
+                                        <div className="p-1">
+                                            {HOURS.map(hour =>
+                                                MINUTES.map(minute => {
+                                                    const isSelected = selectedHour === hour && selectedMinute === minute
+                                                    return (
+                                                        <Button
+                                                            key={`${hour}-${minute}`}
+                                                            variant={isSelected ? "default" : "ghost"}
+                                                            size="sm"
+                                                            className={cn(
+                                                                "w-full justify-start text-sm font-normal",
+                                                                isSelected && "bg-[#D4AF37] text-[#050505] hover:bg-[#b8962e]"
+                                                            )}
+                                                            onClick={() => {
+                                                                setSelectedHour(hour)
+                                                                setSelectedMinute(minute)
+                                                                setTimeOpen(false)
+                                                            }}
+                                                        >
+                                                            {formatTime(hour, minute)}
+                                                        </Button>
+                                                    )
+                                                })
+                                            )}
+                                        </div>
+                                    </ScrollArea>
+                                </PopoverContent>
+                            </Popover>
                         </div>
                         <div className="flex gap-2">
                             <Button
                                 onClick={handleScheduleSubmit}
-                                disabled={!scheduleDate || !scheduleTime}
+                                disabled={!canConfirm}
                                 className="flex-1 gap-2 bg-sky-600 text-white hover:bg-sky-500"
                                 size="sm"
                             >
