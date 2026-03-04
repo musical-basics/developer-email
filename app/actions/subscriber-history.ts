@@ -76,3 +76,50 @@ export async function getSubscriberChains(subscriberId: string) {
 
     return data || []
 }
+
+/**
+ * Optimized: Get only the latest sent email per subscriber.
+ * Instead of fetching ALL sent_history rows (which grows with every campaign),
+ * this fetches in batches and deduplicates server-side.
+ */
+export async function getLastSentPerSubscriber(): Promise<Record<string, { subject: string; sentAt: string }>> {
+    const supabase = await createClient()
+    const lookup: Record<string, { subject: string; sentAt: string }> = {}
+
+    // Fetch in batches of 1000 rows, ordered newest first
+    // For ~500 subscribers, we typically need at most ~500 rows (1 per sub)
+    // But subscribers may not have been emailed, so we fetch more to cover gaps
+    let offset = 0
+    const batchSize = 1000
+    let allFound = false
+
+    while (!allFound) {
+        const { data, error } = await supabase
+            .from("sent_history")
+            .select("subscriber_id, sent_at, campaign_id, campaigns(subject_line)")
+            .order("sent_at", { ascending: false })
+            .range(offset, offset + batchSize - 1)
+
+        if (error || !data || data.length === 0) break
+
+        let newEntriesThisBatch = 0
+        for (const row of data as any[]) {
+            if (!lookup[row.subscriber_id]) {
+                const subject = row.campaigns?.subject_line
+                if (subject) {
+                    lookup[row.subscriber_id] = { subject, sentAt: row.sent_at }
+                    newEntriesThisBatch++
+                }
+            }
+        }
+
+        // If this batch added no new subscribers, we've covered everyone
+        if (newEntriesThisBatch === 0 || data.length < batchSize) {
+            allFound = true
+        }
+
+        offset += batchSize
+    }
+
+    return lookup
+}

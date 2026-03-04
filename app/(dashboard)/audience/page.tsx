@@ -104,6 +104,7 @@ import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { softDeleteSubscriber, bulkSoftDeleteSubscribers } from "@/app/actions/subscribers"
 import { getSavedViews, createSavedView, deleteSavedView, type SavedView } from "@/app/actions/saved-views"
+import { getLastSentPerSubscriber } from "@/app/actions/subscriber-history"
 
 const statusStyles: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -223,35 +224,22 @@ export default function AudienceManagerPage() {
     // Fetch Subscribers
     const fetchSubscribers = async () => {
         setLoading(true)
-        const { data, error } = await supabase
-            .from("subscribers")
-            .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
-            .neq("status", "deleted")
-            .order("created_at", { ascending: false })
+
+        // Run both queries in parallel for faster loading
+        const [subscribersResult, lastSentLookup] = await Promise.all([
+            supabase
+                .from("subscribers")
+                .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
+                .neq("status", "deleted")
+                .order("created_at", { ascending: false }),
+            getLastSentPerSubscriber(),
+        ])
+
+        const { data, error } = subscribersResult
 
         if (data) {
             setSubscribers(data as Subscriber[])
-
-            // Fetch last sent email subject per subscriber
-            const subIds = data.map((s: any) => s.id)
-            if (subIds.length > 0) {
-                const { data: sentData } = await supabase
-                    .from("sent_history")
-                    .select("subscriber_id, sent_at, campaign_id, campaigns(subject_line)")
-                    .in("subscriber_id", subIds)
-                    .order("sent_at", { ascending: false })
-
-                if (sentData) {
-                    const lookup: Record<string, { subject: string; sentAt: string }> = {}
-                    sentData.forEach((row: any) => {
-                        if (!lookup[row.subscriber_id]) {
-                            const subject = row.campaigns?.subject_line
-                            if (subject) lookup[row.subscriber_id] = { subject, sentAt: row.sent_at }
-                        }
-                    })
-                    setLastSentSubjects(lookup)
-                }
-            }
+            setLastSentSubjects(lastSentLookup)
         } else if (error) {
             console.error("Error fetching subscribers:", error)
             toast({
