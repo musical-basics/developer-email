@@ -13,9 +13,22 @@ import { useToast } from "@/hooks/use-toast"
 import { getAnthropicModels } from "@/app/actions/ai-models"
 import {
     getCompanyContext, saveCompanyContext,
+    getDefaultLinks, saveDefaultLinks,
     getCustomLinks, saveCustomLinks,
-    type AudienceContext, type Brand, type CustomLink
+    type DefaultLinks, type AudienceContext, type Brand, type CustomLink
 } from "@/app/actions/settings"
+
+const LINK_LABELS: Record<keyof DefaultLinks, string> = {
+    unsubscribe_url: "Unsubscribe URL",
+    privacy_url: "Privacy Policy",
+    contact_url: "Contact Us",
+    about_url: "About Page",
+    shipping_url: "Shipping Info",
+    main_cta_url: "Main CTA URL",
+    main_activate_url: "Activate URL ($30 Off)",
+    crowdfunding_cta_url: "Crowdfunding CTA",
+    homepage_url: "Homepage URL",
+}
 
 
 export default function SettingsPage() {
@@ -24,8 +37,19 @@ export default function SettingsPage() {
     const [ctxDreamPlay, setCtxDreamPlay] = useState("")
     const [ctxCrossover, setCtxCrossover] = useState("")
 
+    // ─── Links State ────────────────────────────────
+    const [linksMB, setLinksMB] = useState<DefaultLinks>({
+        unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
+        shipping_url: "", main_cta_url: "", main_activate_url: "", crowdfunding_cta_url: "", homepage_url: ""
+    })
+    const [linksDP, setLinksDP] = useState<DefaultLinks>({
+        unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
+        shipping_url: "", main_cta_url: "", main_activate_url: "", crowdfunding_cta_url: "", homepage_url: ""
+    })
+
     const [loading, setLoading] = useState(true)
     const [savingContext, setSavingContext] = useState<string | null>(null)
+    const [savingLinks, setSavingLinks] = useState<string | null>(null)
 
     // ─── Custom Links State ──────────────────────────
     const [customLinksDP, setCustomLinksDP] = useState<CustomLink[]>([])
@@ -51,16 +75,20 @@ export default function SettingsPage() {
     useEffect(() => {
         async function loadAll() {
             try {
-                const [mb, dp, cross, clDP, clMB] = await Promise.all([
+                const [mb, dp, cross, lMB, lDP, clDP, clMB] = await Promise.all([
                     getCompanyContext("musicalbasics"),
                     getCompanyContext("dreamplay"),
                     getCompanyContext("crossover"),
+                    getDefaultLinks("musicalbasics"),
+                    getDefaultLinks("dreamplay"),
                     getCustomLinks("dreamplay"),
                     getCustomLinks("musicalbasics"),
                 ])
                 setCtxMusicalBasics(mb)
                 setCtxDreamPlay(dp)
                 setCtxCrossover(cross)
+                setLinksMB(lMB)
+                setLinksDP(lDP)
                 setCustomLinksDP(clDP)
                 setCustomLinksMB(clMB)
             } catch (e) {
@@ -118,6 +146,27 @@ export default function SettingsPage() {
         }
     }
 
+
+    const handleSaveLinks = async (brand: Brand) => {
+        setSavingLinks(brand)
+        try {
+            const links = brand === "musicalbasics" ? linksMB : linksDP
+            await saveDefaultLinks(brand, links)
+            toast({ title: "Links Saved", description: `${brand} links updated.` })
+        } catch (e: any) {
+            toast({ title: "Error", description: e.message, variant: "destructive" })
+        } finally {
+            setSavingLinks(null)
+        }
+    }
+
+    const updateLink = (brand: Brand, key: keyof DefaultLinks, value: string) => {
+        if (brand === "musicalbasics") {
+            setLinksMB(prev => ({ ...prev, [key]: value }))
+        } else {
+            setLinksDP(prev => ({ ...prev, [key]: value }))
+        }
+    }
 
     const handleSaveCustomLinks = async (brand: Brand) => {
         setSavingCustomLinks(brand)
@@ -391,6 +440,13 @@ export default function SettingsPage() {
                         onSave={() => handleSaveContext("dreamplay")}
                         saving={savingContext === "dreamplay"}
                     />
+                    <BrandLinksCard
+                        title="DreamPlay Links"
+                        links={linksDP}
+                        onChange={(key, val) => updateLink("dreamplay", key, val)}
+                        onSave={() => handleSaveLinks("dreamplay")}
+                        saving={savingLinks === "dreamplay"}
+                    />
                     <CustomLinksCard
                         title="DreamPlay Custom Links"
                         links={customLinksDP}
@@ -409,6 +465,13 @@ export default function SettingsPage() {
                         onChange={setCtxMusicalBasics}
                         onSave={() => handleSaveContext("musicalbasics")}
                         saving={savingContext === "musicalbasics"}
+                    />
+                    <BrandLinksCard
+                        title="MusicalBasics Links"
+                        links={linksMB}
+                        onChange={(key, val) => updateLink("musicalbasics", key, val)}
+                        onSave={() => handleSaveLinks("musicalbasics")}
+                        saving={savingLinks === "musicalbasics"}
                     />
                     <CustomLinksCard
                         title="MusicalBasics Custom Links"
@@ -493,6 +556,47 @@ function BrandContextCard({
     )
 }
 
+function BrandLinksCard({
+    title, links, onChange, onSave, saving
+}: {
+    title: string; links: DefaultLinks
+    onChange: (key: keyof DefaultLinks, value: string) => void
+    onSave: () => void; saving: boolean
+}) {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                    <Link2 className="w-5 h-5 text-blue-400" />
+                    {title}
+                </CardTitle>
+                <CardDescription>
+                    Default URLs the AI Copilot uses when generating templates for this brand.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                {(Object.keys(LINK_LABELS) as (keyof DefaultLinks)[]).map((key) => (
+                    <div key={key} className="grid grid-cols-3 gap-3 items-center">
+                        <div>
+                            <Label className="text-sm text-muted-foreground">{LINK_LABELS[key]}</Label>
+                            <p className="text-[10px] text-muted-foreground/50 font-mono mt-0.5">{`{{${key}}}`}</p>
+                        </div>
+                        <Input
+                            value={links[key]}
+                            onChange={(e) => onChange(key, e.target.value)}
+                            placeholder={`https://...`}
+                            className="col-span-2"
+                        />
+                    </div>
+                ))}
+                <Button onClick={onSave} disabled={saving} className="mt-2">
+                    {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                    Save Links
+                </Button>
+            </CardContent>
+        </Card>
+    )
+}
 
 function CustomLinksCard({
     title, links, onChange, onSave, saving
