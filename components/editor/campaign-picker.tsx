@@ -25,7 +25,7 @@ interface CampaignSummary {
 
 interface CampaignPickerProps {
     currentId?: string | null
-    editorType: "classic" | "modular"
+    editorType: "classic" | "modular" | "knowledge"
     className?: string
 }
 
@@ -55,7 +55,7 @@ export function CampaignPicker({ currentId, editorType, className }: CampaignPic
 
     const handleSelect = (id: string) => {
         setOpen(false)
-        const path = editorType === "classic" ? "/editor" : "/modular-editor"
+        const path = editorType === "classic" ? "/editor" : editorType === "knowledge" ? "/editor-v2" : "/modular-editor"
         router.push(`${path}?id=${id}`)
     }
 
