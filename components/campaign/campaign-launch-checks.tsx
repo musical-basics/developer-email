@@ -32,6 +32,8 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
     const [fromEmail, setFromEmail] = useState(campaign.variable_values?.from_email || "lionel@email.dreamplaypianos.com")
     const [broadcastStatus, setBroadcastStatus] = useState<"idle" | "success" | "error">("idle")
     const [broadcastMessage, setBroadcastMessage] = useState("")
+    const [scheduledAt, setScheduledAt] = useState<string | null>(campaign.scheduled_at ?? null)
+    const [scheduledStatus, setScheduledStatus] = useState<string | null>(campaign.scheduled_status ?? null)
 
     const { toast } = useToast()
     const router = useRouter()
@@ -129,6 +131,59 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
         }
     }
 
+    const handleSchedule = async (date: Date) => {
+        toast({ title: "Scheduling campaign...", description: `For ${date.toLocaleString()}` })
+
+        const response = await fetch("/api/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                type: "schedule",
+                campaignId: campaign.id,
+                scheduledAt: date.toISOString(),
+                fromName,
+                fromEmail,
+                clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
+                openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
+                resendClickTracking: localStorage.getItem(`mb_resend_click_tracking_${fromEmail}`) === "true",
+                resendOpenTracking: localStorage.getItem(`mb_resend_open_tracking_${fromEmail}`) === "true",
+            })
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+            toast({ title: "Scheduling failed", description: data.error || data.message, variant: "destructive" })
+        } else {
+            setScheduledAt(data.scheduledAt)
+            setScheduledStatus("pending")
+            toast({ title: "Campaign Scheduled!", description: data.message })
+            router.refresh()
+        }
+    }
+
+    const handleCancelSchedule = async () => {
+        const response = await fetch("/api/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                type: "cancel_schedule",
+                campaignId: campaign.id,
+            })
+        })
+
+        const data = await response.json()
+
+        if (!response.ok) {
+            toast({ title: "Error", description: data.error || data.message, variant: "destructive" })
+        } else {
+            setScheduledAt(null)
+            setScheduledStatus("cancelled")
+            toast({ title: "Schedule Cancelled", description: "The scheduled send has been cancelled." })
+            router.refresh()
+        }
+    }
+
     return (
         <div className="min-h-screen bg-background">
             <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -152,7 +207,11 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                         <LaunchpadCard
                             subscriberCount={effectiveSubscriberCount}
                             onLaunch={handleLaunchClick}
+                            onSchedule={handleSchedule}
+                            onCancelSchedule={handleCancelSchedule}
                             isDisabled={campaign.status === "completed"}
+                            scheduledAt={scheduledAt}
+                            scheduledStatus={scheduledStatus}
                         />
 
                         {broadcastStatus === "error" && (

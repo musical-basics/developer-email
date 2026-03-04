@@ -323,6 +323,62 @@ export async function POST(request: Request) {
             });
         }
 
+        else if (type === "schedule") {
+            const { scheduledAt } = body;
+            if (!scheduledAt) return NextResponse.json({ error: "scheduledAt is required" }, { status: 400 });
+
+            const scheduledDate = new Date(scheduledAt);
+            if (scheduledDate <= new Date()) {
+                return NextResponse.json({ error: "Scheduled time must be in the future" }, { status: 400 });
+            }
+
+            // Save schedule to campaign
+            await supabaseAdmin
+                .from("campaigns")
+                .update({
+                    scheduled_at: scheduledDate.toISOString(),
+                    scheduled_status: "pending",
+                })
+                .eq("id", campaignId);
+
+            // Send delayed Inngest event
+            const { inngest } = await import("@/inngest/client");
+            await inngest.send({
+                name: "campaign.scheduled-send",
+                data: {
+                    campaignId,
+                    scheduledAt: scheduledDate.toISOString(),
+                    fromName,
+                    fromEmail,
+                    clickTracking,
+                    openTracking,
+                    resendClickTracking,
+                    resendOpenTracking,
+                },
+            });
+
+            return NextResponse.json({
+                success: true,
+                message: `Campaign scheduled for ${scheduledDate.toLocaleString()}`,
+                scheduledAt: scheduledDate.toISOString(),
+            });
+        }
+
+        else if (type === "cancel_schedule") {
+            await supabaseAdmin
+                .from("campaigns")
+                .update({
+                    scheduled_at: null,
+                    scheduled_status: "cancelled",
+                })
+                .eq("id", campaignId);
+
+            return NextResponse.json({
+                success: true,
+                message: "Schedule cancelled",
+            });
+        }
+
         return NextResponse.json({ error: "Invalid Type" }, { status: 400 });
 
     } catch (error: any) {
