@@ -38,6 +38,7 @@ import {
     Eye,
     Mail,
     MailX,
+    Clock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -104,7 +105,7 @@ import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { softDeleteSubscriber, bulkSoftDeleteSubscribers } from "@/app/actions/subscribers"
 import { getSavedViews, createSavedView, deleteSavedView, type SavedView } from "@/app/actions/saved-views"
-import { getLastSentPerSubscriber } from "@/app/actions/subscriber-history"
+import { getLastSentPerSubscriber, getScheduledPerSubscriber } from "@/app/actions/subscriber-history"
 
 const statusStyles: Record<string, string> = {
     active: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -132,6 +133,7 @@ export default function AudienceManagerPage() {
     const [subscribers, setSubscribers] = useState<Subscriber[]>([])
     const [loading, setLoading] = useState(true)
     const [lastSentSubjects, setLastSentSubjects] = useState<Record<string, { subject: string; sentAt: string }>>({})
+    const [scheduledCampaigns, setScheduledCampaigns] = useState<Record<string, { subject: string; scheduledAt: string; campaignName: string }>>({})
     const [searchQuery, setSearchQuery] = useState("")
     const [showTestOnly, setShowTestOnly] = useState(false)
     const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -225,14 +227,15 @@ export default function AudienceManagerPage() {
     const fetchSubscribers = async () => {
         setLoading(true)
 
-        // Run both queries in parallel for faster loading
-        const [subscribersResult, lastSentLookup] = await Promise.all([
+        // Run all queries in parallel for faster loading
+        const [subscribersResult, lastSentLookup, scheduledLookup] = await Promise.all([
             supabase
                 .from("subscribers")
                 .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
                 .neq("status", "deleted")
                 .order("created_at", { ascending: false }),
             getLastSentPerSubscriber(),
+            getScheduledPerSubscriber(),
         ])
 
         const { data, error } = subscribersResult
@@ -240,6 +243,7 @@ export default function AudienceManagerPage() {
         if (data) {
             setSubscribers(data as Subscriber[])
             setLastSentSubjects(lastSentLookup)
+            setScheduledCampaigns(scheduledLookup)
         } else if (error) {
             console.error("Error fetching subscribers:", error)
             toast({
@@ -1513,11 +1517,16 @@ export default function AudienceManagerPage() {
                                                                         {subscriber.first_name} {subscriber.last_name}
                                                                     </p>
                                                                 )}
-                                                                {lastSentSubjects[subscriber.id] && (
+                                                                {scheduledCampaigns[subscriber.id] ? (
+                                                                    <p className="text-xs text-sky-400/80 italic truncate max-w-[300px] flex items-center gap-1">
+                                                                        <Clock className="h-3 w-3 shrink-0" />
+                                                                        Scheduled: {scheduledCampaigns[subscriber.id].subject} · {new Date(scheduledCampaigns[subscriber.id].scheduledAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(scheduledCampaigns[subscriber.id].scheduledAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                                                    </p>
+                                                                ) : lastSentSubjects[subscriber.id] ? (
                                                                     <p className="text-xs text-muted-foreground/70 italic truncate max-w-[300px]">
                                                                         Last sent: {lastSentSubjects[subscriber.id].subject} · {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(lastSentSubjects[subscriber.id].sentAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                                                                     </p>
-                                                                )}
+                                                                ) : null}
                                                             </div>
                                                         </div>
                                                     </TableCell>

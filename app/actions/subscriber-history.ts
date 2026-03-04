@@ -123,3 +123,47 @@ export async function getLastSentPerSubscriber(): Promise<Record<string, { subje
 
     return lookup
 }
+/**
+ * Get pending scheduled campaigns per subscriber.
+ * Returns a lookup of subscriber_id -> { subject, scheduledAt, campaignName }
+ */
+export async function getScheduledPerSubscriber(): Promise<Record<string, { subject: string; scheduledAt: string; campaignName: string }>> {
+    const supabase = await createClient()
+
+    // Fetch all campaigns with scheduled_status = 'pending'
+    const { data: campaigns, error } = await supabase
+        .from("campaigns")
+        .select("id, name, subject_line, scheduled_at, variable_values")
+        .eq("scheduled_status", "pending")
+        .not("scheduled_at", "is", null)
+
+    if (error || !campaigns) return {}
+
+    const lookup: Record<string, { subject: string; scheduledAt: string; campaignName: string }> = {}
+
+    for (const campaign of campaigns) {
+        const subjectLine = campaign.subject_line || campaign.name || "Untitled"
+        const scheduledAt = campaign.scheduled_at
+
+        const subscriberId = campaign.variable_values?.subscriber_id
+        const subscriberIds: string[] | undefined = campaign.variable_values?.subscriber_ids
+
+        if (subscriberIds && subscriberIds.length > 0) {
+            // Multi-subscriber targeting
+            for (const sid of subscriberIds) {
+                if (!lookup[sid]) {
+                    lookup[sid] = { subject: subjectLine, scheduledAt, campaignName: campaign.name }
+                }
+            }
+        } else if (subscriberId) {
+            // Single-subscriber targeting
+            if (!lookup[subscriberId]) {
+                lookup[subscriberId] = { subject: subjectLine, scheduledAt, campaignName: campaign.name }
+            }
+        }
+        // Campaigns with no subscriber targeting are broadcast-scheduled
+        // — don't show per-subscriber since it applies to everyone
+    }
+
+    return lookup
+}
