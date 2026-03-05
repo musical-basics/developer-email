@@ -196,10 +196,30 @@ export const genericChainRunner = inngest.createFunction(
                 // Mark the campaign as "completed" so it appears in the Completed campaigns tab
                 // Also ensure email_type = "campaign" so it shows up in the /campaigns page
                 if (sendResult?.campaignId) {
-                    await supabase
+                    console.log(`[CHAIN-COMPLETE] Step ${i} — template_key: ${stepDef.template_key}, sendResult.campaignId: ${sendResult.campaignId}`);
+
+                    // Check current campaign state before update
+                    const { data: beforeCampaign } = await supabase
+                        .from("campaigns")
+                        .select("id, name, status, email_type")
+                        .eq("id", stepDef.template_key)
+                        .single();
+                    console.log(`[CHAIN-COMPLETE] Campaign BEFORE update:`, JSON.stringify(beforeCampaign));
+
+                    const { data: updateResult, error: updateError, count: updateCount } = await supabase
                         .from("campaigns")
                         .update({ status: "completed", email_type: "campaign" })
-                        .eq("id", stepDef.template_key);
+                        .eq("id", stepDef.template_key)
+                        .select("id, name, status, email_type")
+                        .single();
+
+                    if (updateError) {
+                        console.error(`[CHAIN-COMPLETE] ERROR updating campaign ${stepDef.template_key}:`, updateError);
+                    } else {
+                        console.log(`[CHAIN-COMPLETE] Campaign AFTER update:`, JSON.stringify(updateResult));
+                    }
+                } else {
+                    console.log(`[CHAIN-COMPLETE] Step ${i} — sendResult missing campaignId, skipping status update. sendResult:`, JSON.stringify(sendResult));
                 }
 
                 // Compute wait decision and return it
