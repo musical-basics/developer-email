@@ -21,6 +21,37 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
         return { success: false, error: "Subscriber not found" }
     }
 
+    // ─── CANCEL EXISTING CHAINS FOR THIS SUBSCRIBER ───
+    // Only one chain should run per subscriber at a time
+    const { data: existingProcesses } = await supabase
+        .from("chain_processes")
+        .select("id, history")
+        .eq("subscriber_id", subscriberId)
+        .in("status", ["active", "paused"])
+
+    if (existingProcesses && existingProcesses.length > 0) {
+        for (const proc of existingProcesses) {
+            const history = proc.history || []
+            history.push({
+                step_name: "System",
+                action: "Chain Cancelled — Replaced by new chain",
+                timestamp: new Date().toISOString(),
+            })
+
+            await supabase
+                .from("chain_processes")
+                .update({
+                    status: "cancelled",
+                    history,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", proc.id)
+
+            // Fire cancel event so Inngest stops the running function
+            await inngest.send({ name: "chain.cancel", data: { processId: proc.id } })
+        }
+    }
+
     // Snapshot the master chain — clone it so edits to the master don't affect this run
     // Keep subscriber_id null so the snapshot doesn't appear in the Drafts tab
     const { data: clonedChain, error: cloneError } = await duplicateChain(chainId, {
