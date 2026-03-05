@@ -40,9 +40,11 @@ interface CampaignsTableProps {
     title?: string
     showAnalytics?: boolean
     enableBulkDelete?: boolean
+    sortBy?: "created_at" | "updated_at"
+    paginate?: boolean
 }
 
-export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false, sortBy = "created_at", paginate = false }: CampaignsTableProps) {
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [newName, setNewName] = useState("")
@@ -55,6 +57,8 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [exportingId, setExportingId] = useState<string | null>(null)
     const [downloadingId, setDownloadingId] = useState<string | null>(null)
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+    const [currentPage, setCurrentPage] = useState(0)
+    const [pageSize, setPageSize] = useState(25)
 
     const toggleExpand = (id: string) => {
         setExpandedRows(prev => {
@@ -339,6 +343,12 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                         Avg Time
                                     </div>
                                 </TableHead>
+                                <TableHead className="text-right w-[100px]">
+                                    <div className="flex items-center justify-end gap-1">
+                                        <Send className="h-3.5 w-3.5 text-muted-foreground" />
+                                        Sent At
+                                    </div>
+                                </TableHead>
                             </>
                         )}
                         <TableHead className="text-right w-[50px]"></TableHead>
@@ -347,12 +357,21 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={(showAnalytics ? 8 : 3) + (enableBulkDelete ? 1 : 0)} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={(showAnalytics ? 9 : 3) + (enableBulkDelete ? 1 : 0)} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
                     ) : (
-                        [...campaigns].sort((a, b) => (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)).map((campaign) => {
+                        (() => {
+                            const sorted = [...campaigns].sort((a, b) => {
+                                if (sortBy === "updated_at") {
+                                    return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+                                }
+                                return (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)
+                            })
+                            const displayed = paginate ? sorted.slice(currentPage * pageSize, (currentPage + 1) * pageSize) : sorted
+                            return displayed
+                        })().map((campaign) => {
                             const recipients = campaign.total_recipients || 0
                             const openRate = recipients > 0 ? Math.round((campaign.total_opens / recipients) * 100) : 0
                             const clickRate = recipients > 0 ? Math.round((campaign.total_clicks / recipients) * 100) : 0
@@ -360,7 +379,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                             const checkoutRate = campaign.total_clicks > 0 ? Math.round((conversions / campaign.total_clicks) * 100) : 0
                             const hasBreakdown = campaign.recipient_breakdown && campaign.recipient_breakdown.length > 1
                             const isExpanded = expandedRows.has(campaign.id)
-                            const colCount = (showAnalytics ? 8 : 3) + (enableBulkDelete ? 1 : 0)
+                            const colCount = (showAnalytics ? 9 : 3) + (enableBulkDelete ? 1 : 0)
 
                             return (
                                 <>
@@ -491,6 +510,9 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
 
                                                 <TableCell className="text-right font-mono text-amber-400">
                                                     {formatDuration(campaign.average_read_time)}
+                                                </TableCell>
+                                                <TableCell className="text-right text-xs text-muted-foreground">
+                                                    {campaign.updated_at ? formatDistanceToNow(new Date(campaign.updated_at), { addSuffix: true }) : "—"}
                                                 </TableCell>
                                             </>
                                         )}
@@ -661,6 +683,52 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                     )}
                 </TableBody>
             </Table>
+
+            {/* Pagination */}
+            {paginate && campaigns.length > 0 && (() => {
+                const totalPages = Math.ceil(campaigns.length / pageSize)
+                return (
+                    <div className="flex items-center justify-between border-t border-border px-6 py-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Rows per page:</span>
+                            {[25, 50, 100].map(size => (
+                                <button
+                                    key={size}
+                                    onClick={() => { setPageSize(size); setCurrentPage(0) }}
+                                    className={`text-xs px-2 py-1 rounded transition-colors ${pageSize === size ? 'bg-[#D4AF37]/20 text-[#D4AF37] font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                                >
+                                    {size}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs text-muted-foreground">
+                                {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, campaigns.length)} of {campaigns.length}
+                            </span>
+                            <div className="flex gap-1">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
+                                    disabled={currentPage === 0}
+                                    className="h-7 px-2 text-xs"
+                                >
+                                    Prev
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
+                                    disabled={currentPage >= totalPages - 1}
+                                    className="h-7 px-2 text-xs"
+                                >
+                                    Next
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
 
             <Dialog open={!!editingCampaign} onOpenChange={(open) => !open && setEditingCampaign(null)}>
                 <DialogContent>
