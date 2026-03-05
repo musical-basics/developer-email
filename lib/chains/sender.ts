@@ -153,9 +153,10 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     });
 
     // Mark the campaign as "completed" so it appears in the Completed campaigns tab
+    // Also ensure email_type = "campaign" so it shows up in the /campaigns page
     await supabaseForHistory
         .from("campaigns")
-        .update({ status: "completed" })
+        .update({ status: "completed", email_type: "campaign" })
         .eq("id", campaignId)
         .neq("status", "completed");
 

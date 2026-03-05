@@ -193,6 +193,15 @@ export const genericChainRunner = inngest.createFunction(
                     }).eq("id", processId);
                 }
 
+                // Mark the campaign as "completed" so it appears in the Completed campaigns tab
+                // Also ensure email_type = "campaign" so it shows up in the /campaigns page
+                if (sendResult?.campaignId) {
+                    await supabase
+                        .from("campaigns")
+                        .update({ status: "completed", email_type: "campaign" })
+                        .eq("id", stepDef.template_key);
+                }
+
                 // Compute wait decision and return it
                 const shouldWait = !!(stepDef.wait_after && i < chain.steps.length - 1);
                 let waitDuration: string | null = null;
