@@ -280,15 +280,17 @@ function ChainFormDialog({
     editingChain,
     onSave,
     subscriberName,
+    forceDraftMode,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
     editingChain: ChainRow | null
     onSave: (data: ChainFormData, chainId?: string) => Promise<void>
     subscriberName?: string
+    forceDraftMode?: boolean
 }) {
     const isEditingDraft = !!editingChain?.subscriber_id
-    const isDraftMode = (!!subscriberName && !editingChain) || isEditingDraft
+    const isDraftMode = forceDraftMode || (!!subscriberName && !editingChain) || isEditingDraft
     const [loading, setLoading] = useState(false)
 
     // Master chain fields
@@ -365,7 +367,7 @@ function ChainFormDialog({
             setSteps([emptyStep()])
             setBranches([])
             // Reset draft mode
-            setDraftName(subscriberName ? `New Chain for ${subscriberName}` : "")
+            setDraftName(subscriberName ? `New Chain for ${subscriberName}` : "New Chain")
             setTimeline([{ type: "send", template_key: "" }])
         }
     }, [editingChain, open, subscriberName])
@@ -526,8 +528,8 @@ function ChainFormDialog({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
                 <DialogHeader>
-                    <DialogTitle>{isEditingDraft ? "Edit Draft Chain" : editingChain ? "Edit Chain" : isDraftMode ? "New Draft Chain" : "New Email Chain"}</DialogTitle>
-                    {isDraftMode && (
+                    <DialogTitle>{isEditingDraft ? "Edit Draft Chain" : editingChain ? "Edit Chain" : "New Draft Chain"}</DialogTitle>
+                    {isDraftMode && subscriberName && (
                         <div className="mt-2 rounded-md bg-[#D4AF37]/10 border border-[#D4AF37]/30 px-3 py-2 text-sm flex items-center gap-2">
                             <User className="h-4 w-4 text-[#D4AF37]" />
                             Creating draft chain for <span className="font-semibold">{subscriberName}</span>
@@ -536,9 +538,8 @@ function ChainFormDialog({
                     <DialogDescription>
                         {editingChain
                             ? "Update the chain configuration."
-                            : isDraftMode
-                                ? "Build a sequence of steps and wait times. Drag to reorder."
-                                : "Configure a new automated email sequence."}
+                            : "Build a sequence of steps and wait times. Drag to reorder."
+                        }
                     </DialogDescription>
                 </DialogHeader>
 
@@ -1082,6 +1083,7 @@ export default function ChainsPage() {
     const [editingChain, setEditingChain] = useState<ChainRow | null>(null)
     const [deleteTarget, setDeleteTarget] = useState<ChainRow | null>(null)
     const [deleting, setDeleting] = useState(false)
+    const [forceDraftMode, setForceDraftMode] = useState(false)
     const [activeTab, setActiveTab] = useState<"journeys" | "templates" | "running" | "drafts">("journeys")
     const [processes, setProcesses] = useState<ChainProcess[]>([])
     const [loadingProcesses, setLoadingProcesses] = useState(false)
@@ -1209,7 +1211,7 @@ export default function ChainsPage() {
                     </p>
                 </div>
                 {activeTab === "templates" && (
-                    <Button onClick={() => { setEditingChain(null); setFormOpen(true) }}>
+                    <Button onClick={() => { setEditingChain(null); setForceDraftMode(true); setFormOpen(true) }}>
                         <Plus className="h-4 w-4 mr-2" />
                         New Chain
                     </Button>
@@ -1429,11 +1431,13 @@ export default function ChainsPage() {
                     if (!open) {
                         setDraftSubscriberId(null)
                         setDraftSubscriberName("")
+                        setForceDraftMode(false)
                     }
                 }}
                 editingChain={editingChain}
                 onSave={handleSave}
                 subscriberName={draftSubscriberName || undefined}
+                forceDraftMode={forceDraftMode}
             />
 
             {/* Delete Confirmation */}
