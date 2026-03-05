@@ -62,7 +62,7 @@ export const scheduledCampaignSend = inngest.createFunction(
         await step.run("update-status", async () => {
             await supabase
                 .from("campaigns")
-                .update({ scheduled_status: "sent" })
+                .update({ scheduled_status: "sent", updated_at: new Date().toISOString() })
                 .eq("id", campaignId);
         });
 

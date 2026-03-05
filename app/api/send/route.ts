@@ -325,6 +325,7 @@ export async function POST(request: Request) {
                 status: "completed",
                 total_recipients: recipients.length,
                 sent_from_email: fromEmail || null,
+                updated_at: new Date().toISOString(),
             };
             if (firstResendEmailId) {
                 updateData.resend_email_id = firstResendEmailId;
