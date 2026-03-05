@@ -2129,7 +2129,7 @@ export default function AudienceManagerPage() {
                     <DialogHeader>
                         <DialogTitle>Start Email Chain</DialogTitle>
                         <DialogDescription>
-                            Select a chain to start for {chainTarget?.email}.
+                            Select a chain to review and start for {chainTarget?.email}.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2146,11 +2146,12 @@ export default function AudienceManagerPage() {
                                     {availableChains.map(chain => (
                                         <div
                                             key={chain.id}
-                                            onClick={() => !startingChain && handleStartChain(chain)}
-                                            className={cn(
-                                                "p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors",
-                                                startingChain && "opacity-50 pointer-events-none"
-                                            )}
+                                            onClick={() => {
+                                                if (!chainTarget) return
+                                                setIsChainPickerOpen(false)
+                                                router.push(`/chain/${chain.id}?subscriberId=${chainTarget.id}`)
+                                            }}
+                                            className="p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors"
                                         >
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2">

@@ -338,3 +338,110 @@ export async function promoteDraftToMaster(chainId: string): Promise<{ error: st
     const result = await duplicateChain(chainId, { subscriber_id: null })
     return { error: result.error }
 }
+
+// ─── ENRICHED CHAIN TYPES ──────────────────────────────────
+export interface ChainStepWithCampaign extends ChainStepRow {
+    campaign_name: string | null
+    campaign_subject: string | null
+    campaign_html: string | null
+    campaign_variable_values: Record<string, any> | null
+}
+
+export interface ChainWithDetails {
+    id: string
+    slug: string
+    name: string
+    description: string | null
+    trigger_label: string | null
+    trigger_event: string
+    subscriber_id: string | null
+    created_at: string
+    updated_at: string
+    steps: ChainStepWithCampaign[]
+    branches: ChainBranchRow[]
+}
+
+// ─── GET CHAIN WITH CAMPAIGN DETAILS ───────────────────────
+// Fetches a chain and enriches each step with campaign data (name, subject, html).
+export async function getChainWithCampaignDetails(
+    chainId: string
+): Promise<{ data: ChainWithDetails | null; error: string | null }> {
+    const supabase = await createClient()
+
+    // 1. Fetch chain + steps + branches
+    const { data: chain, error: chainError } = await supabase
+        .from("email_chains")
+        .select(`
+            *,
+            chain_steps ( * ),
+            chain_branches ( * )
+        `)
+        .eq("id", chainId)
+        .single()
+
+    if (chainError || !chain) {
+        return { data: null, error: chainError?.message || "Chain not found" }
+    }
+
+    const sortedSteps = (chain.chain_steps || []).sort(
+        (a: any, b: any) => a.position - b.position
+    )
+    const sortedBranches = (chain.chain_branches || []).sort(
+        (a: any, b: any) => a.position - b.position
+    )
+
+    // 2. Gather unique campaign IDs from steps
+    const campaignIds = [
+        ...new Set(sortedSteps.map((s: any) => s.template_key).filter(Boolean)),
+    ]
+
+    // 3. Batch-fetch campaigns
+    let campaignMap: Record<string, { name: string; subject_line: string | null; html_content: string | null; variable_values: Record<string, any> | null }> = {}
+
+    if (campaignIds.length > 0) {
+        const { data: campaigns } = await supabase
+            .from("campaigns")
+            .select("id, name, subject_line, html_content, variable_values")
+            .in("id", campaignIds)
+
+        if (campaigns) {
+            for (const c of campaigns) {
+                campaignMap[c.id] = {
+                    name: c.name,
+                    subject_line: c.subject_line,
+                    html_content: c.html_content,
+                    variable_values: c.variable_values,
+                }
+            }
+        }
+    }
+
+    // 4. Enrich steps
+    const enrichedSteps: ChainStepWithCampaign[] = sortedSteps.map((step: any) => {
+        const campaign = campaignMap[step.template_key]
+        return {
+            ...step,
+            campaign_name: campaign?.name || null,
+            campaign_subject: campaign?.subject_line || null,
+            campaign_html: campaign?.html_content || null,
+            campaign_variable_values: campaign?.variable_values || null,
+        }
+    })
+
+    return {
+        data: {
+            id: chain.id,
+            slug: chain.slug,
+            name: chain.name,
+            description: chain.description,
+            trigger_label: chain.trigger_label,
+            trigger_event: chain.trigger_event,
+            subscriber_id: chain.subscriber_id,
+            created_at: chain.created_at,
+            updated_at: chain.updated_at,
+            steps: enrichedSteps,
+            branches: sortedBranches,
+        },
+        error: null,
+    }
+}
