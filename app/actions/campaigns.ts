@@ -42,7 +42,7 @@ export async function getCampaigns(emailType?: string) {
     // Fetch campaigns
     let query = supabase
         .from("campaigns")
-        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type")
+        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type, scheduled_at, scheduled_status")
         .order("created_at", { ascending: false })
 
     if (emailType) {

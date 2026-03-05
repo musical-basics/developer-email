@@ -9,21 +9,24 @@ interface CampaignsTabsProps {
 }
 
 export function CampaignsTabs({ campaigns }: CampaignsTabsProps) {
-    const [activeTab, setActiveTab] = useState<"templates" | "drafts" | "completed">("templates")
+    const [activeTab, setActiveTab] = useState<"templates" | "drafts" | "scheduled" | "completed">("templates")
 
     const templates = campaigns.filter(c => c.is_template === true)
     const drafts = campaigns.filter(c => c.status === "draft" && !c.is_template && !c.variable_values?.subscriber_id)
+    const scheduled = campaigns.filter(c => c.scheduled_at && c.scheduled_status !== "sent" && c.scheduled_status !== "cancelled")
     const completed = campaigns.filter(c => ["sent", "completed", "active"].includes(c.status) && !c.is_template)
 
     const tabs = [
         { key: "templates" as const, label: "Master Templates", count: templates.length },
         { key: "drafts" as const, label: "Drafts", count: drafts.length },
+        { key: "scheduled" as const, label: "Scheduled", count: scheduled.length },
         { key: "completed" as const, label: "Completed", count: completed.length },
     ]
 
     const tabData = {
         templates: { title: "Master Templates", campaigns: templates, showAnalytics: false, enableBulkDelete: false },
         drafts: { title: "Drafts", campaigns: drafts, showAnalytics: false, enableBulkDelete: false },
+        scheduled: { title: "Scheduled Campaigns", campaigns: scheduled, showAnalytics: false, enableBulkDelete: false },
         completed: { title: "Completed", campaigns: completed, showAnalytics: true, enableBulkDelete: true },
     }
 
