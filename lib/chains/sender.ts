@@ -152,6 +152,13 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         variant_sent: subject,
     });
 
+    // Mark the campaign as "completed" so it appears in the Completed campaigns tab
+    await supabaseForHistory
+        .from("campaigns")
+        .update({ status: "completed" })
+        .eq("id", campaignId)
+        .neq("status", "completed");
+
     return { success: true, campaignId };
 }
 
