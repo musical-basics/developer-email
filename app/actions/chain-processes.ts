@@ -80,14 +80,38 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
     let alreadySentSet = new Set<string>()
 
     if (campaignIds.length > 0) {
-        const { data: sentRows } = await supabase
+        // Check direct matches (campaign_id IS the template_key)
+        const { data: directSentRows } = await supabase
             .from("sent_history")
             .select("campaign_id")
             .eq("subscriber_id", subscriberId)
             .in("campaign_id", campaignIds)
 
-        if (sentRows) {
-            alreadySentSet = new Set(sentRows.map(r => r.campaign_id))
+        if (directSentRows) {
+            directSentRows.forEach(r => alreadySentSet.add(r.campaign_id))
+        }
+
+        // Check copies (campaigns with parent_template_id = template_key)
+        const { data: copies } = await supabase
+            .from("campaigns")
+            .select("id, parent_template_id")
+            .in("parent_template_id", campaignIds)
+
+        if (copies && copies.length > 0) {
+            const copyIds = copies.map(c => c.id)
+            const { data: copySentRows } = await supabase
+                .from("sent_history")
+                .select("campaign_id")
+                .eq("subscriber_id", subscriberId)
+                .in("campaign_id", copyIds)
+
+            if (copySentRows) {
+                const copyToParent = new Map(copies.map(c => [c.id, c.parent_template_id]))
+                copySentRows.forEach(r => {
+                    const parentId = copyToParent.get(r.campaign_id)
+                    if (parentId) alreadySentSet.add(parentId)
+                })
+            }
         }
     }
 

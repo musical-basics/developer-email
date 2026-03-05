@@ -26,24 +26,56 @@ export default async function ChainPage({ params, searchParams }: ChainPageProps
     if (subscriberId) {
         const supabase = await createClient()
 
-        const [subResult, sentResult] = await Promise.all([
+        const templateKeys = chain.steps.map(s => s.template_key).filter(Boolean)
+
+        const [subResult, directSentResult, copiesResult] = await Promise.all([
             supabase
                 .from("subscribers")
                 .select("id, email, first_name, last_name, tags, status")
                 .eq("id", subscriberId)
                 .single(),
-            // Check which campaigns in this chain the subscriber has already received
+            // Check sent_history for the exact template IDs
             supabase
                 .from("sent_history")
                 .select("campaign_id")
                 .eq("subscriber_id", subscriberId)
-                .in("campaign_id", chain.steps.map(s => s.template_key).filter(Boolean)),
+                .in("campaign_id", templateKeys),
+            // Find campaign copies (parent_template_id → template_key)
+            supabase
+                .from("campaigns")
+                .select("id, parent_template_id")
+                .in("parent_template_id", templateKeys),
         ])
 
         subscriber = subResult.data
-        if (sentResult.data) {
-            alreadySentCampaignIds = sentResult.data.map(r => r.campaign_id)
+
+        // Build set of template_keys that have been sent
+        const sentTemplateKeys = new Set<string>()
+
+        // Direct matches
+        if (directSentResult.data) {
+            directSentResult.data.forEach(r => sentTemplateKeys.add(r.campaign_id))
         }
+
+        // Copy matches: check which copies appear in sent_history
+        if (copiesResult.data && copiesResult.data.length > 0) {
+            const copyIds = copiesResult.data.map(c => c.id)
+            const { data: copySentRows } = await supabase
+                .from("sent_history")
+                .select("campaign_id")
+                .eq("subscriber_id", subscriberId)
+                .in("campaign_id", copyIds)
+
+            if (copySentRows) {
+                const copyToParent = new Map(copiesResult.data.map(c => [c.id, c.parent_template_id]))
+                copySentRows.forEach(r => {
+                    const parentId = copyToParent.get(r.campaign_id)
+                    if (parentId) sentTemplateKeys.add(parentId)
+                })
+            }
+        }
+
+        alreadySentCampaignIds = [...sentTemplateKeys]
     }
 
     return (
