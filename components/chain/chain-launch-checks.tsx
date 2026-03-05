@@ -6,7 +6,7 @@ import Link from "next/link"
 import {
     GitBranch, Mail, Clock, ChevronDown, ChevronRight,
     User, Play, CalendarClock, ArrowRight, Loader2, Home,
-    AlertCircle, CheckCircle2
+    AlertCircle, CheckCircle2, SkipForward
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -31,9 +31,11 @@ interface ChainLaunchChecksProps {
         tags: string[] | null
         status: string
     } | null
+    alreadySentCampaignIds?: string[]
 }
 
-export function ChainLaunchChecks({ chain, subscriber }: ChainLaunchChecksProps) {
+export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = [] }: ChainLaunchChecksProps) {
+    const sentSet = new Set(alreadySentCampaignIds)
     const [expandedStep, setExpandedStep] = useState<number | null>(null)
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
     const [launching, setLaunching] = useState(false)
@@ -62,11 +64,15 @@ export function ChainLaunchChecks({ chain, subscriber }: ChainLaunchChecksProps)
                 throw new Error(result.error || "Failed to start chain")
             }
 
+            const skippedMsg = result.skippedCount && result.skippedCount > 0
+                ? ` (${result.skippedCount} already-sent step(s) skipped)`
+                : ""
+
             setLaunchStatus("success")
-            setLaunchMessage(`Chain "${chain.name}" is now running for ${subscriber.email}`)
+            setLaunchMessage(`Chain "${chain.name}" is now running for ${subscriber.email}${skippedMsg}`)
             toast({
                 title: "Chain Started!",
-                description: `"${chain.name}" is now running for ${subscriber.email}`,
+                description: `"${chain.name}" is now running for ${subscriber.email}${skippedMsg}`,
             })
         } catch (error: any) {
             setLaunchStatus("error")
@@ -248,49 +254,61 @@ export function ChainLaunchChecks({ chain, subscriber }: ChainLaunchChecksProps)
                             </CardHeader>
                             <CardContent>
                                 <div className="space-y-0">
-                                    {chain.steps.map((step, i) => (
-                                        <div key={step.id || i}>
-                                            {/* Step */}
-                                            <div className="flex items-start gap-3">
-                                                <div className="flex flex-col items-center">
-                                                    <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-emerald-500/50 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold flex-shrink-0">
-                                                        {i + 1}
-                                                    </div>
-                                                    {(i < chain.steps.length - 1) && (
-                                                        <div className="w-px flex-1 min-h-[16px] bg-border" />
-                                                    )}
-                                                </div>
-                                                <div className="flex-1 pb-1 min-w-0">
-                                                    <p className="text-xs font-medium text-foreground truncate">
-                                                        {step.campaign_name || step.label}
-                                                    </p>
-                                                    {step.campaign_subject && (
-                                                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">
-                                                            Subject: {step.campaign_subject}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* Wait */}
-                                            {step.wait_after && i < chain.steps.length - 1 && (
+                                    {chain.steps.map((step, i) => {
+                                        const isSent = sentSet.has(step.template_key)
+                                        return (
+                                            <div key={step.id || i}>
+                                                {/* Step */}
                                                 <div className="flex items-start gap-3">
                                                     <div className="flex flex-col items-center">
-                                                        <div className="w-px min-h-[4px] bg-border" />
-                                                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted flex-shrink-0">
-                                                            <Clock className="h-2.5 w-2.5 text-muted-foreground" />
-                                                        </div>
-                                                        <div className="w-px min-h-[4px] bg-border" />
+                                                        {isSent ? (
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-zinc-500/40 bg-zinc-500/10 flex-shrink-0">
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-zinc-400" />
+                                                            </div>
+                                                        ) : (
+                                                            <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-emerald-500/50 bg-emerald-500/10 text-emerald-400 text-[10px] font-bold flex-shrink-0">
+                                                                {i + 1}
+                                                            </div>
+                                                        )}
+                                                        {(i < chain.steps.length - 1) && (
+                                                            <div className="w-px flex-1 min-h-[16px] bg-border" />
+                                                        )}
                                                     </div>
-                                                    <div className="flex items-center h-5 mt-1">
-                                                        <p className="text-[10px] text-amber-400/70 italic">
-                                                            Wait {step.wait_after}
+                                                    <div className="flex-1 pb-1 min-w-0">
+                                                        <p className={`text-xs font-medium truncate ${isSent ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
+                                                            {step.campaign_name || step.label}
                                                         </p>
+                                                        {step.campaign_subject && (
+                                                            <p className={`text-[10px] truncate mt-0.5 ${isSent ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'}`}>
+                                                                Subject: {step.campaign_subject}
+                                                            </p>
+                                                        )}
+                                                        {isSent && (
+                                                            <p className="text-[10px] text-zinc-500 italic mt-0.5">Already sent — will be skipped</p>
+                                                        )}
                                                     </div>
                                                 </div>
-                                            )}
-                                        </div>
-                                    ))}
+
+                                                {/* Wait */}
+                                                {step.wait_after && i < chain.steps.length - 1 && (
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="flex flex-col items-center">
+                                                            <div className="w-px min-h-[4px] bg-border" />
+                                                            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-muted flex-shrink-0">
+                                                                <Clock className="h-2.5 w-2.5 text-muted-foreground" />
+                                                            </div>
+                                                            <div className="w-px min-h-[4px] bg-border" />
+                                                        </div>
+                                                        <div className="flex items-center h-5 mt-1">
+                                                            <p className="text-[10px] text-amber-400/70 italic">
+                                                                Wait {step.wait_after}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             </CardContent>
                         </Card>
@@ -327,13 +345,19 @@ export function ChainLaunchChecks({ chain, subscriber }: ChainLaunchChecksProps)
                                                     {/* Content */}
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
-                                                            <p className="text-sm font-medium text-foreground truncate">
+                                                            <p className={`text-sm font-medium truncate ${sentSet.has(step.template_key) ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                                                                 {step.campaign_name || step.label || "Untitled Step"}
                                                             </p>
+                                                            {sentSet.has(step.template_key) && (
+                                                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-zinc-500/20 text-zinc-400 border-zinc-500/30 flex-shrink-0">
+                                                                    <CheckCircle2 className="h-2.5 w-2.5 mr-0.5" />
+                                                                    Sent
+                                                                </Badge>
+                                                            )}
                                                         </div>
-                                                        <p className="text-xs text-muted-foreground truncate mt-0.5">
+                                                        <p className={`text-xs truncate mt-0.5 ${sentSet.has(step.template_key) ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
                                                             {step.campaign_subject
-                                                                ? <>Subject: <span className="text-foreground/70">{step.campaign_subject}</span></>
+                                                                ? <>Subject: <span className={sentSet.has(step.template_key) ? 'text-muted-foreground/50' : 'text-foreground/70'}>{step.campaign_subject}</span></>
                                                                 : <span className="italic">No subject line set</span>
                                                             }
                                                         </p>
@@ -383,10 +407,21 @@ export function ChainLaunchChecks({ chain, subscriber }: ChainLaunchChecksProps)
                     <AlertDialogHeader>
                         <AlertDialogTitle>Start Chain &quot;{chain.name}&quot;?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will immediately begin sending emails to{" "}
-                            <span className="text-foreground font-medium">{subscriberName}</span>
-                            {" "}({subscriber?.email}). {chain.steps.length} email{chain.steps.length !== 1 ? "s" : ""} will
-                            be sent over a span of {formatDuration(totalDuration)}.
+                            {(() => {
+                                const sentCount = chain.steps.filter(s => sentSet.has(s.template_key)).length
+                                const willSend = chain.steps.length - sentCount
+                                return (
+                                    <>
+                                        This will immediately begin sending emails to{" "}
+                                        <span className="text-foreground font-medium">{subscriberName}</span>
+                                        {" "}({subscriber?.email}).
+                                        {sentCount > 0 && (
+                                            <> <span className="text-amber-400 font-medium">{sentCount} step{sentCount !== 1 ? "s" : ""} will be skipped</span> (already sent).</>
+                                        )}
+                                        {" "}{willSend} email{willSend !== 1 ? "s" : ""} will be sent.
+                                    </>
+                                )
+                            })()}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

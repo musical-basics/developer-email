@@ -34,6 +34,87 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
 
     const snapshotChainId = clonedChain.id
 
+    // ─── SMART SKIP: Trim already-sent leading steps ───
+    // Get snapshot's steps
+    const { data: snapshotSteps } = await supabase
+        .from("chain_steps")
+        .select("id, position, template_key, label")
+        .eq("chain_id", snapshotChainId)
+        .order("position", { ascending: true })
+
+    const steps = snapshotSteps || []
+
+    // Check which campaigns this subscriber has already received
+    const campaignIds = [...new Set(steps.map(s => s.template_key).filter(Boolean))]
+    let alreadySentSet = new Set<string>()
+
+    if (campaignIds.length > 0) {
+        const { data: sentRows } = await supabase
+            .from("sent_history")
+            .select("campaign_id")
+            .eq("subscriber_id", subscriberId)
+            .in("campaign_id", campaignIds)
+
+        if (sentRows) {
+            alreadySentSet = new Set(sentRows.map(r => r.campaign_id))
+        }
+    }
+
+    // Walk from the beginning — skip consecutive already-sent steps
+    const skippedStepIds: string[] = []
+    const skippedLabels: string[] = []
+    let skipCount = 0
+
+    for (const step of steps) {
+        if (alreadySentSet.has(step.template_key)) {
+            skippedStepIds.push(step.id)
+            skippedLabels.push(step.label)
+            skipCount++
+        } else {
+            break // Stop at the first unsent step
+        }
+    }
+
+    // If ALL steps already sent, skip the chain entirely
+    if (skipCount === steps.length) {
+        // Clean up the snapshot since we won't use it
+        await supabase.from("email_chains").delete().eq("id", snapshotChainId)
+        return {
+            success: false,
+            error: `All ${steps.length} steps in this chain have already been sent to this subscriber.`,
+        }
+    }
+
+    // Delete skipped steps from the snapshot and re-number
+    if (skippedStepIds.length > 0) {
+        await supabase.from("chain_steps").delete().in("id", skippedStepIds)
+
+        // Re-number remaining steps starting from position 1
+        const remainingSteps = steps.filter(s => !skippedStepIds.includes(s.id))
+        for (let i = 0; i < remainingSteps.length; i++) {
+            await supabase
+                .from("chain_steps")
+                .update({ position: i + 1 })
+                .eq("id", remainingSteps[i].id)
+        }
+    }
+
+    // Build history entries
+    const historyEntries: any[] = []
+    if (skippedLabels.length > 0) {
+        historyEntries.push({
+            step_name: "System",
+            action: `Skipped ${skippedLabels.length} already-sent step(s)`,
+            timestamp: new Date().toISOString(),
+            details: `Skipped: ${skippedLabels.join(", ")}`,
+        })
+    }
+    historyEntries.push({
+        step_name: "System",
+        action: "Chain Started",
+        timestamp: new Date().toISOString(),
+    })
+
     // Create process row pointing to the snapshot
     const { data: process, error: procError } = await supabase
         .from("chain_processes")
@@ -42,7 +123,7 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
             subscriber_id: subscriberId,
             status: "active",
             current_step_index: 0,
-            history: [{ step_name: "System", action: "Chain Started", timestamp: new Date().toISOString() }],
+            history: historyEntries,
         })
         .select("id")
         .single()
@@ -65,7 +146,7 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
     })
 
     revalidatePath("/journeys")
-    return { success: true, processId: process.id }
+    return { success: true, processId: process.id, skippedCount: skipCount }
 }
 
 // ─── GET ALL CHAIN PROCESSES ───────────────────────────────

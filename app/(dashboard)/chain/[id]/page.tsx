@@ -21,20 +21,36 @@ export default async function ChainPage({ params, searchParams }: ChainPageProps
 
     // Fetch subscriber info if provided
     let subscriber = null
+    let alreadySentCampaignIds: string[] = []
+
     if (subscriberId) {
         const supabase = await createClient()
-        const { data } = await supabase
-            .from("subscribers")
-            .select("id, email, first_name, last_name, tags, status")
-            .eq("id", subscriberId)
-            .single()
-        subscriber = data
+
+        const [subResult, sentResult] = await Promise.all([
+            supabase
+                .from("subscribers")
+                .select("id, email, first_name, last_name, tags, status")
+                .eq("id", subscriberId)
+                .single(),
+            // Check which campaigns in this chain the subscriber has already received
+            supabase
+                .from("sent_history")
+                .select("campaign_id")
+                .eq("subscriber_id", subscriberId)
+                .in("campaign_id", chain.steps.map(s => s.template_key).filter(Boolean)),
+        ])
+
+        subscriber = subResult.data
+        if (sentResult.data) {
+            alreadySentCampaignIds = sentResult.data.map(r => r.campaign_id)
+        }
     }
 
     return (
         <ChainLaunchChecks
             chain={chain}
             subscriber={subscriber}
+            alreadySentCampaignIds={alreadySentCampaignIds}
         />
     )
 }
