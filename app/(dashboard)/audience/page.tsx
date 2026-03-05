@@ -182,7 +182,6 @@ export default function AudienceManagerPage() {
     const [loadingChains, setLoadingChains] = useState(false)
     const [startingChain, setStartingChain] = useState(false)
     const [bulkChainMode, setBulkChainMode] = useState(false)
-    const [bulkChainProgress, setBulkChainProgress] = useState({ done: 0, total: 0, running: false })
 
     // Bulk Add State
     const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
@@ -794,42 +793,6 @@ export default function AudienceManagerPage() {
         } finally {
             setLoadingChains(false)
         }
-    }
-
-    const handleBulkStartChain = async (chain: ChainRow) => {
-        if (selectedIds.length === 0) return
-        setStartingChain(true)
-        setBulkChainProgress({ done: 0, total: selectedIds.length, running: true })
-
-        let successCount = 0
-        let failCount = 0
-
-        for (let idx = 0; idx < selectedIds.length; idx++) {
-            try {
-                const result = await startChainProcess(selectedIds[idx], chain.id)
-                if (result.success) {
-                    successCount++
-                } else {
-                    failCount++
-                    console.error(`Failed to start chain for ${selectedIds[idx]}:`, result.error)
-                }
-            } catch (error) {
-                failCount++
-                console.error(`Error starting chain for ${selectedIds[idx]}:`, error)
-            }
-            setBulkChainProgress(prev => ({ ...prev, done: idx + 1 }))
-        }
-
-        toast({
-            title: "Bulk Chain Complete",
-            description: `Started "${chain.name}" for ${successCount} subscriber${successCount !== 1 ? 's' : ''}${failCount > 0 ? ` (${failCount} failed)` : ''}`,
-        })
-
-        setIsChainPickerOpen(false)
-        setBulkChainMode(false)
-        setSelectedIds([])
-        setStartingChain(false)
-        setBulkChainProgress({ done: 0, total: 0, running: false })
     }
 
     // Bulk add subscribers from textarea (one email per line)
@@ -2199,19 +2162,6 @@ export default function AudienceManagerPage() {
                             <div className="flex justify-center py-8">
                                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                             </div>
-                        ) : startingChain && bulkChainProgress.running ? (
-                            <div className="flex flex-col items-center gap-3 py-8">
-                                <Loader2 className="h-8 w-8 animate-spin text-amber-500" />
-                                <p className="text-sm text-muted-foreground">
-                                    Starting chain for {bulkChainProgress.done} / {bulkChainProgress.total} subscribers...
-                                </p>
-                                <div className="w-full bg-muted rounded-full h-2">
-                                    <div
-                                        className="bg-amber-500 h-2 rounded-full transition-all duration-300"
-                                        style={{ width: `${(bulkChainProgress.done / bulkChainProgress.total) * 100}%` }}
-                                    />
-                                </div>
-                            </div>
                         ) : availableChains.length === 0 ? (
                             <p className="text-center text-muted-foreground py-8">No chains found. Create one first.</p>
                         ) : (
@@ -2222,7 +2172,9 @@ export default function AudienceManagerPage() {
                                             key={chain.id}
                                             onClick={() => {
                                                 if (bulkChainMode) {
-                                                    handleBulkStartChain(chain)
+                                                    setIsChainPickerOpen(false)
+                                                    setBulkChainMode(false)
+                                                    router.push(`/chain/${chain.id}?subscriberIds=${selectedIds.join(",")}`)
                                                 } else if (chainTarget) {
                                                     setIsChainPickerOpen(false)
                                                     router.push(`/chain/${chain.id}?subscriberId=${chainTarget.id}`)

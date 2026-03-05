@@ -6,11 +6,12 @@ import Link from "next/link"
 import {
     GitBranch, Mail, Clock, ChevronDown, ChevronRight,
     User, Play, CalendarClock, ArrowRight, Loader2, Home,
-    AlertCircle, CheckCircle2, SkipForward
+    AlertCircle, CheckCircle2, SkipForward, Users
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { useToast } from "@/hooks/use-toast"
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -21,59 +22,103 @@ import { startChainProcess } from "@/app/actions/chain-processes"
 import { ChainStepPreview } from "./chain-step-preview"
 import type { ChainWithDetails, ChainStepWithCampaign } from "@/app/actions/chains"
 
-interface ChainLaunchChecksProps {
-    chain: ChainWithDetails
-    subscriber: {
-        id: string
-        email: string
-        first_name: string | null
-        last_name: string | null
-        tags: string[] | null
-        status: string
-    } | null
-    alreadySentCampaignIds?: string[]
+type SubscriberInfo = {
+    id: string
+    email: string
+    first_name: string | null
+    last_name: string | null
+    tags: string[] | null
+    status: string
 }
 
-export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = [] }: ChainLaunchChecksProps) {
-    const sentSet = new Set(alreadySentCampaignIds)
+interface ChainLaunchChecksProps {
+    chain: ChainWithDetails
+    subscriber: SubscriberInfo | null
+    alreadySentCampaignIds?: string[]
+    // Bulk mode
+    subscribers?: SubscriberInfo[]
+    sentMap?: Record<string, string[]>
+}
+
+export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = [], subscribers, sentMap }: ChainLaunchChecksProps) {
+    const isBulkMode = !!subscribers && subscribers.length > 1
+    const [selectedSubIdx, setSelectedSubIdx] = useState(0)
+
+    // Current subscriber + sent set (changes when clicking in bulk mode)
+    const activeSubscriber = isBulkMode ? subscribers![selectedSubIdx] : subscriber
+    const activeSentIds = isBulkMode ? (sentMap?.[activeSubscriber?.id || ""] || []) : alreadySentCampaignIds
+    const sentSet = new Set(activeSentIds)
+
     const [expandedStep, setExpandedStep] = useState<number | null>(null)
     const [showConfirmDialog, setShowConfirmDialog] = useState(false)
     const [launching, setLaunching] = useState(false)
     const [launchStatus, setLaunchStatus] = useState<"idle" | "success" | "error">("idle")
     const [launchMessage, setLaunchMessage] = useState("")
+    const [bulkProgress, setBulkProgress] = useState({ done: 0, total: 0 })
     const { toast } = useToast()
     const router = useRouter()
 
-    const subscriberName = subscriber?.first_name
-        ? `${subscriber.first_name} ${subscriber.last_name || ""}`.trim()
-        : subscriber?.email || "Unknown"
+    const getSubscriberName = (sub: SubscriberInfo | null) =>
+        sub?.first_name
+            ? `${sub.first_name} ${sub.last_name || ""}`.trim()
+            : sub?.email || "Unknown"
+
+    const subscriberName = getSubscriberName(activeSubscriber)
 
     const toggleStep = (index: number) => {
         setExpandedStep(prev => prev === index ? null : index)
     }
 
     const handleStartNow = async () => {
-        if (!subscriber) return
         setShowConfirmDialog(false)
         setLaunching(true)
         setLaunchStatus("idle")
 
         try {
-            const result = await startChainProcess(subscriber.id, chain.id)
-            if (!result.success) {
-                throw new Error(result.error || "Failed to start chain")
+            if (isBulkMode) {
+                // Start chain for ALL subscribers
+                const subs = subscribers!
+                setBulkProgress({ done: 0, total: subs.length })
+                let successCount = 0
+                let failCount = 0
+
+                for (let idx = 0; idx < subs.length; idx++) {
+                    try {
+                        const result = await startChainProcess(subs[idx].id, chain.id)
+                        if (result.success) {
+                            successCount++
+                        } else {
+                            failCount++
+                        }
+                    } catch {
+                        failCount++
+                    }
+                    setBulkProgress({ done: idx + 1, total: subs.length })
+                }
+
+                const msg = `Chain "${chain.name}" started for ${successCount} subscriber${successCount !== 1 ? "s" : ""}${failCount > 0 ? ` (${failCount} failed)` : ""}`
+                setLaunchStatus("success")
+                setLaunchMessage(msg)
+                toast({ title: "Bulk Chain Started!", description: msg })
+            } else {
+                // Single subscriber
+                if (!activeSubscriber) return
+                const result = await startChainProcess(activeSubscriber.id, chain.id)
+                if (!result.success) {
+                    throw new Error(result.error || "Failed to start chain")
+                }
+
+                const skippedMsg = result.skippedCount && result.skippedCount > 0
+                    ? ` (${result.skippedCount} already-sent step(s) skipped)`
+                    : ""
+
+                setLaunchStatus("success")
+                setLaunchMessage(`Chain "${chain.name}" is now running for ${activeSubscriber.email}${skippedMsg}`)
+                toast({
+                    title: "Chain Started!",
+                    description: `"${chain.name}" is now running for ${activeSubscriber.email}${skippedMsg}`,
+                })
             }
-
-            const skippedMsg = result.skippedCount && result.skippedCount > 0
-                ? ` (${result.skippedCount} already-sent step(s) skipped)`
-                : ""
-
-            setLaunchStatus("success")
-            setLaunchMessage(`Chain "${chain.name}" is now running for ${subscriber.email}${skippedMsg}`)
-            toast({
-                title: "Chain Started!",
-                description: `"${chain.name}" is now running for ${subscriber.email}${skippedMsg}`,
-            })
         } catch (error: any) {
             setLaunchStatus("error")
             setLaunchMessage(error.message)
@@ -138,6 +183,12 @@ export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = 
                             <Badge variant="outline" className="text-amber-400 border-amber-500/30 bg-amber-500/10 text-xs">
                                 {chain.steps.length} email{chain.steps.length !== 1 ? "s" : ""}
                             </Badge>
+                            {isBulkMode && (
+                                <Badge variant="outline" className="text-blue-400 border-blue-500/30 bg-blue-500/10 text-xs">
+                                    <Users className="h-3 w-3 mr-1" />
+                                    {subscribers!.length} subscribers
+                                </Badge>
+                            )}
                         </div>
                         {chain.description && (
                             <p className="text-muted-foreground mt-1">{chain.description}</p>
@@ -148,25 +199,25 @@ export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = 
                         <Button
                             variant="outline"
                             onClick={() => toast({ title: "Scheduling coming soon", description: "Schedule feature will be available in a future update." })}
-                            disabled={!subscriber || launchStatus === "success"}
+                            disabled={!activeSubscriber || launchStatus === "success"}
                         >
                             <CalendarClock className="h-4 w-4 mr-2" />
                             Schedule
                         </Button>
                         <Button
                             onClick={() => setShowConfirmDialog(true)}
-                            disabled={!subscriber || launching || launchStatus === "success"}
+                            disabled={!activeSubscriber || launching || launchStatus === "success"}
                             className="bg-emerald-600 hover:bg-emerald-500 text-white"
                         >
                             {launching ? (
                                 <>
                                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Starting...
+                                    {isBulkMode ? `${bulkProgress.done}/${bulkProgress.total}` : "Starting..."}
                                 </>
                             ) : (
                                 <>
                                     <Play className="h-4 w-4 mr-2" />
-                                    Start Now
+                                    {isBulkMode ? "Start All" : "Start Now"}
                                 </>
                             )}
                         </Button>
@@ -205,41 +256,88 @@ export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = 
                 <div className="grid gap-6 lg:grid-cols-3">
                     {/* Left Column - Info */}
                     <div className="space-y-6">
-                        {/* Target Subscriber */}
-                        <Card className="border-border bg-card">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                                    <User className="h-4 w-4 text-[#D4AF37]" />
-                                    Target Subscriber
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                {subscriber ? (
-                                    <div className="space-y-2">
-                                        <p className="text-sm font-semibold text-[#D4AF37]">
-                                            {subscriberName}
-                                        </p>
-                                        <p className="text-xs text-muted-foreground">{subscriber.email}</p>
-                                        {subscriber.tags && subscriber.tags.length > 0 && (
-                                            <div className="flex flex-wrap gap-1 mt-2">
-                                                {subscriber.tags.slice(0, 4).map(tag => (
-                                                    <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
-                                                        {tag}
-                                                    </Badge>
-                                                ))}
-                                                {subscriber.tags.length > 4 && (
-                                                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                                                        +{subscriber.tags.length - 4}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <p className="text-sm text-muted-foreground">No subscriber selected.</p>
-                                )}
-                            </CardContent>
-                        </Card>
+                        {/* Subscribers List (Bulk Mode) */}
+                        {isBulkMode && (
+                            <Card className="border-border bg-card">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                                        <Users className="h-4 w-4 text-[#D4AF37]" />
+                                        Subscribers
+                                    </CardTitle>
+                                    <CardDescription className="text-xs">
+                                        Click a subscriber to preview their chain status.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="p-0">
+                                    <ScrollArea className="h-[200px]">
+                                        <div className="divide-y divide-border">
+                                            {subscribers!.map((sub, idx) => {
+                                                const subSentIds = sentMap?.[sub.id] || []
+                                                const subSentCount = subSentIds.length
+                                                const isActive = idx === selectedSubIdx
+                                                return (
+                                                    <button
+                                                        key={sub.id}
+                                                        onClick={() => setSelectedSubIdx(idx)}
+                                                        className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors ${isActive ? "bg-[#D4AF37]/10 border-l-2 border-l-[#D4AF37]" : "hover:bg-muted/30 border-l-2 border-l-transparent"}`}
+                                                    >
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className={`text-xs font-medium truncate ${isActive ? "text-[#D4AF37]" : "text-foreground"}`}>
+                                                                {getSubscriberName(sub)}
+                                                            </p>
+                                                            <p className="text-[10px] text-muted-foreground truncate">{sub.email}</p>
+                                                        </div>
+                                                        {subSentCount > 0 && (
+                                                            <Badge variant="secondary" className="text-[9px] px-1 py-0 bg-zinc-500/20 text-zinc-400 flex-shrink-0">
+                                                                {subSentCount}/{chain.steps.length} sent
+                                                            </Badge>
+                                                        )}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </ScrollArea>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Target Subscriber (Single Mode) */}
+                        {!isBulkMode && (
+                            <Card className="border-border bg-card">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                                        <User className="h-4 w-4 text-[#D4AF37]" />
+                                        Target Subscriber
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    {activeSubscriber ? (
+                                        <div className="space-y-2">
+                                            <p className="text-sm font-semibold text-[#D4AF37]">
+                                                {subscriberName}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground">{activeSubscriber.email}</p>
+                                            {activeSubscriber.tags && activeSubscriber.tags.length > 0 && (
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {activeSubscriber.tags.slice(0, 4).map(tag => (
+                                                        <Badge key={tag} variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                            {tag}
+                                                        </Badge>
+                                                    ))}
+                                                    {activeSubscriber.tags.length > 4 && (
+                                                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                                            +{activeSubscriber.tags.length - 4}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <p className="text-sm text-muted-foreground">No subscriber selected.</p>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
 
                         {/* Journey Overview */}
                         <Card className="border-border bg-card">
@@ -321,6 +419,11 @@ export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = 
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium">
                                     <Mail className="h-4 w-4 text-[#D4AF37]" />
                                     Email Steps
+                                    {isBulkMode && activeSubscriber && (
+                                        <span className="text-muted-foreground font-normal ml-1">
+                                            for {getSubscriberName(activeSubscriber)}
+                                        </span>
+                                    )}
                                 </CardTitle>
                                 <CardDescription className="text-xs">
                                     Click a step to preview the email content.
@@ -407,21 +510,29 @@ export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = 
                     <AlertDialogHeader>
                         <AlertDialogTitle>Start Chain &quot;{chain.name}&quot;?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            {(() => {
-                                const sentCount = chain.steps.filter(s => sentSet.has(s.template_key)).length
-                                const willSend = chain.steps.length - sentCount
-                                return (
-                                    <>
-                                        This will immediately begin sending emails to{" "}
-                                        <span className="text-foreground font-medium">{subscriberName}</span>
-                                        {" "}({subscriber?.email}).
-                                        {sentCount > 0 && (
-                                            <> <span className="text-amber-400 font-medium">{sentCount} step{sentCount !== 1 ? "s" : ""} will be skipped</span> (already sent).</>
-                                        )}
-                                        {" "}{willSend} email{willSend !== 1 ? "s" : ""} will be sent.
-                                    </>
-                                )
-                            })()}
+                            {isBulkMode ? (
+                                <>
+                                    This will immediately begin sending emails to{" "}
+                                    <span className="text-foreground font-medium">{subscribers!.length} subscribers</span>.
+                                    {" "}Each subscriber&apos;s already-sent steps will be automatically skipped.
+                                </>
+                            ) : (
+                                (() => {
+                                    const sentCount = chain.steps.filter(s => sentSet.has(s.template_key)).length
+                                    const willSend = chain.steps.length - sentCount
+                                    return (
+                                        <>
+                                            This will immediately begin sending emails to{" "}
+                                            <span className="text-foreground font-medium">{subscriberName}</span>
+                                            {" "}({activeSubscriber?.email}).
+                                            {sentCount > 0 && (
+                                                <> <span className="text-amber-400 font-medium">{sentCount} step{sentCount !== 1 ? "s" : ""} will be skipped</span> (already sent).</>
+                                            )}
+                                            {" "}{willSend} email{willSend !== 1 ? "s" : ""} will be sent.
+                                        </>
+                                    )
+                                })()
+                            )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -431,7 +542,7 @@ export function ChainLaunchChecks({ chain, subscriber, alreadySentCampaignIds = 
                             className="bg-emerald-600 hover:bg-emerald-500 text-white"
                         >
                             <Play className="h-4 w-4 mr-2" />
-                            Start Chain
+                            {isBulkMode ? `Start All (${subscribers!.length})` : "Start Chain"}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
