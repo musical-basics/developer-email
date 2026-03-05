@@ -152,23 +152,6 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         variant_sent: subject,
     });
 
-    // Mark the campaign as "completed" so it appears in the Completed campaigns tab
-    // Also ensure email_type = "campaign" so it shows up in the /campaigns page
-    console.log(`[CHAIN-SENDER] Updating campaign ${campaignId} to status=completed, email_type=campaign`);
-    const { data: updatedCampaign, error: updateCampaignError } = await supabaseForHistory
-        .from("campaigns")
-        .update({ status: "completed", email_type: "campaign" })
-        .eq("id", campaignId)
-        .neq("status", "completed")
-        .select("id, name, status, email_type")
-        .single();
-
-    if (updateCampaignError) {
-        console.error(`[CHAIN-SENDER] Error updating campaign status:`, updateCampaignError);
-    } else {
-        console.log(`[CHAIN-SENDER] Campaign updated:`, JSON.stringify(updatedCampaign));
-    }
-
     return { success: true, campaignId };
 }
 

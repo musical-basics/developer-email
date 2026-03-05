@@ -193,33 +193,51 @@ export const genericChainRunner = inngest.createFunction(
                     }).eq("id", processId);
                 }
 
-                // Mark the campaign as "completed" so it appears in the Completed campaigns tab
-                // Also ensure email_type = "campaign" so it shows up in the /campaigns page
+                // Create a "completed" campaign copy for this chain send
+                // (master templates have is_template=true which the Completed tab filters out)
                 if (sendResult?.campaignId) {
-                    console.log(`[CHAIN-COMPLETE] Step ${i} — template_key: ${stepDef.template_key}, sendResult.campaignId: ${sendResult.campaignId}`);
+                    console.log(`[CHAIN-COMPLETE] Step ${i} — creating completed campaign copy for template_key: ${stepDef.template_key}`);
 
-                    // Check current campaign state before update
-                    const { data: beforeCampaign } = await supabase
+                    // Fetch the original campaign to copy its details
+                    const { data: originalCampaign } = await supabase
                         .from("campaigns")
-                        .select("id, name, status, email_type")
+                        .select("name, subject_line, html_content, variable_values, sent_from_email")
                         .eq("id", stepDef.template_key)
                         .single();
-                    console.log(`[CHAIN-COMPLETE] Campaign BEFORE update:`, JSON.stringify(beforeCampaign));
 
-                    const { data: updateResult, error: updateError, count: updateCount } = await supabase
-                        .from("campaigns")
-                        .update({ status: "completed", email_type: "campaign" })
-                        .eq("id", stepDef.template_key)
-                        .select("id, name, status, email_type")
-                        .single();
+                    if (originalCampaign) {
+                        const copyName = `${originalCampaign.name} — Chain: ${chain.name} (${firstName || email})`;
+                        const { data: copyCampaign, error: copyError } = await supabase
+                            .from("campaigns")
+                            .insert({
+                                name: copyName,
+                                status: "completed",
+                                email_type: "campaign",
+                                is_template: false,
+                                subject_line: originalCampaign.subject_line,
+                                html_content: originalCampaign.html_content,
+                                variable_values: originalCampaign.variable_values,
+                                sent_from_email: originalCampaign.sent_from_email,
+                                parent_template_id: stepDef.template_key,
+                                total_recipients: 1,
+                            })
+                            .select("id")
+                            .single();
 
-                    if (updateError) {
-                        console.error(`[CHAIN-COMPLETE] ERROR updating campaign ${stepDef.template_key}:`, updateError);
-                    } else {
-                        console.log(`[CHAIN-COMPLETE] Campaign AFTER update:`, JSON.stringify(updateResult));
+                        if (copyError) {
+                            console.error(`[CHAIN-COMPLETE] Error creating campaign copy:`, copyError);
+                        } else if (copyCampaign) {
+                            console.log(`[CHAIN-COMPLETE] Created completed campaign copy: ${copyCampaign.id} — "${copyName}"`);
+                            // Re-point the sent_history record to the copy so stats work
+                            await supabase
+                                .from("sent_history")
+                                .update({ campaign_id: copyCampaign.id })
+                                .eq("campaign_id", stepDef.template_key)
+                                .eq("subscriber_id", subscriberId);
+                        }
                     }
                 } else {
-                    console.log(`[CHAIN-COMPLETE] Step ${i} — sendResult missing campaignId, skipping status update. sendResult:`, JSON.stringify(sendResult));
+                    console.log(`[CHAIN-COMPLETE] Step ${i} — sendResult missing campaignId, skipping. sendResult:`, JSON.stringify(sendResult));
                 }
 
                 // Compute wait decision and return it
