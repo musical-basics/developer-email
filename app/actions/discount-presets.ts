@@ -9,6 +9,8 @@ export interface DiscountPreset {
     type: "percentage" | "fixed_amount"
     value: number
     duration_days: number
+    expiry_mode: "duration" | "fixed_date"
+    expires_on?: string | null
     code_prefix: string
     target_url_key: string
     usage_limit: number

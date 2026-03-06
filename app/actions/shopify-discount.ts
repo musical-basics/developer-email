@@ -48,6 +48,7 @@ export interface DiscountConfig {
     durationDays: number
     codePrefix: string
     usageLimit?: number
+    expiresOn?: string // ISO date string, e.g. "2026-04-01" — overrides durationDays when set
 }
 
 export async function createShopifyDiscount(config: DiscountConfig) {
@@ -63,7 +64,9 @@ export async function createShopifyDiscount(config: DiscountConfig) {
     const discountCode = `${config.codePrefix}-${uniqueSuffix}`;
 
     const startsAt = new Date().toISOString();
-    const endsAt = new Date(Date.now() + config.durationDays * 24 * 60 * 60 * 1000).toISOString();
+    const endsAt = config.expiresOn
+        ? new Date(config.expiresOn + "T23:59:59Z").toISOString()
+        : new Date(Date.now() + config.durationDays * 24 * 60 * 60 * 1000).toISOString();
 
     const payload = {
         price_rule: {

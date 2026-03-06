@@ -221,6 +221,7 @@ export function KnowledgeEmailEditor({
                                                 durationDays: preset.duration_days,
                                                 codePrefix: preset.code_prefix,
                                                 usageLimit: preset.code_mode === "per_user" ? 1 : preset.usage_limit,
+                                                ...(preset.expiry_mode === "fixed_date" && preset.expires_on ? { expiresOn: preset.expires_on } : {}),
                                             });
                                             if (!res.success) {
                                                 toast({ title: "Error", description: res.error, variant: "destructive" });
@@ -255,7 +256,10 @@ export function KnowledgeEmailEditor({
                                                 if (preset.code_mode === "per_user") {
                                                     toast({ title: "Preview Code Created!", description: `${res.code} — ${label}. Each recipient will get a unique code at send time.` });
                                                 } else {
-                                                    toast({ title: "Discount Created!", description: `${res.code} — ${label}, valid ${preset.duration_days} days.` });
+                                                    const validity = preset.expiry_mode === "fixed_date" && preset.expires_on
+                                                        ? `expires ${preset.expires_on}`
+                                                        : `valid ${preset.duration_days} days`;
+                                                    toast({ title: "Discount Created!", description: `${res.code} — ${label}, ${validity}.` });
                                                 }
                                             }
                                             setGeneratingPresetId(null);

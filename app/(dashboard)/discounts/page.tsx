@@ -62,6 +62,8 @@ export default function DiscountsPage() {
             type: "percentage",
             value: 5,
             duration_days: 2,
+            expiry_mode: "duration",
+            expires_on: null,
             code_prefix: "VIP",
             target_url_key: "main_cta_url",
             usage_limit: 1,
@@ -245,20 +247,28 @@ function PresetCard({
 }) {
     const typeLabel = draft.type === "percentage" ? "%" : "$"
     const previewCode = `${draft.code_prefix}-XXXXXX`
+    const expiryMode = draft.expiry_mode || "duration"
 
-    // Bidirectional: compute expiry from duration
+    // For duration mode: compute a preview expiry date from duration_days
     const durationMs = (draft.duration_days || 0) * 24 * 60 * 60 * 1000
-    const expiryDate = new Date(Date.now() + (isNaN(durationMs) ? 0 : durationMs))
-    const expiryStr = isNaN(expiryDate.getTime()) ? "" : expiryDate.toISOString().split("T")[0]
+    const previewExpiryDate = new Date(Date.now() + (isNaN(durationMs) ? 0 : durationMs))
+    const previewExpiryStr = isNaN(previewExpiryDate.getTime()) ? "" : previewExpiryDate.toISOString().split("T")[0]
+
+    // For fixed_date mode: use the stored expires_on
+    const fixedDateStr = draft.expires_on || ""
+
+    const handleDurationChange = (days: number) => {
+        onChange("duration_days", Math.max(1, days))
+        onChange("expiry_mode", "duration")
+        onChange("expires_on", null)
+    }
 
     const handleDateChange = (dateStr: string) => {
         if (!dateStr) return
         const date = new Date(dateStr)
-        if (isNaN(date.getTime())) return // ignore invalid/partial dates
-        const now = new Date()
-        const diffMs = date.getTime() - now.getTime()
-        const days = Math.max(1, Math.ceil(diffMs / (24 * 60 * 60 * 1000)))
-        onChange("duration_days", days)
+        if (isNaN(date.getTime())) return
+        onChange("expires_on", dateStr)
+        onChange("expiry_mode", "fixed_date")
     }
 
     return (
@@ -277,6 +287,9 @@ function PresetCard({
                         />
                         <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
                             {previewCode}
+                        </span>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${expiryMode === "fixed_date" ? "bg-amber-500/10 text-amber-400" : "bg-emerald-500/10 text-emerald-400"}`}>
+                            {expiryMode === "fixed_date" ? "Fixed Date" : "Duration"}
                         </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -344,24 +357,38 @@ function PresetCard({
 
                     {/* Duration */}
                     <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Duration (days)</Label>
+                        <Label className={`text-xs ${expiryMode === "duration" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
+                            Duration (days)
+                            {expiryMode === "duration" && (
+                                <span className="text-[10px] text-emerald-400 ml-1">● active</span>
+                            )}
+                        </Label>
                         <Input
                             type="number"
                             value={draft.duration_days}
-                            onChange={e => onChange("duration_days", Math.max(1, Number(e.target.value)))}
+                            onChange={e => handleDurationChange(Number(e.target.value))}
                             min={1}
-                            className="h-9"
+                            className={`h-9 ${expiryMode !== "duration" ? "opacity-40" : ""}`}
+                            disabled={expiryMode !== "duration"}
                         />
+                        {expiryMode === "duration" && (
+                            <p className="text-[10px] text-muted-foreground/60">Expires ~{previewExpiryStr}</p>
+                        )}
                     </div>
 
-                    {/* Expiry Preview */}
+                    {/* Fixed Expiry Date */}
                     <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Expires on (if generated now)</Label>
+                        <Label className={`text-xs ${expiryMode === "fixed_date" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
+                            Expires on (fixed date)
+                            {expiryMode === "fixed_date" && (
+                                <span className="text-[10px] text-amber-400 ml-1">● active</span>
+                            )}
+                        </Label>
                         <Input
                             type="date"
-                            value={expiryStr}
+                            value={expiryMode === "fixed_date" ? fixedDateStr : previewExpiryStr}
                             onChange={e => handleDateChange(e.target.value)}
-                            className="h-9"
+                            className={`h-9 ${expiryMode !== "fixed_date" ? "opacity-40" : ""}`}
                         />
                     </div>
 
