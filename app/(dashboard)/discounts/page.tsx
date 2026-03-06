@@ -257,10 +257,14 @@ function PresetCard({
     // For fixed_date mode: use the stored expires_on
     const fixedDateStr = draft.expires_on || ""
 
-    const handleDurationChange = (days: number) => {
-        onChange("duration_days", Math.max(1, days))
-        onChange("expiry_mode", "duration")
-        onChange("expires_on", null)
+    const toggleExpiryMode = () => {
+        if (expiryMode === "duration") {
+            // Switching to fixed_date: seed expires_on from current duration preview
+            onChange("expiry_mode", "fixed_date")
+            onChange("expires_on", previewExpiryStr)
+        } else {
+            onChange("expiry_mode", "duration")
+        }
     }
 
     const handleDateChange = (dateStr: string) => {
@@ -268,7 +272,6 @@ function PresetCard({
         const date = new Date(dateStr)
         if (isNaN(date.getTime())) return
         onChange("expires_on", dateStr)
-        onChange("expiry_mode", "fixed_date")
     }
 
     return (
@@ -288,9 +291,14 @@ function PresetCard({
                         <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
                             {previewCode}
                         </span>
-                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${expiryMode === "fixed_date" ? "bg-amber-500/10 text-amber-400" : "bg-emerald-500/10 text-emerald-400"}`}>
-                            {expiryMode === "fixed_date" ? "Fixed Date" : "Duration"}
-                        </span>
+                        <button
+                            type="button"
+                            onClick={toggleExpiryMode}
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors ${expiryMode === "fixed_date" ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`}
+                            title="Click to toggle between Duration and Fixed Date"
+                        >
+                            {expiryMode === "fixed_date" ? "⏱ Fixed Date" : "⟳ Duration"}
+                        </button>
                     </div>
                     <div className="flex items-center gap-2">
                         {!isNew && onToggleActive && (
@@ -355,20 +363,17 @@ function PresetCard({
                         />
                     </div>
 
-                    {/* Duration */}
+                    {/* Duration (days) */}
                     <div className="space-y-1.5">
                         <Label className={`text-xs ${expiryMode === "duration" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
                             Duration (days)
-                            {expiryMode === "duration" && (
-                                <span className="text-[10px] text-emerald-400 ml-1">● active</span>
-                            )}
                         </Label>
                         <Input
                             type="number"
                             value={draft.duration_days}
-                            onChange={e => handleDurationChange(Number(e.target.value))}
+                            onChange={e => onChange("duration_days", Math.max(1, Number(e.target.value)))}
                             min={1}
-                            className={`h-9 ${expiryMode !== "duration" ? "opacity-40" : ""}`}
+                            className={`h-9 ${expiryMode !== "duration" ? "opacity-30" : ""}`}
                             disabled={expiryMode !== "duration"}
                         />
                         {expiryMode === "duration" && (
@@ -380,15 +385,13 @@ function PresetCard({
                     <div className="space-y-1.5">
                         <Label className={`text-xs ${expiryMode === "fixed_date" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
                             Expires on (fixed date)
-                            {expiryMode === "fixed_date" && (
-                                <span className="text-[10px] text-amber-400 ml-1">● active</span>
-                            )}
                         </Label>
                         <Input
                             type="date"
-                            value={expiryMode === "fixed_date" ? fixedDateStr : previewExpiryStr}
+                            value={expiryMode === "fixed_date" ? fixedDateStr : ""}
                             onChange={e => handleDateChange(e.target.value)}
-                            className={`h-9 ${expiryMode !== "fixed_date" ? "opacity-40" : ""}`}
+                            className={`h-9 ${expiryMode !== "fixed_date" ? "opacity-30" : ""}`}
+                            disabled={expiryMode !== "fixed_date"}
                         />
                     </div>
 
