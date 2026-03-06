@@ -8,6 +8,7 @@ import { PreflightCheckCard } from "./preflight-check-card"
 import { SendTestCard } from "./send-test-card"
 import { LaunchpadCard } from "./launchpad-card"
 import { EmailPreviewCard } from "./email-preview-card"
+import { MergeTagAuditCard } from "./merge-tag-audit-card"
 import { AnalyticsSection } from "./analytics-section"
 import { BroadcastConfirmDialog } from "./broadcast-confirm-dialog"
 import { Music, AlertCircle, CheckCircle2 } from "lucide-react"
@@ -244,6 +245,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                     {/* Right Column - Preview */}
                     <div className="lg:col-span-3">
                         <EmailPreviewCard campaign={campaign} previewMode={previewMode} onPreviewModeChange={setPreviewMode} />
+                        <MergeTagAuditCard campaignId={campaign.id} campaignStatus={campaign.status} />
                     </div>
                 </div>
 

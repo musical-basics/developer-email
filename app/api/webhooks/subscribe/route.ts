@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
-import { applyAllMergeTags } from "@/lib/merge-tags";
+import { applyAllMergeTagsWithLog } from "@/lib/merge-tags";
 
 
 const supabase = createClient(
@@ -227,10 +227,14 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                 const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${campaign.id}`;
 
                 if (subscriberData) {
-                    renderedHtml = await applyAllMergeTags(renderedHtml, subscriberData, {
+                    const { html: mergedHtml, log: mergeTagLog } = await applyAllMergeTagsWithLog(renderedHtml, subscriberData, {
                         discount_code: discountCode,
                         unsubscribe_url: unsubscribeUrl,
                     });
+                    renderedHtml = mergedHtml;
+
+                    // Store the log for sent_history
+                    (trigger as any)._mergeTagLog = mergeTagLog;
                 }
 
                 // Append sid and cid to all links (matching manual send behavior)
@@ -287,6 +291,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     campaign_id: campaign.id,
                     subscriber_id: subscriberId,
                     resend_email_id: emailResult?.id || null,
+                    merge_tag_log: (trigger as any)._mergeTagLog || null,
                 });
 
                 // Update campaign status

@@ -4,7 +4,7 @@ import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { addPlayButtonsToVideoThumbnails } from "@/lib/video-overlay";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
-import { applyAllMergeTags } from "@/lib/merge-tags";
+import { applyAllMergeTags, applyAllMergeTagsWithLog } from "@/lib/merge-tags";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -195,10 +195,10 @@ export async function POST(request: Request) {
                 try {
                     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${trackingCampaignId}`;
 
-                    // Personalize content with merge tags
-                    let personalHtml = await applyAllMergeTags(htmlWithVideoOverlay, sub, {
+                    const { html: personalHtml_, log: mergeTagLog } = await applyAllMergeTagsWithLog(htmlWithVideoOverlay, sub, {
                         unsubscribe_url: unsubscribeUrl,
                     });
+                    let personalHtml = personalHtml_;
 
                     // Per-user discount: generate a unique Shopify code for this recipient
                     if (isPerUserDiscount) {
@@ -300,7 +300,8 @@ export async function POST(request: Request) {
                             campaign_id: trackingCampaignId,
                             subscriber_id: sub.id,
                             sent_at: new Date().toISOString(),
-                            variant_sent: campaign.subject_line || null
+                            variant_sent: campaign.subject_line || null,
+                            merge_tag_log: mergeTagLog,
                         });
                     }
                 } catch (e) {

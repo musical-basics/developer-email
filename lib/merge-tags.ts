@@ -77,45 +77,149 @@ export async function applyAllMergeTags(
     subscriber: Record<string, any> = {},
     dynamicVars: Record<string, string> = {}
 ): Promise<string> {
+    const { html: rendered } = await applyAllMergeTagsWithLog(html, subscriber, dynamicVars)
+    return rendered
+}
+
+export interface MergeTagLogEntry {
+    tag: string          // e.g. "first_name"
+    category: string     // "subscriber" | "global" | "dynamic" | "alias"
+    resolved: boolean
+    value: string        // the value it resolved to (or "" if unresolved)
+    source: string       // e.g. "subscriber.first_name", "default", "dynamicVars"
+}
+
+export interface MergeTagLog {
+    tags_found: string[]
+    tags_resolved: Record<string, string>
+    tags_unresolved: string[]
+    entries: MergeTagLogEntry[]
+}
+
+/**
+ * Apply ALL merge tags to HTML content AND return an audit log.
+ */
+export async function applyAllMergeTagsWithLog(
+    html: string,
+    subscriber: Record<string, any> = {},
+    dynamicVars: Record<string, string> = {}
+): Promise<{ html: string; log: MergeTagLog }> {
     const tags = await getAllMergeTags()
     let result = html
 
+    // 1. Detect all {{tag}} patterns in the raw HTML before replacement
+    const foundSet = new Set<string>()
+    const foundRegex = /\{\{(\w+)\}\}/g
+    let m: RegExpExecArray | null
+    while ((m = foundRegex.exec(html)) !== null) {
+        foundSet.add(m[1])
+    }
+
+    const entries: MergeTagLogEntry[] = []
+    const resolvedMap: Record<string, string> = {}
+    const processedTags = new Set<string>()
+
+    // 2. Process registered merge tags
     for (const tag of tags) {
         const regex = new RegExp(`\\{\\{${tag.tag}\\}\\}`, "g")
+        const wasInHtml = foundSet.has(tag.tag)
 
         let value: string
+        let source: string
 
         switch (tag.category) {
             case "subscriber":
-                // Pull from subscriber row, fallback to default
-                value = subscriber[tag.subscriber_field] || tag.default_value
+                if (subscriber[tag.subscriber_field]) {
+                    value = subscriber[tag.subscriber_field]
+                    source = `subscriber.${tag.subscriber_field}`
+                } else {
+                    value = tag.default_value
+                    source = value ? "default" : "empty"
+                }
                 break
 
             case "global":
-                // Always use the configured default_value
                 value = tag.default_value
+                source = "global_default"
                 break
 
             case "dynamic":
-                // Use runtime-injected value, fallback to default
-                value = dynamicVars[tag.tag] || tag.default_value
+                if (dynamicVars[tag.tag]) {
+                    value = dynamicVars[tag.tag]
+                    source = "dynamicVars"
+                } else {
+                    value = tag.default_value
+                    source = value ? "default" : "empty"
+                }
                 break
 
             default:
                 value = tag.default_value
+                source = "default"
         }
 
         result = result.replace(regex, value)
+        processedTags.add(tag.tag)
+
+        if (wasInHtml) {
+            const resolved = value !== "" && value !== undefined
+            entries.push({
+                tag: tag.tag,
+                category: tag.category,
+                resolved,
+                value: resolved ? value : "",
+                source: resolved ? source : "missing",
+            })
+            if (resolved) {
+                resolvedMap[tag.tag] = value
+            }
+        }
     }
 
-    // Handle unsubscribe URL aliases (some templates use different names)
+    // 3. Handle unsubscribe URL aliases
+    const aliases = ["unsubscribe_link_url", "unsubscribe_link"]
     if (dynamicVars.unsubscribe_url) {
-        result = result
-            .replace(/\{\{unsubscribe_link_url\}\}/g, dynamicVars.unsubscribe_url)
-            .replace(/\{\{unsubscribe_link\}\}/g, dynamicVars.unsubscribe_url)
+        for (const alias of aliases) {
+            const aliasRegex = new RegExp(`\\{\\{${alias}\\}\\}`, "g")
+            if (foundSet.has(alias)) {
+                result = result.replace(aliasRegex, dynamicVars.unsubscribe_url)
+                processedTags.add(alias)
+                entries.push({
+                    tag: alias,
+                    category: "alias",
+                    resolved: true,
+                    value: dynamicVars.unsubscribe_url,
+                    source: "dynamicVars.unsubscribe_url",
+                })
+                resolvedMap[alias] = dynamicVars.unsubscribe_url
+            }
+        }
     }
 
-    return result
+    // 4. Detect any leftover unresolved tags
+    const unresolvedTags: string[] = []
+    for (const tag of foundSet) {
+        if (!processedTags.has(tag)) {
+            unresolvedTags.push(tag)
+            entries.push({
+                tag,
+                category: "unknown",
+                resolved: false,
+                value: "",
+                source: "not_registered",
+            })
+        }
+    }
+
+    return {
+        html: result,
+        log: {
+            tags_found: Array.from(foundSet),
+            tags_resolved: resolvedMap,
+            tags_unresolved: unresolvedTags,
+            entries,
+        },
+    }
 }
 
 // ── Backwards-compatible wrapper (used by send/route.ts and subscribe/route.ts) ──
