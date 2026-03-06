@@ -30,7 +30,7 @@ export function EmailPreviewCard({ campaign, previewMode, onPreviewModeChange }:
         : baseRendered + unsubscribeFooter
 
     return (
-        <Card className="h-full border-border bg-card">
+        <Card className="border-border bg-card">
             <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
                     <Mail className="h-5 w-5 text-[#D4AF37]" />
@@ -86,8 +86,8 @@ export function EmailPreviewCard({ campaign, previewMode, onPreviewModeChange }:
 
                         {/* Email Content */}
                         <div
-                            className="h-[800px] overflow-y-auto"
-                            style={{ minHeight: previewMode === "mobile" ? "800px" : "800px" }}
+                            className="h-[500px] overflow-y-auto"
+                            style={{ minHeight: "500px" }}
                         >
                             <iframe
                                 srcDoc={renderedHtml}
