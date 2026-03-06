@@ -102,7 +102,18 @@ export async function dryRunMergeTags(campaignId: string): Promise<{
     ) as Record<string, string>
     const renderedHtml = renderTemplate(campaign.html_content, globalAssets)
 
-    // 4. Build dynamic vars (simulated)
+    // 4. Append unsubscribe footer (exactly what send route does for every recipient)
+    const unsubscribeFooter = `
+<div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
+  <p style="margin: 0;">
+    No longer want to receive these emails? 
+    <a href="{{unsubscribe_url}}" style="color: #6b7280; text-decoration: underline;">Unsubscribe here</a>.
+  </p>
+</div>
+`;
+    const htmlWithFooter = renderedHtml + unsubscribeFooter
+
+    // 5. Build dynamic vars (simulated)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com"
     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriber.id}&c=${campaignId}`
 
@@ -116,8 +127,8 @@ export async function dryRunMergeTags(campaignId: string): Promise<{
         dynamicVars.discount_code = discountCode
     }
 
-    // 5. Run the full merge tag resolution
-    const { log } = await applyAllMergeTagsWithLog(renderedHtml, subscriber, dynamicVars)
+    // 6. Run the full merge tag resolution
+    const { log } = await applyAllMergeTagsWithLog(htmlWithFooter, subscriber, dynamicVars)
 
     return {
         log,
