@@ -95,14 +95,37 @@ export async function dryRunMergeTags(campaignId: string): Promise<{
         return null
     }
 
-    // 3. Render template variables (same as send route)
+    // 3. Pre-scan raw HTML for ALL {{tag}} patterns BEFORE renderTemplate eats them
+    const rawTagRegex = /\{\{(\w+)\}\}/g
+    const allRawTags = new Set<string>()
+    let rawMatch: RegExpExecArray | null
+    while ((rawMatch = rawTagRegex.exec(campaign.html_content)) !== null) {
+        allRawTags.add(rawMatch[1])
+    }
+
+    // 4. Render template variables (same as send route)
     const subscriberVarNames = ["first_name", "last_name", "email", "unsubscribe_url", "unsubscribe_link_url", "unsubscribe_link"]
     const globalAssets = Object.fromEntries(
         Object.entries(campaign.variable_values || {}).filter(([key]) => !subscriberVarNames.includes(key))
     ) as Record<string, string>
     const renderedHtml = renderTemplate(campaign.html_content, globalAssets)
 
-    // 4. Append unsubscribe footer (exactly what send route does for every recipient)
+    // 5. Figure out which tags were consumed by renderTemplate (template-level)
+    const postRenderTags = new Set<string>()
+    const postRenderRegex = /\{\{(\w+)\}\}/g
+    let prMatch: RegExpExecArray | null
+    while ((prMatch = postRenderRegex.exec(renderedHtml)) !== null) {
+        postRenderTags.add(prMatch[1])
+    }
+    // Tags that renderTemplate replaced = rawTags minus postRenderTags
+    const templateResolvedTags = new Set<string>()
+    for (const tag of allRawTags) {
+        if (!postRenderTags.has(tag)) {
+            templateResolvedTags.add(tag)
+        }
+    }
+
+    // 6. Append unsubscribe footer (exactly what send route does for every recipient)
     const unsubscribeFooter = `
 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
   <p style="margin: 0;">
@@ -113,7 +136,7 @@ export async function dryRunMergeTags(campaignId: string): Promise<{
 `;
     const htmlWithFooter = renderedHtml + unsubscribeFooter
 
-    // 5. Build dynamic vars (simulated)
+    // 7. Build dynamic vars (simulated)
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com"
     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriber.id}&c=${campaignId}`
 
@@ -127,8 +150,26 @@ export async function dryRunMergeTags(campaignId: string): Promise<{
         dynamicVars.discount_code = discountCode
     }
 
-    // 6. Run the full merge tag resolution
+    // 8. Run the merge tag resolution on the remaining tags
     const { log } = await applyAllMergeTagsWithLog(htmlWithFooter, subscriber, dynamicVars)
+
+    // 9. Merge template-level tags into the log (these were resolved BEFORE merge tag engine)
+    for (const tag of templateResolvedTags) {
+        const value = String(globalAssets[tag] || campaign.variable_values?.[tag] || "")
+        log.tags_found.unshift(tag)
+        if (value) {
+            log.tags_resolved[tag] = value
+        } else {
+            log.tags_unresolved.push(tag)
+        }
+        log.entries.unshift({
+            tag,
+            category: "template",
+            resolved: !!value,
+            value,
+            source: value ? "variable_values" : "empty",
+        })
+    }
 
     return {
         log,
