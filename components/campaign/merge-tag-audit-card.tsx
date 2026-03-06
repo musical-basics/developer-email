@@ -8,40 +8,159 @@ import { getMergeTagLogs, MergeTagLogData } from "@/app/actions/merge-tag-logs"
 interface MergeTagAuditCardProps {
     campaignId: string
     campaignStatus: string
+    htmlContent?: string | null
+    variableValues?: Record<string, any> | null
 }
 
-export function MergeTagAuditCard({ campaignId, campaignStatus }: MergeTagAuditCardProps) {
+/**
+ * Extract all {{tag}} patterns from HTML
+ */
+function extractTags(html: string): string[] {
+    const regex = /\{\{(\w+)\}\}/g
+    const tags = new Set<string>()
+    let match
+    while ((match = regex.exec(html)) !== null) {
+        tags.add(match[1])
+    }
+    return Array.from(tags)
+}
+
+// Tags that are always resolved at send-time (not stored in variable_values)
+const RUNTIME_TAGS = new Set([
+    "unsubscribe_url", "unsubscribe_link_url", "unsubscribe_link",
+    "subscriber_id", "discount_code",
+])
+
+// Tags resolved from subscriber data at send-time
+const SUBSCRIBER_TAGS = new Set([
+    "first_name", "last_name", "email",
+    "location_city", "location_country",
+])
+
+export function MergeTagAuditCard({ campaignId, campaignStatus, htmlContent, variableValues }: MergeTagAuditCardProps) {
     const [logs, setLogs] = useState<MergeTagLogData[]>([])
     const [loading, setLoading] = useState(false)
     const [expandedRecipient, setExpandedRecipient] = useState<string | null>(null)
 
+    const isSent = campaignStatus === "completed" || campaignStatus === "active"
+
+    // Fetch post-send logs
     useEffect(() => {
-        if (campaignStatus !== "completed" && campaignStatus !== "active") return
+        if (!isSent) return
         setLoading(true)
         getMergeTagLogs(campaignId)
             .then(setLogs)
             .finally(() => setLoading(false))
-    }, [campaignId, campaignStatus])
+    }, [campaignId, isSent])
 
-    if (campaignStatus !== "completed" && campaignStatus !== "active") {
+    // ─── PRE-SEND MODE: static analysis of template ───
+    if (!isSent) {
+        const safeHtml = htmlContent || ""
+        const safeVars = variableValues || {}
+        const detectedTags = extractTags(safeHtml)
+
+        if (detectedTags.length === 0) {
+            return (
+                <Card className="border-border bg-card">
+                    <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
+                            <Tag className="h-5 w-5 text-[#D4AF37]" />
+                            Merge Tag Audit
+                        </CardTitle>
+                        <CardDescription className="text-muted-foreground">
+                            No merge tags detected in template.
+                        </CardDescription>
+                    </CardHeader>
+                </Card>
+            )
+        }
+
+        const preSendChecks = detectedTags.map(tag => {
+            // Check if it has a value in variable_values
+            const hasValue = safeVars[tag] && String(safeVars[tag]).trim() !== ""
+            // Is it a runtime tag (resolved at send-time automatically)?
+            const isRuntime = RUNTIME_TAGS.has(tag)
+            // Is it a subscriber tag (resolved from subscriber row)?
+            const isSubscriber = SUBSCRIBER_TAGS.has(tag)
+
+            let status: "pass" | "runtime" | "warning"
+            let detail: string
+
+            if (hasValue) {
+                status = "pass"
+                const val = String(safeVars[tag])
+                detail = val.length > 50 ? val.slice(0, 50) + "…" : val
+            } else if (isRuntime) {
+                status = "runtime"
+                detail = "Auto-filled at send-time"
+            } else if (isSubscriber) {
+                status = "runtime"
+                detail = "Pulled from subscriber record"
+            } else {
+                status = "warning"
+                detail = "No value set — will appear blank in email"
+            }
+
+            return { tag, status, detail }
+        })
+
+        const hasWarnings = preSendChecks.some(c => c.status === "warning")
+
         return (
-            <Card className="border-border bg-card mt-6">
+            <Card className="border-border bg-card">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
                         <Tag className="h-5 w-5 text-[#D4AF37]" />
-                        Merge Tag Audit Log
+                        Merge Tag Audit
+                        {hasWarnings ? (
+                            <span className="ml-auto rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
+                                Missing Values
+                            </span>
+                        ) : (
+                            <span className="ml-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
+                                Ready
+                            </span>
+                        )}
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
-                        Send the campaign to see merge tag resolution details.
+                        {detectedTags.length} tag{detectedTags.length !== 1 ? "s" : ""} found in template — pre-send check
                     </CardDescription>
                 </CardHeader>
+                <CardContent>
+                    <ul className="space-y-2">
+                        {preSendChecks.map(check => (
+                            <li key={check.tag} className="flex items-start gap-2 text-sm">
+                                {check.status === "pass" ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 mt-0.5 shrink-0" />
+                                ) : check.status === "runtime" ? (
+                                    <CheckCircle2 className="h-3.5 w-3.5 text-blue-400 mt-0.5 shrink-0" />
+                                ) : (
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 shrink-0" />
+                                )}
+                                <div className="min-w-0">
+                                    <code className="text-xs px-1.5 py-0.5 bg-muted rounded font-mono text-foreground">
+                                        {`{{${check.tag}}}`}
+                                    </code>
+                                    <span className={`text-xs ml-2 ${check.status === "warning" ? "text-amber-500" :
+                                            check.status === "runtime" ? "text-blue-400" :
+                                                "text-muted-foreground"
+                                        }`}>
+                                        {check.detail}
+                                    </span>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </CardContent>
             </Card>
         )
     }
 
+    // ─── POST-SEND MODE: actual resolution logs ───
+
     if (loading) {
         return (
-            <Card className="border-border bg-card mt-6">
+            <Card className="border-border bg-card">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
                         <Tag className="h-5 w-5 text-[#D4AF37]" />
@@ -57,21 +176,21 @@ export function MergeTagAuditCard({ campaignId, campaignStatus }: MergeTagAuditC
 
     if (logs.length === 0) {
         return (
-            <Card className="border-border bg-card mt-6">
+            <Card className="border-border bg-card">
                 <CardHeader className="pb-3">
                     <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
                         <Tag className="h-5 w-5 text-[#D4AF37]" />
                         Merge Tag Audit Log
                     </CardTitle>
                     <CardDescription className="text-muted-foreground">
-                        No merge tag data recorded for this campaign. This may be because the campaign was sent before this feature was added.
+                        No merge tag data recorded. This campaign may have been sent before this feature was added.
                     </CardDescription>
                 </CardHeader>
             </Card>
         )
     }
 
-    // Aggregate stats across all recipients
+    // Aggregate stats
     const allResolved = new Set<string>()
     const allUnresolved = new Set<string>()
     const allFound = new Set<string>()
@@ -85,7 +204,7 @@ export function MergeTagAuditCard({ campaignId, campaignStatus }: MergeTagAuditC
     const hasWarnings = allUnresolved.size > 0
 
     return (
-        <Card className="border-border bg-card mt-6">
+        <Card className="border-border bg-card">
             <CardHeader className="pb-3">
                 <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
                     <Tag className="h-5 w-5 text-[#D4AF37]" />

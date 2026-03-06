@@ -235,6 +235,12 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                             </Alert>
                         )}
 
+                        <MergeTagAuditCard
+                            campaignId={campaign.id}
+                            campaignStatus={campaign.status}
+                            htmlContent={campaign.html_content}
+                            variableValues={campaign.variable_values}
+                        />
                         <PreflightCheckCard
                             subjectLine={campaign.subject_line}
                             htmlContent={campaign.html_content}
@@ -245,7 +251,6 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                     {/* Right Column - Preview */}
                     <div className="lg:col-span-3">
                         <EmailPreviewCard campaign={campaign} previewMode={previewMode} onPreviewModeChange={setPreviewMode} />
-                        <MergeTagAuditCard campaignId={campaign.id} campaignStatus={campaign.status} />
                     </div>
                 </div>
 
