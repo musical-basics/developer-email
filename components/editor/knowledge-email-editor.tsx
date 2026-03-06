@@ -6,6 +6,7 @@ import { CodePane } from "./code-pane"
 import { PreviewPane } from "./preview-pane"
 import { KnowledgeCopilotPane } from "./knowledge-copilot-pane"
 import { CampaignPicker } from "./campaign-picker"
+import { DiscountLinkPicker } from "./discount-link-picker"
 import { renderTemplate } from "@/lib/render-template"
 import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, TicketPercent } from "lucide-react"
 import { createShopifyDiscount } from "@/app/actions/shopify-discount"
@@ -71,6 +72,7 @@ export function KnowledgeEmailEditor({
 
     const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([])
     const [generatingPresetId, setGeneratingPresetId] = useState<string | null>(null)
+    const [pendingDiscountCode, setPendingDiscountCode] = useState<string | null>(null)
 
     useEffect(() => {
         getActiveDiscountPresets().then(setDiscountPresets).catch(() => { })
@@ -208,7 +210,7 @@ export function KnowledgeEmailEditor({
                                     <option value="automated">Automated Email</option>
                                 </select>
                             </div>
-                            <div className="pt-3 border-t border-border mt-3">
+                            <div className="pt-3 border-t border-border mt-3 relative">
                                 {discountPresets.map(preset => (
                                     <button
                                         key={preset.id}
@@ -226,17 +228,9 @@ export function KnowledgeEmailEditor({
                                             if (!res.success) {
                                                 toast({ title: "Error", description: res.error, variant: "destructive" });
                                             } else if (res.code) {
-                                                const baseUrl = (assets as any)[preset.target_url_key] || "";
-                                                const sep = baseUrl.includes("?") ? "&" : "?";
-                                                const finalUrl = baseUrl
-                                                    ? (baseUrl.includes("discount=")
-                                                        ? baseUrl.replace(/discount=[^&]+/, `discount=${res.code}`)
-                                                        : `${baseUrl}${sep}discount=${res.code}`)
-                                                    : "";
                                                 const updatedAssets: Record<string, any> = {
                                                     ...assets,
                                                     discount_code: res.code,
-                                                    ...(finalUrl ? { [preset.target_url_key]: finalUrl } : {}),
                                                 };
                                                 if (preset.code_mode === "per_user") {
                                                     updatedAssets.discount_preset_id = preset.id;
@@ -253,14 +247,15 @@ export function KnowledgeEmailEditor({
                                                 }
                                                 onAssetsChange(updatedAssets);
                                                 const label = preset.type === "percentage" ? `${preset.value}% off` : `$${preset.value} off`;
+                                                const validity = preset.expiry_mode === "fixed_date" && preset.expires_on
+                                                    ? `expires ${preset.expires_on}`
+                                                    : `valid ${preset.duration_days} days`;
                                                 if (preset.code_mode === "per_user") {
                                                     toast({ title: "Preview Code Created!", description: `${res.code} — ${label}. Each recipient will get a unique code at send time.` });
                                                 } else {
-                                                    const validity = preset.expiry_mode === "fixed_date" && preset.expires_on
-                                                        ? `expires ${preset.expires_on}`
-                                                        : `valid ${preset.duration_days} days`;
                                                     toast({ title: "Discount Created!", description: `${res.code} — ${label}, ${validity}.` });
                                                 }
+                                                setPendingDiscountCode(res.code);
                                             }
                                             setGeneratingPresetId(null);
                                         }}
@@ -272,6 +267,14 @@ export function KnowledgeEmailEditor({
                                         {preset.code_mode === "per_user" && <span className="text-[10px] opacity-60">(per user)</span>}
                                     </button>
                                 ))}
+                                {pendingDiscountCode && (
+                                    <DiscountLinkPicker
+                                        discountCode={pendingDiscountCode}
+                                        assets={assets}
+                                        onApply={onAssetsChange}
+                                        onClose={() => setPendingDiscountCode(null)}
+                                    />
+                                )}
                             </div>
                         </div>
 

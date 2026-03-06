@@ -179,7 +179,8 @@ Reply ONLY with the exact word "SIMPLE" or "COMPLEX".`;
     When asked to create a NEW email template from scratch or from a reference image:
     - All text/copy MUST be hardcoded directly in the HTML (not mustache variables). Write the actual words into the template.
     - All image sources (src) MUST use {{mustache_variable}} names (e.g. {{hero_src}}, {{product_img}}).
-    - All links (href on <a> tags) MUST use {{mustache_variable}} names (e.g. {{cta_link_url}}, {{hero_link_url}}).
+    - All links (href on <a> tags) MUST use {{mustache_variable}} names (e.g. {{main_cta_url}}, {{hero_link_url}}).
+    - **IMPORTANT CTA URL NAMING:** The PRIMARY call-to-action link MUST always use {{main_cta_url}}. If there is only one CTA button, use {{main_cta_url}}. If there are multiple CTA buttons pointing to the SAME destination, they should ALL use {{main_cta_url}}. Only create additional URL variables (e.g. {{secondary_cta_url}}) when different buttons genuinely link to DIFFERENT pages. This ensures discount codes auto-attach correctly.
     - This means the user only needs to load assets (images + links) via the Asset Loader, while the text is baked into the HTML.
     
     ### RESPONSE FORMAT (STRICT JSON ONLY):

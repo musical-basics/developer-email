@@ -50,7 +50,8 @@ VALID BLOCK TYPES AND THEIR PROPS:
 
 RULES:
 - All image src values MUST be mustache variables like {{hero_src}}, {{product_img}}, etc.
-- All link URLs MUST be mustache variables like {{cta_link_url}}, {{hero_link_url}}
+- All link URLs MUST be mustache variables like {{main_cta_url}}, {{hero_link_url}}
+- **IMPORTANT CTA URL NAMING:** The PRIMARY call-to-action link MUST always use {{main_cta_url}}. If there is only one CTA button, use {{main_cta_url}}. If there are multiple CTA buttons pointing to the SAME destination, they should ALL use {{main_cta_url}}. Only create additional URL variables (e.g. {{secondary_cta_url}}) when different buttons genuinely link to DIFFERENT pages.
 - All text/copy MUST be hardcoded (NOT mustache variables)
 - Generate unique IDs for each block (e.g. "block-heading-1", "block-text-1")
 - NO EM-DASHES in any text
