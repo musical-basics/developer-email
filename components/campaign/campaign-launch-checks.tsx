@@ -5,6 +5,7 @@ import { CampaignHeader } from "./campaign-header"
 import { AudienceCard, Audience } from "./audience-card"
 import { SenderIdentityCard } from "./sender-identity-card"
 import { PreflightCheckCard } from "./preflight-check-card"
+import { DiscountAuditCard } from "./discount-audit-card"
 import { SendTestCard } from "./send-test-card"
 import { LaunchpadCard } from "./launchpad-card"
 import { EmailPreviewCard } from "./email-preview-card"
@@ -204,6 +205,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                             onFromEmailChange={setFromEmail}
                             readOnly={campaign.status === "completed"}
                         />
+                        <DiscountAuditCard variableValues={campaign.variable_values} />
                         <SendTestCard onSendTest={handleSendTest} />
                         <LaunchpadCard
                             subscriberCount={effectiveSubscriberCount}
