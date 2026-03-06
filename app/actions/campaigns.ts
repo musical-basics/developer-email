@@ -227,6 +227,7 @@ export async function duplicateCampaign(campaignId: string) {
             {
                 name: original.name,
                 status: "draft",
+                email_type: original.email_type || "campaign",
                 subject_line: original.subject_line,
                 html_content: original.html_content,
                 variable_values: (() => {
@@ -245,6 +246,7 @@ export async function duplicateCampaign(campaignId: string) {
     }
 
     revalidatePath("/campaigns")
+    revalidatePath("/automated-emails")
     return { data }
 }
 

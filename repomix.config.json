@@ -4,7 +4,7 @@
     "maxFileSize": 52428800
   },
   "output": {
-    "filePath": "repomix-output.xml",
+    "filePath": "../dreamplay-email-repomix.xml",
     "style": "xml",
     "parsableStyle": false,
     "fileSummary": true,
