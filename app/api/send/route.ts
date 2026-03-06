@@ -97,7 +97,7 @@ export async function POST(request: Request) {
             const { data, error } = await resend.emails.send({
                 from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                 to: email,
-                subject: `[TEST] ${campaign.subject_line}`,
+                subject: `[TEST] ${simulationSubscriber ? await applyAllMergeTags(campaign.subject_line || "", simulationSubscriber) : campaign.subject_line}`,
                 html: finalHtml,
                 click_tracking: resendClickTracking,
                 open_tracking: resendOpenTracking,
@@ -273,11 +273,13 @@ export async function POST(request: Request) {
                         }
                     }
 
+                    const personalSubject = await applyAllMergeTags(campaign.subject_line || "", sub);
+
                     // Send Email (disable Resend's tracking — we use our own open pixel + click redirect)
                     const { data: sendData, error } = await resend.emails.send({
                         from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                         to: sub.email,
-                        subject: campaign.subject_line,
+                        subject: personalSubject,
                         html: personalHtml,
                         headers: {
                             "List-Unsubscribe": `<${unsubscribeUrl}>`,

@@ -153,11 +153,13 @@ export const sendCampaign = inngest.createFunction(
                     const fromName = campaign.variable_values?.from_name;
                     const fromEmail = campaign.variable_values?.from_email;
 
+                    const personalSubject = await applyAllMergeTags(campaign.subject_line || "", sub);
+
                     // Send Email (disable Resend's tracking — we use our own)
                     const { error } = await resend.emails.send({
                         from: fromName && fromEmail ? `${fromName} <${fromEmail}>` : (process.env.RESEND_FROM_EMAIL || "DreamPlay <hello@email.dreamplaypianos.com>"),
                         to: sub.email,
-                        subject: campaign.subject_line,
+                        subject: personalSubject,
                         html: personalHtml,
                         headers: {
                             "List-Unsubscribe": `<${unsubscribeUrl}>`,
