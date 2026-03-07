@@ -228,32 +228,45 @@ export default function AudienceManagerPage() {
     const fetchSubscribers = async () => {
         setLoading(true)
 
+        // Fetch ALL subscribers in batches (Supabase caps at 1000 per request)
+        const fetchAllSubscribers = async () => {
+            const allData: any[] = []
+            const batchSize = 1000
+            let from = 0
+            while (true) {
+                const { data, error } = await supabase
+                    .from("subscribers")
+                    .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
+                    .neq("status", "deleted")
+                    .order("created_at", { ascending: false })
+                    .range(from, from + batchSize - 1)
+                if (error) {
+                    console.error("Error fetching subscribers:", error)
+                    toast({
+                        title: "Error fetching subscribers",
+                        description: error.message,
+                        variant: "destructive",
+                    })
+                    break
+                }
+                if (!data || data.length === 0) break
+                allData.push(...data)
+                if (data.length < batchSize) break  // last page
+                from += batchSize
+            }
+            return allData
+        }
+
         // Run all queries in parallel for faster loading
-        const [subscribersResult, lastSentLookup, scheduledLookup] = await Promise.all([
-            supabase
-                .from("subscribers")
-                .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
-                .neq("status", "deleted")
-                .order("created_at", { ascending: false })
-                .limit(10000),
+        const [allSubscribers, lastSentLookup, scheduledLookup] = await Promise.all([
+            fetchAllSubscribers(),
             getLastSentPerSubscriber(),
             getScheduledPerSubscriber(),
         ])
 
-        const { data, error } = subscribersResult
-
-        if (data) {
-            setSubscribers(data as Subscriber[])
-            setLastSentSubjects(lastSentLookup)
-            setScheduledCampaigns(scheduledLookup)
-        } else if (error) {
-            console.error("Error fetching subscribers:", error)
-            toast({
-                title: "Error fetching subscribers",
-                description: error.message,
-                variant: "destructive",
-            })
-        }
+        setSubscribers(allSubscribers as Subscriber[])
+        setLastSentSubjects(lastSentLookup)
+        setScheduledCampaigns(scheduledLookup)
         setLoading(false)
     }
 
