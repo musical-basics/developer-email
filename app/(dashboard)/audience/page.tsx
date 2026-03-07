@@ -234,7 +234,8 @@ export default function AudienceManagerPage() {
                 .from("subscribers")
                 .select("id, email, first_name, last_name, country, country_code, phone_code, phone_number, shipping_address1, shipping_address2, shipping_city, shipping_zip, shipping_province, tags, status, created_at")
                 .neq("status", "deleted")
-                .order("created_at", { ascending: false }),
+                .order("created_at", { ascending: false })
+                .limit(10000),
             getLastSentPerSubscriber(),
             getScheduledPerSubscriber(),
         ])
