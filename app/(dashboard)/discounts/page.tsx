@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { TicketPercent, Plus, Trash2, Save, Loader2, Power } from "lucide-react"
+import { TicketPercent, Plus, Trash2, Save, Loader2, Power, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -168,7 +168,7 @@ export default function DiscountsPage() {
                 </Button>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-2">
                 {/* Existing presets */}
                 {presets.map(preset => {
                     const draft = drafts[preset.id] || preset
@@ -238,21 +238,19 @@ function PresetCard({
     saving: boolean
     deleting: boolean
 }) {
+    const [expanded, setExpanded] = useState(!!isNew)
     const typeLabel = draft.type === "percentage" ? "%" : "$"
     const previewCode = `${draft.code_prefix}-XXXXXX`
     const expiryMode = draft.expiry_mode || "duration"
+    const valueLabel = draft.type === "percentage" ? `${draft.value}%` : `$${draft.value}`
 
-    // For duration mode: compute a preview expiry date from duration_days
     const durationMs = (draft.duration_days || 0) * 24 * 60 * 60 * 1000
     const previewExpiryDate = new Date(Date.now() + (isNaN(durationMs) ? 0 : durationMs))
     const previewExpiryStr = isNaN(previewExpiryDate.getTime()) ? "" : previewExpiryDate.toISOString().split("T")[0]
-
-    // For fixed_date mode: use the stored expires_on
     const fixedDateStr = draft.expires_on || ""
 
     const toggleExpiryMode = () => {
         if (expiryMode === "duration") {
-            // Switching to fixed_date: seed expires_on from current duration preview
             onChange("expiry_mode", "fixed_date")
             onChange("expires_on", previewExpiryStr)
         } else {
@@ -268,171 +266,126 @@ function PresetCard({
     }
 
     return (
-        <Card className={`${!draft.is_active && !isNew ? "opacity-50" : ""} transition-opacity`}>
-            <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                        <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${draft.type === "percentage" ? "bg-emerald-500/10 text-emerald-400" : "bg-violet-500/10 text-violet-400"}`}>
-                            <TicketPercent className="w-4 h-4" />
+        <div className={`border border-border rounded-lg bg-card transition-all ${!draft.is_active && !isNew ? "opacity-50" : ""}`}>
+            {/* Collapsed row */}
+            <div
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-muted/30 transition-colors rounded-lg"
+                onClick={() => setExpanded(!expanded)}
+            >
+                <div className={`flex h-7 w-7 items-center justify-center rounded-md flex-shrink-0 ${draft.type === "percentage" ? "bg-emerald-500/10 text-emerald-400" : "bg-violet-500/10 text-violet-400"}`}>
+                    <TicketPercent className="w-3.5 h-3.5" />
+                </div>
+                <span className="text-sm font-semibold text-foreground truncate min-w-0">
+                    {draft.name || (isNew ? "New Preset" : "Untitled")}
+                </span>
+                <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${draft.type === "percentage" ? "bg-emerald-500/10 text-emerald-400" : "bg-violet-500/10 text-violet-400"}`}>
+                    {valueLabel} off
+                </span>
+                <span className="text-[11px] text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded flex-shrink-0">
+                    {previewCode}
+                </span>
+                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${draft.code_mode === "per_user" ? "bg-violet-500/10 text-violet-400" : "bg-sky-500/10 text-sky-400"}`}>
+                    {draft.code_mode === "per_user" ? "Per User" : "Shared"}
+                </span>
+                <span className={`text-[10px] px-1.5 py-0.5 rounded flex-shrink-0 ${expiryMode === "fixed_date" ? "bg-amber-500/10 text-amber-400" : "bg-muted text-muted-foreground"}`}>
+                    {expiryMode === "fixed_date" ? `Exp ${fixedDateStr}` : `${draft.duration_days}d`}
+                </span>
+                <div className="flex-1" />
+                <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                    {!isNew && onToggleActive && (
+                        <Button variant="ghost" size="icon"
+                            className={`h-7 w-7 ${draft.is_active ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground"}`}
+                            onClick={onToggleActive}
+                            title={draft.is_active ? "Active — click to disable" : "Inactive — click to enable"}
+                        >
+                            <Power className="w-3.5 h-3.5" />
+                        </Button>
+                    )}
+                    <Button variant="ghost" size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-red-400"
+                        onClick={onDelete} disabled={deleting}
+                    >
+                        {deleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    </Button>
+                </div>
+                <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform flex-shrink-0 ${expanded ? "rotate-180" : ""}`} />
+            </div>
+
+            {/* Expanded settings */}
+            {expanded && (
+                <div className="px-4 pb-4 pt-1 border-t border-border">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-3">
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Name</Label>
+                            <Input value={draft.name} onChange={e => onChange("name", e.target.value)} placeholder="Preset name" className="h-9 text-sm font-semibold" />
                         </div>
-                        <Input
-                            value={draft.name}
-                            onChange={e => onChange("name", e.target.value)}
-                            placeholder="Preset name (e.g. VIP 5% Off)"
-                            className="max-w-[260px] h-8 text-sm font-semibold"
-                        />
-                        <span className="text-xs text-muted-foreground font-mono bg-muted px-2 py-0.5 rounded">
-                            {previewCode}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={toggleExpiryMode}
-                            className={`text-[10px] font-semibold px-2 py-0.5 rounded cursor-pointer transition-colors ${expiryMode === "fixed_date" ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`}
-                            title="Click to toggle between Duration and Fixed Date"
-                        >
-                            {expiryMode === "fixed_date" ? "⏱ Fixed Date" : "⟳ Duration"}
-                        </button>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Type</Label>
+                            <Select value={draft.type} onValueChange={v => onChange("type", v)}>
+                                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="percentage">Percentage (%)</SelectItem>
+                                    <SelectItem value="fixed_amount">Fixed Amount ($)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Value ({typeLabel})</Label>
+                            <Input type="number" value={draft.value} onChange={e => onChange("value", Number(e.target.value))} min={1} className="h-9" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Code Prefix</Label>
+                            <Input value={draft.code_prefix} onChange={e => onChange("code_prefix", e.target.value.toUpperCase())} placeholder="VIP" className="h-9 font-mono" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className={`text-xs ${expiryMode === "duration" ? "text-muted-foreground" : "text-muted-foreground/40"} flex items-center gap-1.5`}>
+                                Duration (days)
+                                <button type="button" onClick={toggleExpiryMode}
+                                    className={`text-[9px] font-semibold px-1.5 py-0.5 rounded cursor-pointer transition-colors ${expiryMode === "fixed_date" ? "bg-amber-500/10 text-amber-400 hover:bg-amber-500/20" : "bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20"}`}
+                                    title="Toggle between Duration and Fixed Date"
+                                >
+                                    {expiryMode === "fixed_date" ? "⏱ Fixed" : "⟳ Duration"}
+                                </button>
+                            </Label>
+                            <Input type="number" value={draft.duration_days} onChange={e => onChange("duration_days", Math.max(1, Number(e.target.value)))} min={1}
+                                className={`h-9 ${expiryMode !== "duration" ? "opacity-30" : ""}`} disabled={expiryMode !== "duration"}
+                            />
+                            {expiryMode === "duration" && <p className="text-[10px] text-muted-foreground/60">Expires ~{previewExpiryStr}</p>}
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className={`text-xs ${expiryMode === "fixed_date" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>Expires on (fixed date)</Label>
+                            <Input type="date" value={expiryMode === "fixed_date" ? fixedDateStr : ""} onChange={e => handleDateChange(e.target.value)}
+                                className={`h-9 ${expiryMode !== "fixed_date" ? "opacity-30" : ""}`} disabled={expiryMode !== "fixed_date"}
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Code Mode</Label>
+                            <Select value={draft.code_mode || "all_users"} onValueChange={v => { onChange("code_mode", v); if (v === "per_user") onChange("usage_limit", 1) }}>
+                                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all_users">All Users (shared code)</SelectItem>
+                                    <SelectItem value="per_user">Per User (unique codes)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">
+                                Usage Limit{draft.code_mode === "per_user" && <span className="text-[10px] text-amber-400 ml-1">(1 per code)</span>}
+                            </Label>
+                            <Input type="number" value={draft.code_mode === "per_user" ? 1 : draft.usage_limit}
+                                onChange={e => onChange("usage_limit", Math.max(1, Number(e.target.value)))} min={1}
+                                disabled={draft.code_mode === "per_user"} className={`h-9 ${draft.code_mode === "per_user" ? "opacity-50" : ""}`}
+                            />
+                        </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        {!isNew && onToggleActive && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className={draft.is_active ? "text-emerald-400 hover:text-emerald-300" : "text-muted-foreground"}
-                                onClick={onToggleActive}
-                                title={draft.is_active ? "Active — click to disable" : "Inactive — click to enable"}
-                            >
-                                <Power className="w-4 h-4" />
-                            </Button>
-                        )}
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-muted-foreground hover:text-red-400"
-                            onClick={onDelete}
-                            disabled={deleting}
-                        >
-                            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                    <div className="flex justify-end mt-4">
+                        <Button onClick={onSave} disabled={saving} size="sm" className="gap-2">
+                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                            {isNew ? "Create" : "Save"}
                         </Button>
                     </div>
                 </div>
-            </CardHeader>
-            <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {/* Type */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Type</Label>
-                        <Select value={draft.type} onValueChange={v => onChange("type", v)}>
-                            <SelectTrigger className="h-9">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="percentage">Percentage (%)</SelectItem>
-                                <SelectItem value="fixed_amount">Fixed Amount ($)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Value */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Value ({typeLabel})</Label>
-                        <Input
-                            type="number"
-                            value={draft.value}
-                            onChange={e => onChange("value", Number(e.target.value))}
-                            min={1}
-                            className="h-9"
-                        />
-                    </div>
-
-                    {/* Code Prefix */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Code Prefix</Label>
-                        <Input
-                            value={draft.code_prefix}
-                            onChange={e => onChange("code_prefix", e.target.value.toUpperCase())}
-                            placeholder="VIP"
-                            className="h-9 font-mono"
-                        />
-                    </div>
-
-                    {/* Duration (days) */}
-                    <div className="space-y-1.5">
-                        <Label className={`text-xs ${expiryMode === "duration" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
-                            Duration (days)
-                        </Label>
-                        <Input
-                            type="number"
-                            value={draft.duration_days}
-                            onChange={e => onChange("duration_days", Math.max(1, Number(e.target.value)))}
-                            min={1}
-                            className={`h-9 ${expiryMode !== "duration" ? "opacity-30" : ""}`}
-                            disabled={expiryMode !== "duration"}
-                        />
-                        {expiryMode === "duration" && (
-                            <p className="text-[10px] text-muted-foreground/60">Expires ~{previewExpiryStr}</p>
-                        )}
-                    </div>
-
-                    {/* Fixed Expiry Date */}
-                    <div className="space-y-1.5">
-                        <Label className={`text-xs ${expiryMode === "fixed_date" ? "text-muted-foreground" : "text-muted-foreground/40"}`}>
-                            Expires on (fixed date)
-                        </Label>
-                        <Input
-                            type="date"
-                            value={expiryMode === "fixed_date" ? fixedDateStr : ""}
-                            onChange={e => handleDateChange(e.target.value)}
-                            className={`h-9 ${expiryMode !== "fixed_date" ? "opacity-30" : ""}`}
-                            disabled={expiryMode !== "fixed_date"}
-                        />
-                    </div>
-
-
-
-                    {/* Code Mode */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Code Mode</Label>
-                        <Select value={draft.code_mode || "all_users"} onValueChange={v => {
-                            onChange("code_mode", v)
-                            if (v === "per_user") onChange("usage_limit", 1)
-                        }}>
-                            <SelectTrigger className="h-9">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all_users">All Users (shared code)</SelectItem>
-                                <SelectItem value="per_user">Per User (unique codes)</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    {/* Usage Limit */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">
-                            Usage Limit
-                            {draft.code_mode === "per_user" && (
-                                <span className="text-[10px] text-amber-400 ml-1">(1 per code)</span>
-                            )}
-                        </Label>
-                        <Input
-                            type="number"
-                            value={draft.code_mode === "per_user" ? 1 : draft.usage_limit}
-                            onChange={e => onChange("usage_limit", Math.max(1, Number(e.target.value)))}
-                            min={1}
-                            disabled={draft.code_mode === "per_user"}
-                            className={`h-9 ${draft.code_mode === "per_user" ? "opacity-50" : ""}`}
-                        />
-                    </div>
-                </div>
-
-                <div className="flex justify-end mt-4">
-                    <Button onClick={onSave} disabled={saving} size="sm" className="gap-2">
-                        {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                        {isNew ? "Create" : "Save"}
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+            )}
+        </div>
     )
 }
