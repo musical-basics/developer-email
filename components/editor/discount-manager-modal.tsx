@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { TicketPercent, Plus, Trash2, Loader2, Link2 } from "lucide-react"
+import { TicketPercent, Plus, Trash2, Loader2, Link2, Code2 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"
 import { getActiveDiscountPresets, type DiscountPreset } from "@/app/actions/discount-presets"
 import { createShopifyDiscount } from "@/app/actions/shopify-discount"
@@ -18,9 +18,18 @@ export interface DiscountSlot {
         expiresOn?: string
     }
     preview_code: string
-    target_url_key: string     // which {{variable}} gets ?discount=
+    target_url_key: string     // which {{variable}} gets ?discount=CODE appended
+    code_variable: string      // which {{variable}} displays the code text, e.g. "discount_code1"
     label: string              // human-readable, e.g. "$300 off (14 days)"
 }
+
+// Available code variable options
+const CODE_VARIABLE_OPTIONS = [
+    { value: "discount_code", label: "{{discount_code}}" },
+    { value: "discount_code1", label: "{{discount_code1}}" },
+    { value: "discount_code2", label: "{{discount_code2}}" },
+    { value: "discount_code3", label: "{{discount_code3}}" },
+]
 
 interface DiscountManagerModalProps {
     assets: Record<string, any>
@@ -68,36 +77,34 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
         }
     }, [open])
 
-
-
-    /**
-     * Sync discount_code1, discount_code2, discount_code3 merge tags from the slots array.
-     * Also sets legacy `discount_code` to the first slot's code for backward compat.
-     */
-    const syncCodeMergeTags = (target: Record<string, any>, slotsArr: DiscountSlot[]) => {
-        // Clear all indexed code tags first
-        delete target.discount_code1
-        delete target.discount_code2
-        delete target.discount_code3
-        delete target.discount_code
-        // Write indexed tags
-        slotsArr.forEach((slot, i) => {
-            target[`discount_code${i + 1}`] = slot.preview_code
-        })
-        // Legacy compat — first slot code
-        if (slotsArr.length > 0) {
-            target.discount_code = slotsArr[0].preview_code
-        }
-    }
+    // Which code variables are already taken by other slots
+    const usedCodeVars = useMemo(() => new Set(slots.map(s => s.code_variable).filter(Boolean)), [slots])
 
     const updateSlots = (newSlots: DiscountSlot[]) => {
         const updated = { ...assets, discount_slots: newSlots }
         // Clean up legacy fields if present
         delete (updated as any).discount_preset_id
         delete (updated as any).discount_preset_config
-        // Sync code merge tags
-        syncCodeMergeTags(updated, newSlots)
+        // Sync code variables from slots into assets
+        syncCodeVariables(updated, newSlots)
         onAssetsChange(updated)
+    }
+
+    /**
+     * Write each slot's preview_code to its mapped code_variable in assets.
+     * Also clears any code variables that are no longer mapped.
+     */
+    const syncCodeVariables = (target: Record<string, any>, slotsArr: DiscountSlot[]) => {
+        // Clear all possible code variable keys first
+        for (const opt of CODE_VARIABLE_OPTIONS) {
+            delete target[opt.value]
+        }
+        // Write mapped ones
+        for (const slot of slotsArr) {
+            if (slot.code_variable && slot.preview_code) {
+                target[slot.code_variable] = slot.preview_code
+            }
+        }
     }
 
     const handleActivatePreset = async (preset: DiscountPreset) => {
@@ -134,6 +141,9 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
                 ? `expires ${preset.expires_on}`
                 : `${preset.duration_days} days`
 
+            // Auto-pick the first available code variable
+            const autoCodeVar = CODE_VARIABLE_OPTIONS.find(o => !usedCodeVars.has(o.value))?.value || ""
+
             const newSlot: DiscountSlot & { code_mode: string } = {
                 preset_id: preset.id,
                 config: {
@@ -144,7 +154,8 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
                     ...(preset.expiry_mode === "fixed_date" && preset.expires_on ? { expiresOn: preset.expires_on } : {}),
                 },
                 preview_code: res.code,
-                target_url_key: "",  // user must map this
+                target_url_key: "",       // user must map this
+                code_variable: autoCodeVar,
                 label: `${label} (${validity})`,
                 code_mode: preset.code_mode,
             }
@@ -178,8 +189,8 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
         updated.discount_slots = newSlots
         delete updated.discount_preset_id
         delete updated.discount_preset_config
-        // Re-sync code merge tags with new slot order
-        syncCodeMergeTags(updated, newSlots)
+        // Re-sync code variables
+        syncCodeVariables(updated, newSlots)
         onAssetsChange(updated)
     }
 
@@ -214,6 +225,26 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
         onAssetsChange(updated)
     }
 
+    const handleMapCodeVariable = (slotIndex: number, codeVar: string) => {
+        const updated = { ...assets }
+        const newSlots = [...slots]
+        const slot = newSlots[slotIndex]
+
+        // Clear old code variable if it was set
+        if (slot.code_variable) {
+            delete updated[slot.code_variable]
+        }
+
+        // Set new code variable
+        newSlots[slotIndex] = { ...slot, code_variable: codeVar }
+        if (codeVar && slot.preview_code) {
+            updated[codeVar] = slot.preview_code
+        }
+
+        updated.discount_slots = newSlots
+        onAssetsChange(updated)
+    }
+
     // Presets not yet activated
     const availablePresets = presets.filter(p => !slots.some(s => s.preset_id === p.id))
 
@@ -243,7 +274,7 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
                         Email Discounts
                     </DialogTitle>
                     <DialogDescription className="text-muted-foreground text-sm">
-                        Activate up to 3 discounts and map each to a CTA link.
+                        Activate up to 3 discounts. Map each to a CTA link and a code variable.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -289,6 +320,29 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
                                 </code>
                             </div>
 
+                            {/* Code variable mapper */}
+                            <div className="flex items-center gap-2">
+                                <Code2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                                <select
+                                    value={slot.code_variable || ""}
+                                    onChange={(e) => handleMapCodeVariable(i, e.target.value)}
+                                    className="flex-1 bg-background border border-border rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 cursor-pointer"
+                                >
+                                    <option value="">Select a code variable...</option>
+                                    {CODE_VARIABLE_OPTIONS.map(opt => {
+                                        const taken = usedCodeVars.has(opt.value) && slot.code_variable !== opt.value
+                                        return (
+                                            <option key={opt.value} value={opt.value} disabled={taken}>
+                                                {opt.label}{taken ? " (in use)" : ""}
+                                            </option>
+                                        )
+                                    })}
+                                </select>
+                            </div>
+                            {!slot.code_variable && (
+                                <p className="text-[10px] text-amber-500">⚠ Map this to a code variable so the code appears in your email.</p>
+                            )}
+
                             {/* CTA Link mapper */}
                             <div className="flex items-center gap-2">
                                 <Link2 className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
@@ -329,7 +383,6 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
                         ) : (
                             <div className="space-y-1.5 max-h-40 overflow-y-auto">
                                 {availablePresets.map(preset => {
-
                                     const label = preset.type === "percentage" ? `${preset.value}% off` : `$${preset.value} off`
                                     return (
                                         <button
@@ -343,7 +396,6 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
                                                     ? "border-emerald-500/20 hover:bg-emerald-500/5"
                                                     : "border-violet-500/20 hover:bg-violet-500/5"
                                             )}
-
                                         >
                                             {generatingId === preset.id
                                                 ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0" />

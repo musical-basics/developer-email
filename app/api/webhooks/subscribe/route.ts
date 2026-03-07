@@ -219,6 +219,10 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                             }
                         }
 
+                        // Write code to the slot's mapped code_variable
+                        if (slot.code_variable) {
+                            assets[slot.code_variable] = result.code;
+                        }
                         // Set discount_code for legacy template rendering
                         assets.discount_code = result.code;
                     } else {

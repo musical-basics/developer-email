@@ -404,6 +404,10 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
                         ? baseUrl.replace(/discount=[^&]+/, `discount=${res.code}`)
                         : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}discount=${res.code}`
                 }
+                // Write code to the slot's mapped code_variable
+                if (slot.code_variable) {
+                    newVars[slot.code_variable] = res.code
+                }
                 // Also set legacy discount_code for backward compat template rendering
                 newVars.discount_code = res.code
             }
