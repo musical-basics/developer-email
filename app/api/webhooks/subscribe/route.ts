@@ -213,6 +213,46 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     }
                 }
 
+                // ─── Create child campaign from master template ──────────
+                const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" });
+                const childName = `${campaign.name} — ${trigger.name} — ${today}`;
+
+                const { data: childCampaign, error: childErr } = await supabase
+                    .from("campaigns")
+                    .insert({
+                        name: childName,
+                        subject_line: campaign.subject_line,
+                        html_content: campaign.html_content,
+                        status: "draft",
+                        is_template: false,
+                        parent_template_id: campaign.id,
+                        variable_values: {
+                            ...(campaign.variable_values || {}),
+                            subscriber_ids: [subscriberId],
+                            trigger_id: trigger.id,
+                            trigger_name: trigger.name,
+                        },
+                    })
+                    .select("id")
+                    .single();
+
+                if (childErr || !childCampaign) {
+                    await logTriggerEvent("error", `Failed to create child campaign`, {
+                        trigger_name: trigger.name,
+                        error: childErr?.message || "Unknown error",
+                        subscriber_email: subscriberEmail,
+                    });
+                    continue;
+                }
+
+                const trackingCampaignId = childCampaign.id;
+
+                await logTriggerEvent("info", `Created child campaign ${trackingCampaignId} from template ${campaign.id}`, {
+                    trigger_name: trigger.name,
+                    child_campaign_name: childName,
+                    subscriber_email: subscriberEmail,
+                });
+
                 // Render template (campaign variables + smart blocks)
                 let renderedHtml = renderTemplate(campaign.html_content, assets, subscriberTags);
 
@@ -224,7 +264,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     .single();
 
                 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
-                const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${campaign.id}`;
+                const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${subscriberId}&c=${trackingCampaignId}`;
 
                 if (subscriberData) {
                     const { html: mergedHtml, log: mergeTagLog } = await applyAllMergeTagsWithLog(renderedHtml, subscriberData, {
@@ -242,17 +282,23 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     if (url.includes('/unsubscribe')) return match;
                     if (url.includes('/api/track/')) return match;
                     const sep = url.includes('?') ? '&' : '?';
-                    return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaign.id}${quote}`;
+                    return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${trackingCampaignId}${quote}`;
                 });
 
                 // Determine sender
                 const fromName = campaign.variable_values?.from_name || "Lionel Yu";
                 const senderEmail = campaign.variable_values?.from_email || "lionel@email.dreamplaypianos.com";
-                const subjectLine = campaign.subject_line || trigger.name;
+                const subjectLine = subscriberData
+                    ? await (async () => {
+                        const { applyAllMergeTags } = await import("@/lib/merge-tags");
+                        return applyAllMergeTags(campaign.subject_line || trigger.name, subscriberData);
+                    })()
+                    : (campaign.subject_line || trigger.name);
 
                 await logTriggerEvent("info", `Sending email via Resend`, {
                     trigger_name: trigger.name,
                     campaign_name: campaign.name,
+                    child_campaign_id: trackingCampaignId,
                     to: subscriberEmail,
                     from: `${fromName} <${senderEmail}>`,
                     subject: subjectLine,
@@ -276,6 +322,8 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                         subscriber_email: subscriberEmail,
                         error: emailError,
                     });
+                    // Mark child as failed
+                    await supabase.from("campaigns").update({ status: "failed" }).eq("id", trackingCampaignId);
                     continue;
                 }
 
@@ -284,18 +332,23 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     subscriber_email: subscriberEmail,
                     resend_id: emailResult?.id,
                     campaign_name: campaign.name,
+                    child_campaign_id: trackingCampaignId,
                 });
 
-                // Log to sent_history
+                // Log to sent_history (using child campaign ID)
                 await supabase.from("sent_history").insert({
-                    campaign_id: campaign.id,
+                    campaign_id: trackingCampaignId,
                     subscriber_id: subscriberId,
                     resend_email_id: emailResult?.id || null,
                     merge_tag_log: (trigger as any)._mergeTagLog || null,
                 });
 
-                // Update campaign status
-                await supabase.from("campaigns").update({ status: "active" }).eq("id", campaign.id);
+                // Mark child campaign as completed
+                await supabase.from("campaigns").update({
+                    status: "completed",
+                    total_recipients: 1,
+                    resend_email_id: emailResult?.id || null,
+                }).eq("id", trackingCampaignId);
 
             } catch (innerErr: any) {
                 await logTriggerEvent("error", `Trigger execution error`, {
