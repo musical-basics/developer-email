@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { TicketPercent, Plus, Trash2, Save, Loader2, Power, ChevronDown } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { TicketPercent, Plus, Trash2, Save, Loader2, Power, ChevronDown, GripVertical } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,6 +13,7 @@ import {
     createDiscountPreset,
     updateDiscountPreset,
     deleteDiscountPreset,
+    reorderDiscountPresets,
     type DiscountPreset
 } from "@/app/actions/discount-presets"
 
@@ -30,6 +31,10 @@ export default function DiscountsPage() {
     const [drafts, setDrafts] = useState<Record<string, PresetDraft>>({})
     const [newPresets, setNewPresets] = useState<PresetDraft[]>([])
 
+    // Drag state
+    const [dragIndex, setDragIndex] = useState<number | null>(null)
+    const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
     useEffect(() => {
         loadPresets()
     }, [])
@@ -38,7 +43,6 @@ export default function DiscountsPage() {
         try {
             const data = await getDiscountPresets()
             setPresets(data)
-            // Initialize drafts
             const d: Record<string, PresetDraft> = {}
             data.forEach(p => { d[p.id] = { ...p } })
             setDrafts(d)
@@ -61,6 +65,7 @@ export default function DiscountsPage() {
             target_url_key: "",
             usage_limit: 1,
             code_mode: "all_users",
+            sort_order: presets.length + newPresets.length,
             is_active: true,
         }])
     }
@@ -142,6 +147,47 @@ export default function DiscountsPage() {
         }
     }
 
+    // ─── Drag-and-drop handlers ──────────────────────────────
+    const handleDragStart = (index: number) => {
+        setDragIndex(index)
+    }
+
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault()
+        if (dragIndex === null || index === dragIndex) return
+        setDragOverIndex(index)
+    }
+
+    const handleDrop = async (e: React.DragEvent, dropIndex: number) => {
+        e.preventDefault()
+        if (dragIndex === null || dragIndex === dropIndex) {
+            setDragIndex(null)
+            setDragOverIndex(null)
+            return
+        }
+
+        // Reorder locally first for instant feedback
+        const reordered = [...presets]
+        const [moved] = reordered.splice(dragIndex, 1)
+        reordered.splice(dropIndex, 0, moved)
+        setPresets(reordered)
+        setDragIndex(null)
+        setDragOverIndex(null)
+
+        // Persist the new order
+        try {
+            await reorderDiscountPresets(reordered.map(p => p.id))
+        } catch (e: any) {
+            toast({ title: "Error", description: "Failed to save order.", variant: "destructive" })
+            await loadPresets() // revert on failure
+        }
+    }
+
+    const handleDragEnd = () => {
+        setDragIndex(null)
+        setDragOverIndex(null)
+    }
+
     if (loading) {
         return (
             <div className="flex h-96 items-center justify-center">
@@ -170,7 +216,7 @@ export default function DiscountsPage() {
 
             <div className="space-y-2">
                 {/* Existing presets */}
-                {presets.map(preset => {
+                {presets.map((preset, index) => {
                     const draft = drafts[preset.id] || preset
                     return (
                         <PresetCard
@@ -182,6 +228,13 @@ export default function DiscountsPage() {
                             onToggleActive={() => handleToggleActive(preset.id)}
                             saving={savingId === preset.id}
                             deleting={deletingId === preset.id}
+                            // Drag props
+                            isDragging={dragIndex === index}
+                            isDragOver={dragOverIndex === index}
+                            onDragStart={() => handleDragStart(index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDrop={(e) => handleDrop(e, index)}
+                            onDragEnd={handleDragEnd}
                         />
                     )
                 })}
@@ -228,6 +281,12 @@ function PresetCard({
     onToggleActive,
     saving,
     deleting,
+    isDragging,
+    isDragOver,
+    onDragStart,
+    onDragOver,
+    onDrop,
+    onDragEnd,
 }: {
     draft: PresetDraft
     isNew?: boolean
@@ -237,6 +296,12 @@ function PresetCard({
     onToggleActive?: () => void
     saving: boolean
     deleting: boolean
+    isDragging?: boolean
+    isDragOver?: boolean
+    onDragStart?: () => void
+    onDragOver?: (e: React.DragEvent) => void
+    onDrop?: (e: React.DragEvent) => void
+    onDragEnd?: () => void
 }) {
     const [expanded, setExpanded] = useState(!!isNew)
     const typeLabel = draft.type === "percentage" ? "%" : "$"
@@ -266,12 +331,34 @@ function PresetCard({
     }
 
     return (
-        <div className={`border border-border rounded-lg bg-card transition-all ${!draft.is_active && !isNew ? "opacity-50" : ""}`}>
+        <div
+            className={`border rounded-lg bg-card transition-all ${!draft.is_active && !isNew ? "opacity-50" : ""
+                } ${isDragging ? "opacity-40 scale-[0.98] border-dashed" : "border-border"} ${isDragOver ? "border-emerald-400 bg-emerald-500/5" : ""
+                }`}
+            draggable={!isNew}
+            onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move"
+                onDragStart?.()
+            }}
+            onDragOver={(e) => onDragOver?.(e)}
+            onDrop={(e) => onDrop?.(e)}
+            onDragEnd={() => onDragEnd?.()}
+        >
             {/* Collapsed row */}
             <div
                 className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none hover:bg-muted/30 transition-colors rounded-lg"
                 onClick={() => setExpanded(!expanded)}
             >
+                {/* Drag handle */}
+                {!isNew && (
+                    <div
+                        className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground flex-shrink-0 -ml-1"
+                        onMouseDown={(e) => e.stopPropagation()}
+                        title="Drag to reorder"
+                    >
+                        <GripVertical className="w-4 h-4" />
+                    </div>
+                )}
                 <div className={`flex h-7 w-7 items-center justify-center rounded-md flex-shrink-0 ${draft.type === "percentage" ? "bg-emerald-500/10 text-emerald-400" : "bg-violet-500/10 text-violet-400"}`}>
                     <TicketPercent className="w-3.5 h-3.5" />
                 </div>

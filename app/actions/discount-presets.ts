@@ -16,6 +16,7 @@ export interface DiscountPreset {
     usage_limit: number
     code_mode: "per_user" | "all_users"
     is_active: boolean
+    sort_order: number
     created_at: string
 }
 
@@ -36,7 +37,7 @@ export async function getActiveDiscountPresets(): Promise<DiscountPreset[]> {
         .from("discount_presets")
         .select("*")
         .eq("is_active", true)
-        .order("created_at", { ascending: true })
+        .order("sort_order", { ascending: true })
 
     if (error) throw new Error(error.message)
     return (data || []) as DiscountPreset[]
@@ -73,6 +74,20 @@ export async function deleteDiscountPreset(id: string) {
         .eq("id", id)
 
     if (error) throw new Error(error.message)
+    revalidatePath("/discounts")
+    return { success: true }
+}
+
+export async function reorderDiscountPresets(orderedIds: string[]) {
+    const supabase = await createClient()
+    // Batch update sort_order for each preset
+    for (let i = 0; i < orderedIds.length; i++) {
+        const { error } = await supabase
+            .from("discount_presets")
+            .update({ sort_order: i })
+            .eq("id", orderedIds[i])
+        if (error) throw new Error(error.message)
+    }
     revalidatePath("/discounts")
     return { success: true }
 }
