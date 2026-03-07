@@ -8,7 +8,7 @@ import { applyAllMergeTags } from "@/lib/merge-tags";
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
 
-export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKeyOrId: string, clickTracking = false, resendClickTracking = false, resendOpenTracking = false) {
+export async function sendChainEmail(subscriberId: string, email: string, firstName: string, templateKeyOrId: string, clickTracking = false, openTracking = true, resendClickTracking = false, resendOpenTracking = false) {
     let rawHtml = "";
     let subject = "";
     let campaignId = "";
@@ -115,6 +115,16 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
             const sep = url.includes('?') ? '&' : '?';
             return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaignId}${quote}`;
         });
+    }
+
+    // Open tracking: inject 1x1 pixel
+    if (openTracking) {
+        const openPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&s=${subscriberId}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+        if (finalHtml.includes('</body>')) {
+            finalHtml = finalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
+        } else {
+            finalHtml += openPixel;
+        }
     }
 
     // Send Email (disable Resend's tracking — we use our own click redirect)

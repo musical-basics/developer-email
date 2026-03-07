@@ -304,6 +304,14 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     subject: subjectLine,
                 });
 
+                // Open tracking: inject 1x1 pixel
+                const openPixel = `<img src="${baseUrl}/api/track/open?c=${trackingCampaignId}&s=${subscriberId}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+                if (renderedHtml.includes('</body>')) {
+                    renderedHtml = renderedHtml.replace(/<\/body>/i, `${openPixel}</body>`);
+                } else {
+                    renderedHtml += openPixel;
+                }
+
                 // Send via Resend
                 const { data: emailResult, error: emailError } = await resend.emails.send({
                     from: `${fromName} <${senderEmail}>`,
