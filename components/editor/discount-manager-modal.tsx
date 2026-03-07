@@ -68,17 +68,13 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
         }
     }, [open])
 
-    // Determine mode from the first slot (all slots share the same mode)
-    const currentMode: "per_user" | "all_users" | null = slots.length > 0
-        ? (slots[0] as any).code_mode || "per_user"
-        : null
 
     const updateSlots = (newSlots: DiscountSlot[]) => {
         const updated = { ...assets, discount_slots: newSlots }
         // Clean up legacy fields if present
-        delete updated.discount_preset_id
-        delete updated.discount_preset_config
-        delete updated.discount_code
+        delete (updated as any).discount_preset_id
+        delete (updated as any).discount_preset_config
+        delete (updated as any).discount_code
         onAssetsChange(updated)
     }
 
@@ -87,15 +83,7 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
             toast({ title: "Maximum 3 discounts", description: "Remove one before adding another.", variant: "destructive" })
             return
         }
-        // Enforce same mode
-        if (currentMode && preset.code_mode !== currentMode) {
-            toast({
-                title: "Mode mismatch",
-                description: `All discounts in one email must use the same mode. Current: ${currentMode === "per_user" ? "Per User" : "All Users"}.`,
-                variant: "destructive"
-            })
-            return
-        }
+
         // Prevent duplicates
         if (slots.some(s => s.preset_id === preset.id)) {
             toast({ title: "Already added", description: `"${preset.name}" is already active.`, variant: "destructive" })
@@ -319,21 +307,21 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
                         ) : (
                             <div className="space-y-1.5 max-h-40 overflow-y-auto">
                                 {availablePresets.map(preset => {
-                                    const isDisabledMode = currentMode !== null && preset.code_mode !== currentMode
+
                                     const label = preset.type === "percentage" ? `${preset.value}% off` : `$${preset.value} off`
                                     return (
                                         <button
                                             key={preset.id}
                                             type="button"
                                             onClick={() => handleActivatePreset(preset)}
-                                            disabled={generatingId === preset.id || isDisabledMode}
+                                            disabled={generatingId === preset.id}
                                             className={cn(
                                                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border transition-colors text-left disabled:opacity-40",
                                                 preset.type === "percentage"
                                                     ? "border-emerald-500/20 hover:bg-emerald-500/5"
                                                     : "border-violet-500/20 hover:bg-violet-500/5"
                                             )}
-                                            title={isDisabledMode ? `Mode mismatch: this preset is "${preset.code_mode}" but active slots are "${currentMode}"` : undefined}
+
                                         >
                                             {generatingId === preset.id
                                                 ? <Loader2 className="w-4 h-4 animate-spin text-muted-foreground flex-shrink-0" />
