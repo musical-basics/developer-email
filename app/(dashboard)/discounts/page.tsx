@@ -16,13 +16,6 @@ import {
     type DiscountPreset
 } from "@/app/actions/discount-presets"
 
-const URL_KEY_OPTIONS: { value: string; label: string }[] = [
-    { value: "main_cta_url", label: "Main CTA URL" },
-    { value: "main_activate_url", label: "Activate URL" },
-    { value: "crowdfunding_cta_url", label: "Crowdfunding CTA" },
-    { value: "homepage_url", label: "Homepage URL" },
-    { value: "shipping_url", label: "Shipping Info" },
-]
 
 type PresetDraft = Omit<DiscountPreset, "id" | "created_at"> & { id?: string }
 
@@ -65,7 +58,7 @@ export default function DiscountsPage() {
             expiry_mode: "duration",
             expires_on: null,
             code_prefix: "VIP",
-            target_url_key: "main_cta_url",
+            target_url_key: "",
             usage_limit: 1,
             code_mode: "all_users",
             is_active: true,
@@ -395,23 +388,7 @@ function PresetCard({
                         />
                     </div>
 
-                    {/* Target URL */}
-                    <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">Target URL Key</Label>
-                        <Select value={draft.target_url_key} onValueChange={v => onChange("target_url_key", v)}>
-                            <SelectTrigger className="h-9">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {URL_KEY_OPTIONS.map(opt => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                        {opt.label}
-                                        <span className="text-[10px] text-muted-foreground ml-2 font-mono">{`{{${opt.value}}}`}</span>
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+
 
                     {/* Code Mode */}
                     <div className="space-y-1.5">
