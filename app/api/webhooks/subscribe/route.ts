@@ -138,78 +138,95 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                     continue;
                 }
 
-                // Generate Shopify discount code if configured
-                // Priority: campaign-level discount_preset_config > trigger-level discount_config
-                let discountCode = "";
-                const campaignDiscountConfig = campaign.variable_values?.discount_preset_config;
-                const triggerDiscountConfig = trigger.discount_config;
-                const discountConfig = campaignDiscountConfig || (trigger.generate_discount ? triggerDiscountConfig : null);
+                // Generate discount codes — multi-slot support
+                // Priority: campaign discount_slots > campaign legacy preset_config > trigger-level config
+                const campaignSlots: any[] = campaign.variable_values?.discount_slots || []
+                const campaignLegacyConfig = campaign.variable_values?.discount_preset_config
+                const campaignLegacyIsPerUser = !!campaign.variable_values?.discount_preset_id && !!campaignLegacyConfig
+                const triggerDiscountConfig = trigger.discount_config
 
-                if (discountConfig) {
-                    await logTriggerEvent("info", `Generating Shopify discount code`, {
-                        trigger_name: trigger.name,
-                        config_source: campaignDiscountConfig ? "campaign" : "trigger",
-                        config: discountConfig,
-                        subscriber_email: subscriberEmail,
-                    });
-
-                    const result = await createShopifyDiscount({
-                        type: discountConfig.type,
-                        value: discountConfig.value,
-                        durationDays: discountConfig.durationDays,
-                        codePrefix: discountConfig.codePrefix,
-                        usageLimit: discountConfig.usageLimit ?? 1,
-                    });
-
-                    if (result.success && result.code) {
-                        discountCode = result.code;
-                        await logTriggerEvent("success", `Shopify code generated: ${discountCode}`, {
-                            trigger_name: trigger.name,
-                            subscriber_email: subscriberEmail,
-                        });
-                    } else {
-                        await logTriggerEvent("error", `Shopify discount generation failed`, {
-                            trigger_name: trigger.name,
-                            error: result.error,
-                            subscriber_email: subscriberEmail,
-                        });
-                    }
+                // Build effective slots list
+                const effectiveSlots: any[] = [...campaignSlots]
+                if (effectiveSlots.length === 0 && campaignLegacyIsPerUser) {
+                    effectiveSlots.push({
+                        config: campaignLegacyConfig,
+                        preview_code: campaign.variable_values?.discount_code || "",
+                        target_url_key: campaignLegacyConfig.targetUrlKey || "",
+                        code_mode: "per_user",
+                    })
+                }
+                if (effectiveSlots.length === 0 && trigger.generate_discount && triggerDiscountConfig) {
+                    effectiveSlots.push({
+                        config: triggerDiscountConfig,
+                        preview_code: "",
+                        target_url_key: triggerDiscountConfig.targetUrlKey || "",
+                        code_mode: "per_user",
+                    })
                 }
 
                 // Build template variables
                 const assets: Record<string, string> = {
                     ...(campaign.variable_values || {}),
                     subscriber_email: subscriberEmail,
-                    discount_code: discountCode,
                 };
 
-                // Inject discount code into target URL variable
-                if (discountCode) {
-                    const targetUrlKey = discountConfig?.targetUrlKey || null;
+                // Generate a discount code for each slot and inject into assets
+                for (const slot of effectiveSlots) {
+                    await logTriggerEvent("info", `Generating Shopify discount code (${slot.config.codePrefix})`, {
+                        trigger_name: trigger.name,
+                        config: slot.config,
+                        subscriber_email: subscriberEmail,
+                    });
 
-                    if (targetUrlKey && assets[targetUrlKey]) {
-                        const baseUrl = assets[targetUrlKey];
-                        const sep = baseUrl.includes("?") ? "&" : "?";
-                        assets[targetUrlKey] = baseUrl.includes("discount=")
-                            ? baseUrl.replace(/discount=[^&]+/, `discount=${discountCode}`)
-                            : `${baseUrl}${sep}discount=${discountCode}`;
-                    } else {
-                        // Fallback: scan all CTA/activate URL variables
-                        for (const [key, value] of Object.entries(assets)) {
-                            if (typeof value === "string"
-                                && (key.includes("cta") || key.includes("activate"))
-                                && value.startsWith("http")
-                                && !value.includes("discount=")) {
-                                const sep = value.includes("?") ? "&" : "?";
-                                assets[key] = `${value}${sep}discount=${discountCode}`;
+                    const result = await createShopifyDiscount({
+                        type: slot.config.type,
+                        value: slot.config.value,
+                        durationDays: slot.config.durationDays,
+                        codePrefix: slot.config.codePrefix,
+                        usageLimit: slot.config.usageLimit ?? 1,
+                        ...(slot.config.expiresOn ? { expiresOn: slot.config.expiresOn } : {}),
+                    });
+
+                    if (result.success && result.code) {
+                        await logTriggerEvent("success", `Shopify code generated: ${result.code}`, {
+                            trigger_name: trigger.name,
+                            subscriber_email: subscriberEmail,
+                        });
+
+                        // Replace preview code in HTML if present
+                        if (slot.preview_code && slot.preview_code !== result.code) {
+                            campaign.html_content = campaign.html_content.replaceAll(slot.preview_code, result.code);
+                        }
+
+                        // Inject discount into target URL variable
+                        const targetUrlKey = slot.target_url_key;
+                        if (targetUrlKey && assets[targetUrlKey]) {
+                            const baseUrl = assets[targetUrlKey];
+                            const sep = baseUrl.includes("?") ? "&" : "?";
+                            assets[targetUrlKey] = baseUrl.includes("discount=")
+                                ? baseUrl.replace(/discount=[^&]+/, `discount=${result.code}`)
+                                : `${baseUrl}${sep}discount=${result.code}`;
+                        } else if (!targetUrlKey) {
+                            // Fallback: scan all CTA/activate URL variables (only for slots with no explicit mapping)
+                            for (const [key, value] of Object.entries(assets)) {
+                                if (typeof value === "string"
+                                    && (key.includes("cta") || key.includes("activate"))
+                                    && value.startsWith("http")
+                                    && !value.includes("discount=")) {
+                                    const sep = value.includes("?") ? "&" : "?";
+                                    assets[key] = `${value}${sep}discount=${result.code}`;
+                                }
                             }
                         }
-                    }
 
-                    // Also replace preview discount code in the template if present
-                    const previewCode = campaign.variable_values?.discount_code;
-                    if (previewCode && previewCode !== discountCode) {
-                        campaign.html_content = campaign.html_content.replaceAll(previewCode, discountCode);
+                        // Set discount_code for legacy template rendering
+                        assets.discount_code = result.code;
+                    } else {
+                        await logTriggerEvent("error", `Shopify discount generation failed (${slot.config.codePrefix})`, {
+                            trigger_name: trigger.name,
+                            error: result.error,
+                            subscriber_email: subscriberEmail,
+                        });
                     }
                 }
 
@@ -268,7 +285,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
 
                 if (subscriberData) {
                     const { html: mergedHtml, log: mergeTagLog } = await applyAllMergeTagsWithLog(renderedHtml, subscriberData, {
-                        discount_code: discountCode,
+                        discount_code: assets.discount_code || "",
                         unsubscribe_url: unsubscribeUrl,
                     });
                     renderedHtml = mergedHtml;

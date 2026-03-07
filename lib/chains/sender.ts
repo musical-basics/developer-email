@@ -70,32 +70,51 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         unsubscribe_url: unsubscribeUrl,
     });
 
-    // Per-user discount: generate a unique Shopify code for this recipient
+    // Multi-discount slots support (with backward compat for legacy single-preset config)
     if (templateVariableValues) {
-        const discountPresetConfig = templateVariableValues.discount_preset_config;
-        const isPerUserDiscount = !!templateVariableValues.discount_preset_id && !!discountPresetConfig;
+        const discountSlots: any[] = templateVariableValues.discount_slots || []
+        const legacyPresetConfig = templateVariableValues.discount_preset_config
+        const legacyIsPerUser = !!templateVariableValues.discount_preset_id && !!legacyPresetConfig
+        if (discountSlots.length === 0 && legacyIsPerUser) {
+            discountSlots.push({
+                config: legacyPresetConfig,
+                preview_code: templateVariableValues.discount_code || "",
+                target_url_key: legacyPresetConfig.targetUrlKey || "",
+                code_mode: "per_user",
+            })
+        }
 
-        if (isPerUserDiscount) {
+        for (const slot of discountSlots) {
+            if ((slot.code_mode || "per_user") !== "per_user") continue
             try {
                 const discountRes = await createShopifyDiscount({
-                    type: discountPresetConfig.type,
-                    value: discountPresetConfig.value,
-                    durationDays: discountPresetConfig.durationDays,
-                    codePrefix: discountPresetConfig.codePrefix,
+                    type: slot.config.type,
+                    value: slot.config.value,
+                    durationDays: slot.config.durationDays,
+                    codePrefix: slot.config.codePrefix,
                     usageLimit: 1,
-                });
+                    ...(slot.config.expiresOn ? { expiresOn: slot.config.expiresOn } : {}),
+                })
                 if (discountRes.success && discountRes.code) {
-                    // Replace discount code text in HTML
-                    const oldCode = templateVariableValues.discount_code;
-                    if (oldCode) {
-                        finalHtml = finalHtml.replaceAll(oldCode, discountRes.code);
+                    if (slot.preview_code) {
+                        finalHtml = finalHtml.replaceAll(slot.preview_code, discountRes.code)
                     }
                     // Also replace discount= param in any URLs
-                    finalHtml = finalHtml.replace(/discount=[A-Z0-9-]+/g, `discount=${discountRes.code}`);
+                    if (slot.target_url_key && templateVariableValues[slot.target_url_key]) {
+                        const targetUrl = templateVariableValues[slot.target_url_key]
+                        if (!targetUrl.includes('discount=')) {
+                            const escapedUrl = targetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                            const urlRegex = new RegExp(`(href=["'])${escapedUrl}([^"']*)`, 'g')
+                            finalHtml = finalHtml.replace(urlRegex, (match: string, prefix: string, suffix: string) => {
+                                if (match.includes('discount=')) return match
+                                const sep = (targetUrl + suffix).includes('?') ? '&' : '?'
+                                return `${prefix}${targetUrl}${suffix}${sep}discount=${discountRes.code}`
+                            })
+                        }
+                    }
                 }
             } catch (discountErr) {
-                console.error(`Chain: Failed to generate per-user discount for ${email}:`, discountErr);
-                // Continue with the preview/fallback code
+                console.error(`Chain: Failed to generate per-user discount for ${email} (slot ${slot.config.codePrefix}):`, discountErr)
             }
         }
     }

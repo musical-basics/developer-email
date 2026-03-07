@@ -186,9 +186,20 @@ export async function POST(request: Request) {
             const sentRecords: any[] = [];
 
             // Send to each recipient
-            // Pre-check for per-user discount config
-            const discountPresetConfig = campaign.variable_values?.discount_preset_config;
-            const isPerUserDiscount = !!campaign.variable_values?.discount_preset_id && !!discountPresetConfig;
+            // Multi-discount slots support (with backward compat for legacy single-preset config)
+            const discountSlots: any[] = campaign.variable_values?.discount_slots || []
+            const legacyPresetConfig = campaign.variable_values?.discount_preset_config
+            const legacyIsPerUser = !!campaign.variable_values?.discount_preset_id && !!legacyPresetConfig
+            // Backward compat: wrap legacy single config into a slot
+            if (discountSlots.length === 0 && legacyIsPerUser) {
+                discountSlots.push({
+                    config: legacyPresetConfig,
+                    preview_code: campaign.variable_values?.discount_code || "",
+                    target_url_key: legacyPresetConfig.targetUrlKey || "",
+                    code_mode: "per_user",
+                })
+            }
+            const hasPerUserSlots = discountSlots.some((s: any) => (s.code_mode || "per_user") === "per_user")
 
             for (let ri = 0; ri < recipients.length; ri++) {
                 const sub = recipients[ri];
@@ -200,50 +211,47 @@ export async function POST(request: Request) {
                     });
                     let personalHtml = personalHtml_;
 
-                    // Per-user discount: generate a unique Shopify code for this recipient
-                    if (isPerUserDiscount) {
-                        try {
-                            const discountRes = await createShopifyDiscount({
-                                type: discountPresetConfig.type,
-                                value: discountPresetConfig.value,
-                                durationDays: discountPresetConfig.durationDays,
-                                codePrefix: discountPresetConfig.codePrefix,
-                                usageLimit: 1,
-                            });
-                            if (discountRes.success && discountRes.code) {
-                                // Replace discount code text in HTML
-                                const oldCode = campaign.variable_values?.discount_code;
-                                if (oldCode) {
-                                    personalHtml = personalHtml.replaceAll(oldCode, discountRes.code);
-                                }
-                                // Replace existing discount= param in any URLs
-                                personalHtml = personalHtml.replace(/discount=[A-Z0-9-]+/g, `discount=${discountRes.code}`);
-
-                                // If targetUrlKey is configured, find that URL in the HTML and append ?discount=CODE
-                                // This handles the case where the editor didn't set it (e.g. main_cta_url was empty at preset time)
-                                const targetUrlKey = discountPresetConfig.targetUrlKey;
-                                if (targetUrlKey) {
-                                    const targetUrl = campaign.variable_values?.[targetUrlKey];
-                                    if (targetUrl && !targetUrl.includes('discount=')) {
-                                        // Find the rendered URL in the HTML and append the discount param
-                                        const escapedUrl = targetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                                        const urlRegex = new RegExp(`(href=["'])${escapedUrl}([^"']*)`, 'g');
-                                        personalHtml = personalHtml.replace(urlRegex, (match, prefix, suffix) => {
-                                            // Only append if discount= not already in this href
-                                            if (match.includes('discount=')) return match;
-                                            const sep = (targetUrl + suffix).includes('?') ? '&' : '?';
-                                            return `${prefix}${targetUrl}${suffix}${sep}discount=${discountRes.code}`;
-                                        });
+                    // Per-user discount: generate unique Shopify codes for each slot
+                    if (hasPerUserSlots) {
+                        for (const slot of discountSlots) {
+                            if ((slot.code_mode || "per_user") !== "per_user") continue
+                            try {
+                                const discountRes = await createShopifyDiscount({
+                                    type: slot.config.type,
+                                    value: slot.config.value,
+                                    durationDays: slot.config.durationDays,
+                                    codePrefix: slot.config.codePrefix,
+                                    usageLimit: 1,
+                                    ...(slot.config.expiresOn ? { expiresOn: slot.config.expiresOn } : {}),
+                                });
+                                if (discountRes.success && discountRes.code) {
+                                    // Replace preview code text in HTML
+                                    if (slot.preview_code) {
+                                        personalHtml = personalHtml.replaceAll(slot.preview_code, discountRes.code);
+                                    }
+                                    // Replace discount= param for this slot's target URL in rendered HTML
+                                    const targetUrlKey = slot.target_url_key;
+                                    if (targetUrlKey) {
+                                        const targetUrl = campaign.variable_values?.[targetUrlKey];
+                                        if (targetUrl && !targetUrl.includes('discount=')) {
+                                            const escapedUrl = targetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                                            const urlRegex = new RegExp(`(href=["'])${escapedUrl}([^"']*)`, 'g');
+                                            personalHtml = personalHtml.replace(urlRegex, (match: string, prefix: string, suffix: string) => {
+                                                if (match.includes('discount=')) return match;
+                                                const sep = (targetUrl + suffix).includes('?') ? '&' : '?';
+                                                return `${prefix}${targetUrl}${suffix}${sep}discount=${discountRes.code}`;
+                                            });
+                                        }
                                     }
                                 }
+                            } catch (discountErr) {
+                                console.error(`Failed to generate per-user discount for ${sub.email} (slot ${slot.config.codePrefix}):`, discountErr);
+                                // Continue with the preview code as fallback
                             }
-                            // Rate limit: small delay between Shopify API calls
-                            if (ri < recipients.length - 1) {
-                                await new Promise(r => setTimeout(r, 300));
-                            }
-                        } catch (discountErr) {
-                            console.error(`Failed to generate per-user discount for ${sub.email}:`, discountErr);
-                            // Continue with the preview code as fallback
+                        }
+                        // Rate limit: small delay between Shopify API calls
+                        if (ri < recipients.length - 1) {
+                            await new Promise(r => setTimeout(r, 300));
                         }
                     }
 

@@ -368,32 +368,47 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
         subscriber_id: subscriberId
     }
 
-    // 3. If per-user discount preset, generate a unique code for this recipient
-    const presetConfig = newVars.discount_preset_config
-    if (newVars.discount_preset_id && presetConfig) {
+    // 3. Multi-discount slots: generate unique codes for each slot
+    const discountSlots: any[] = newVars.discount_slots || []
+    const legacyConfig = newVars.discount_preset_config
+    if (discountSlots.length === 0 && newVars.discount_preset_id && legacyConfig) {
+        discountSlots.push({
+            config: legacyConfig,
+            preview_code: newVars.discount_code || "",
+            target_url_key: legacyConfig.targetUrlKey || "",
+            code_mode: "per_user",
+        })
+        newVars.discount_slots = discountSlots
+    }
+
+    for (const slot of discountSlots) {
+        if ((slot.code_mode || "per_user") !== "per_user") continue
         try {
             const { createShopifyDiscount } = await import("@/app/actions/shopify-discount")
             const res = await createShopifyDiscount({
-                type: presetConfig.type,
-                value: presetConfig.value,
-                durationDays: presetConfig.durationDays,
-                codePrefix: presetConfig.codePrefix,
-                usageLimit: 1, // per-user = 1 use per code
+                type: slot.config.type,
+                value: slot.config.value,
+                durationDays: slot.config.durationDays,
+                codePrefix: slot.config.codePrefix,
+                usageLimit: 1,
+                ...(slot.config.expiresOn ? { expiresOn: slot.config.expiresOn } : {}),
             })
             if (res.success && res.code) {
-                newVars.discount_code = res.code
+                // Update the slot's preview code with the new code
+                slot.preview_code = res.code
                 // Update the target URL with the new code
-                const targetUrlKey = presetConfig.targetUrlKey || "main_cta_url"
-                const baseUrl = newVars[targetUrlKey] || ""
-                if (baseUrl) {
+                const targetUrlKey = slot.target_url_key
+                if (targetUrlKey && newVars[targetUrlKey]) {
+                    const baseUrl = newVars[targetUrlKey]
                     newVars[targetUrlKey] = baseUrl.includes("discount=")
                         ? baseUrl.replace(/discount=[^&]+/, `discount=${res.code}`)
                         : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}discount=${res.code}`
                 }
+                // Also set legacy discount_code for backward compat template rendering
+                newVars.discount_code = res.code
             }
         } catch (e) {
             console.error("Failed to generate per-user discount code:", e)
-            // Continue without unique code — preview code will be used as fallback
         }
     }
 

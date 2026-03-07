@@ -7,39 +7,62 @@ interface DiscountAuditCardProps {
     variableValues: Record<string, any> | null
 }
 
+interface DiscountSlotDisplay {
+    label: string
+    preview_code: string
+    target_url_key: string
+    config: {
+        type: string
+        value: number
+        durationDays: number
+        codePrefix: string
+    }
+    code_mode: string
+    target_url?: string
+    has_discount_attached: boolean
+}
+
 export function DiscountAuditCard({ variableValues }: DiscountAuditCardProps) {
     const vars = variableValues || {}
-    const discountCode = vars.discount_code
-    const presetConfig = vars.discount_preset_config
-    const presetId = vars.discount_preset_id
-    const isPerUser = !!presetId && !!presetConfig
 
-    // No discount configured — don't render
-    if (!discountCode) return null
+    // Build slots list from new format or legacy
+    const rawSlots: any[] = vars.discount_slots || []
+    const legacyConfig = vars.discount_preset_config
+    const legacyCode = vars.discount_code
+    const legacyIsPerUser = !!vars.discount_preset_id && !!legacyConfig
 
-    // Find all URL variables that have ?discount= attached
-    const urlsWithDiscount: { key: string; url: string }[] = []
-    const urlsWithoutDiscount: { key: string; url: string }[] = []
+    // Backward compat: wrap legacy into a slot
+    if (rawSlots.length === 0 && legacyCode) {
+        rawSlots.push({
+            config: legacyConfig || {},
+            preview_code: legacyCode,
+            target_url_key: legacyConfig?.targetUrlKey || "",
+            code_mode: legacyIsPerUser ? "per_user" : "all_users",
+            label: legacyConfig
+                ? `${legacyConfig.type === "percentage" ? `${legacyConfig.value}%` : `$${legacyConfig.value}`} off`
+                : "Discount",
+        })
+    }
 
-    Object.entries(vars).forEach(([key, value]) => {
-        if (typeof value !== "string") return
-        const keyLower = key.toLowerCase()
-        const valueLower = value.toLowerCase()
-        // Skip non-URL values
-        if (keyLower === "discount_code" || keyLower === "discount_preset_id" || keyLower === "discount_preset_config") return
-        if (keyLower.includes("from_") || keyLower.includes("subscriber")) return
-        const isUrl = valueLower.startsWith("http") || valueLower.includes(".com") || valueLower.includes(".io")
-        const isLinkKey = keyLower.includes("url") || keyLower.includes("link") || keyLower.includes("cta") || keyLower.includes("href")
-        if (!isUrl && !isLinkKey) return
+    if (rawSlots.length === 0) return null
 
-        if (value.includes("discount=")) {
-            urlsWithDiscount.push({ key, url: value })
-        } else {
-            urlsWithoutDiscount.push({ key, url: value })
+    // Enrich slots with URL info
+    const slots: DiscountSlotDisplay[] = rawSlots.map((slot: any) => {
+        const targetUrl = slot.target_url_key ? vars[slot.target_url_key] : undefined
+        const hasDiscount = targetUrl ? String(targetUrl).includes("discount=") : false
+        return {
+            label: slot.label || `${slot.config?.codePrefix || "DISCOUNT"}-XXXXXX`,
+            preview_code: slot.preview_code || "",
+            target_url_key: slot.target_url_key || "",
+            config: slot.config || {},
+            code_mode: slot.code_mode || "per_user",
+            target_url: targetUrl,
+            has_discount_attached: hasDiscount || !!slot.target_url_key,
         }
     })
 
-    const hasIssues = urlsWithDiscount.length === 0
+    const unmappedSlots = slots.filter(s => !s.target_url_key)
+    const hasIssues = unmappedSlots.length > 0
 
     return (
         <Card className="border-border bg-card">
@@ -47,9 +70,12 @@ export function DiscountAuditCard({ variableValues }: DiscountAuditCardProps) {
                 <CardTitle className="flex items-center gap-2 text-base font-medium text-foreground">
                     <TicketPercent className="h-5 w-5 text-emerald-400" />
                     Discount Audit
+                    <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        ({slots.length} slot{slots.length !== 1 ? "s" : ""})
+                    </span>
                     {hasIssues ? (
                         <span className="ml-auto rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
-                            No Links
+                            Unmapped
                         </span>
                     ) : (
                         <span className="ml-auto rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-500">
@@ -57,77 +83,67 @@ export function DiscountAuditCard({ variableValues }: DiscountAuditCardProps) {
                         </span>
                     )}
                 </CardTitle>
-                <CardDescription className="text-muted-foreground">Discount code and link attachment overview.</CardDescription>
+                <CardDescription className="text-muted-foreground">
+                    Discount codes and link mapping overview.
+                </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-                {/* Code + Mode */}
-                <div className="flex items-center justify-between">
-                    <div className="space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Discount Code</p>
-                        <p className="font-mono text-sm font-semibold tracking-wider">{discountCode}</p>
-                    </div>
-                    <div className="text-right space-y-0.5">
-                        <p className="text-xs text-muted-foreground">Mode</p>
-                        <span className={`text-xs font-semibold px-2 py-0.5 rounded ${isPerUser ? "bg-violet-500/10 text-violet-400" : "bg-emerald-500/10 text-emerald-400"}`}>
-                            {isPerUser ? "Per User (unique codes)" : "Shared Code"}
-                        </span>
-                    </div>
-                </div>
+            <CardContent className="space-y-3">
+                {slots.map((slot, i) => (
+                    <div key={i} className="border border-border rounded-lg p-3 space-y-2 bg-background/50">
+                        <div className="flex items-center justify-between">
+                            <span className={`text-xs font-semibold px-2 py-0.5 rounded ${slot.config.type === "percentage"
+                                    ? "bg-emerald-500/10 text-emerald-400"
+                                    : "bg-violet-500/10 text-violet-400"
+                                }`}>
+                                {slot.label}
+                            </span>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${slot.code_mode === "per_user"
+                                    ? "bg-violet-500/10 text-violet-400"
+                                    : "bg-emerald-500/10 text-emerald-400"
+                                }`}>
+                                {slot.code_mode === "per_user" ? "Per User" : "Shared"}
+                            </span>
+                        </div>
 
-                {/* Preset details (if per-user) */}
-                {isPerUser && presetConfig && (
-                    <div className="flex items-center gap-3 bg-violet-500/5 rounded px-3 py-2">
-                        <Clock className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
-                        <p className="text-[11px] text-muted-foreground">
-                            Each recipient gets a unique <strong className="text-violet-400">{presetConfig.codePrefix}-XXXXXX</strong> code
-                            {presetConfig.type === "percentage" ? ` for ${presetConfig.value}% off` : ` for $${presetConfig.value} off`}
-                            , valid {presetConfig.durationDays} days, 1 use each.
-                        </p>
-                    </div>
-                )}
+                        {/* Preview code */}
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-muted-foreground">Preview Code:</span>
+                            <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded tracking-wider">
+                                {slot.preview_code}
+                            </code>
+                        </div>
 
-                {/* URLs with discount */}
-                {urlsWithDiscount.length > 0 && (
-                    <div className="space-y-1.5">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                            Discount attached to {urlsWithDiscount.length} link{urlsWithDiscount.length !== 1 ? "s" : ""}
-                        </p>
-                        {urlsWithDiscount.map(({ key, url }) => (
-                            <div key={key} className="text-[11px] bg-emerald-500/5 rounded px-3 py-1.5">
-                                <span className="font-mono text-emerald-400">{"{{" + key + "}}"}</span>
-                                <p className="text-muted-foreground truncate mt-0.5">{url}</p>
+                        {/* Per-user details */}
+                        {slot.code_mode === "per_user" && slot.config.codePrefix && (
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                                <Clock className="w-3 h-3 text-violet-400 flex-shrink-0" />
+                                <span>
+                                    {slot.config.codePrefix}-XXXXXX · {slot.config.durationDays} days · 1 use each
+                                </span>
                             </div>
-                        ))}
-                    </div>
-                )}
+                        )}
 
-                {/* URLs without discount */}
-                {urlsWithoutDiscount.length > 0 && (
-                    <div className="space-y-1.5">
-                        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                            <Link2 className="w-3.5 h-3.5 text-muted-foreground/60" />
-                            {urlsWithoutDiscount.length} link{urlsWithoutDiscount.length !== 1 ? "s" : ""} without discount
-                        </p>
-                        {urlsWithoutDiscount.map(({ key, url }) => (
-                            <div key={key} className="text-[11px] bg-muted/30 rounded px-3 py-1.5 opacity-60">
-                                <span className="font-mono text-muted-foreground">{"{{" + key + "}}"}</span>
-                                <p className="text-muted-foreground truncate mt-0.5">{url}</p>
+                        {/* Mapped URL */}
+                        {slot.target_url_key ? (
+                            <div className="flex items-start gap-2 text-[11px] bg-emerald-500/5 rounded px-2.5 py-1.5">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                <div className="min-w-0">
+                                    <span className="font-mono text-emerald-400">{"{{" + slot.target_url_key + "}}"}</span>
+                                    {slot.target_url && (
+                                        <p className="text-muted-foreground truncate mt-0.5">{slot.target_url}</p>
+                                    )}
+                                </div>
                             </div>
-                        ))}
+                        ) : (
+                            <div className="flex items-start gap-2 bg-amber-500/5 rounded px-2.5 py-1.5">
+                                <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                                <p className="text-[11px] text-amber-500/80">
+                                    Not mapped to any CTA link. Go to the editor to map it.
+                                </p>
+                            </div>
+                        )}
                     </div>
-                )}
-
-                {/* Warning: no URLs have discount */}
-                {hasIssues && (
-                    <div className="flex items-start gap-2 bg-amber-500/5 rounded px-3 py-2">
-                        <AlertCircle className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-[11px] text-amber-500/80">
-                            Code <strong>{discountCode}</strong> is set but no URLs have <code className="text-[10px]">?discount=</code> attached.
-                            Go back to the editor and use the link picker to apply it.
-                        </p>
-                    </div>
-                )}
+                ))}
             </CardContent>
         </Card>
     )
