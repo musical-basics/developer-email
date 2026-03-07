@@ -100,6 +100,7 @@ import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubsc
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
 import { getTags, ensureTagDefinitions, type TagDefinition } from "@/app/actions/tags"
+import { evaluateTriggersForSubscriber } from "@/app/actions/evaluate-triggers"
 import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -469,8 +470,11 @@ export default function AudienceManagerPage() {
         setLastSelectedIndex(index)
     }
 
+    const [originalTags, setOriginalTags] = useState<string[]>([])
+
     const handleEdit = (subscriber: Subscriber) => {
         setFormData(subscriber)
+        setOriginalTags(subscriber.tags || [])
         setIsNewSubscriber(false)
         setIsDrawerOpen(true)
     }
@@ -492,6 +496,7 @@ export default function AudienceManagerPage() {
             tags: [],
             status: "active",
         })
+        setOriginalTags([])
         setIsNewSubscriber(true)
         setIsDrawerOpen(true)
     }
@@ -546,6 +551,18 @@ export default function AudienceManagerPage() {
                 title: isNewSubscriber ? "Subscriber added" : "Subscriber updated",
                 description: "The changes have been saved successfully.",
             })
+
+            // Evaluate triggers for newly added tags
+            const savedTags = payload.tags || []
+            const prevTags = isNewSubscriber ? [] : originalTags
+            const addedTags = savedTags.filter((t: string) => !prevTags.includes(t))
+            if (addedTags.length > 0 && formData.id) {
+                console.log("[audience] New tags added, evaluating triggers:", addedTags)
+                evaluateTriggersForSubscriber(formData.id, savedTags, prevTags)
+                    .then(res => console.log("[audience] Trigger evaluation result:", res))
+                    .catch(err => console.error("[audience] Trigger evaluation error:", err))
+            }
+
             setIsDrawerOpen(false)
             fetchSubscribers()
         }
