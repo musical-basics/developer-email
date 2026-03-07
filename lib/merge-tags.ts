@@ -196,6 +196,25 @@ export async function applyAllMergeTagsWithLog(
         }
     }
 
+    // 3.5. Catch-all: apply any dynamicVars that weren't handled by registered tags
+    //      (e.g. discount_code1, discount_code2, discount_code3 which may not be in the DB)
+    for (const [dvKey, dvValue] of Object.entries(dynamicVars)) {
+        if (processedTags.has(dvKey) || !dvValue) continue
+        if (foundSet.has(dvKey)) {
+            const dvRegex = new RegExp(`\\{\\{${dvKey}\\}\\}`, "g")
+            result = result.replace(dvRegex, dvValue)
+            processedTags.add(dvKey)
+            entries.push({
+                tag: dvKey,
+                category: "dynamic",
+                resolved: true,
+                value: dvValue,
+                source: "dynamicVars",
+            })
+            resolvedMap[dvKey] = dvValue
+        }
+    }
+
     // 4. Detect any leftover unresolved tags
     const unresolvedTags: string[] = []
     for (const tag of foundSet) {

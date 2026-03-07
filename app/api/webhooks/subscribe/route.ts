@@ -286,6 +286,9 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                 if (subscriberData) {
                     const { html: mergedHtml, log: mergeTagLog } = await applyAllMergeTagsWithLog(renderedHtml, subscriberData, {
                         discount_code: assets.discount_code || "",
+                        discount_code1: assets.discount_code1 || "",
+                        discount_code2: assets.discount_code2 || "",
+                        discount_code3: assets.discount_code3 || "",
                         unsubscribe_url: unsubscribeUrl,
                     });
                     renderedHtml = mergedHtml;

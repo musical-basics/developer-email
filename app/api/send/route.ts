@@ -208,6 +208,10 @@ export async function POST(request: Request) {
 
                     const { html: personalHtml_, log: mergeTagLog } = await applyAllMergeTagsWithLog(htmlWithVideoOverlay, sub, {
                         unsubscribe_url: unsubscribeUrl,
+                        discount_code: campaign.variable_values?.discount_code || "",
+                        discount_code1: campaign.variable_values?.discount_code1 || "",
+                        discount_code2: campaign.variable_values?.discount_code2 || "",
+                        discount_code3: campaign.variable_values?.discount_code3 || "",
                     });
                     let personalHtml = personalHtml_;
 

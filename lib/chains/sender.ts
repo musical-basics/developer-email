@@ -68,6 +68,10 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
 
     finalHtml = await applyAllMergeTags(finalHtml, subscriberData || { id: subscriberId, email, first_name: firstName }, {
         unsubscribe_url: unsubscribeUrl,
+        discount_code: templateVariableValues?.discount_code || "",
+        discount_code1: templateVariableValues?.discount_code1 || "",
+        discount_code2: templateVariableValues?.discount_code2 || "",
+        discount_code3: templateVariableValues?.discount_code3 || "",
     });
 
     // Multi-discount slots support (with backward compat for legacy single-preset config)

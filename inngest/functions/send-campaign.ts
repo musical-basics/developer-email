@@ -98,6 +98,10 @@ export const sendCampaign = inngest.createFunction(
                     const unsubscribeUrl = `${baseUrl}/unsubscribe?s=${sub.id}&c=${campaignId}`;
                     let personalHtml = await applyAllMergeTags(htmlWithFooter, sub, {
                         unsubscribe_url: unsubscribeUrl,
+                        discount_code: campaign.variable_values?.discount_code || "",
+                        discount_code1: campaign.variable_values?.discount_code1 || "",
+                        discount_code2: campaign.variable_values?.discount_code2 || "",
+                        discount_code3: campaign.variable_values?.discount_code3 || "",
                     });
 
                     // Per-user discount: generate unique Shopify codes for each slot

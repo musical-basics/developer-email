@@ -69,12 +69,34 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
     }, [open])
 
 
+
+    /**
+     * Sync discount_code1, discount_code2, discount_code3 merge tags from the slots array.
+     * Also sets legacy `discount_code` to the first slot's code for backward compat.
+     */
+    const syncCodeMergeTags = (target: Record<string, any>, slotsArr: DiscountSlot[]) => {
+        // Clear all indexed code tags first
+        delete target.discount_code1
+        delete target.discount_code2
+        delete target.discount_code3
+        delete target.discount_code
+        // Write indexed tags
+        slotsArr.forEach((slot, i) => {
+            target[`discount_code${i + 1}`] = slot.preview_code
+        })
+        // Legacy compat — first slot code
+        if (slotsArr.length > 0) {
+            target.discount_code = slotsArr[0].preview_code
+        }
+    }
+
     const updateSlots = (newSlots: DiscountSlot[]) => {
         const updated = { ...assets, discount_slots: newSlots }
         // Clean up legacy fields if present
         delete (updated as any).discount_preset_id
         delete (updated as any).discount_preset_config
-        delete (updated as any).discount_code
+        // Sync code merge tags
+        syncCodeMergeTags(updated, newSlots)
         onAssetsChange(updated)
     }
 
@@ -143,21 +165,21 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
 
     const handleRemoveSlot = (index: number) => {
         const slot = slots[index]
-        // Remove ?discount=PREVIEW_CODE from any URL it was mapped to
         const updated = { ...assets }
+        // Remove ?discount= from any URL it was mapped to
         if (slot.target_url_key && updated[slot.target_url_key]) {
             const url = updated[slot.target_url_key] as string
-            // Remove discount param
             updated[slot.target_url_key] = url
                 .replace(new RegExp(`[?&]discount=${slot.preview_code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), '')
-                .replace(/\?&/, '?')   // clean up malformed ?&
-                .replace(/\?$/, '')     // clean up trailing ?
+                .replace(/\?&/, '?')
+                .replace(/\?$/, '')
         }
         const newSlots = slots.filter((_, i) => i !== index)
         updated.discount_slots = newSlots
         delete updated.discount_preset_id
         delete updated.discount_preset_config
-        delete updated.discount_code
+        // Re-sync code merge tags with new slot order
+        syncCodeMergeTags(updated, newSlots)
         onAssetsChange(updated)
     }
 
