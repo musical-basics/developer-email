@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { createClient as createServiceClient } from "@supabase/supabase-js"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -37,7 +38,10 @@ export async function createCampaign(prevState: any, formData: FormData) {
 }
 
 export async function getCampaigns(emailType?: string) {
-    const supabase = await createClient()
+    const supabase = createServiceClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_KEY!
+    )
 
     // Fetch campaigns
     let query = supabase
@@ -87,6 +91,45 @@ export async function getCampaigns(emailType?: string) {
             }
         }
     })
+
+    // Fallback: for campaigns with no sent_history rows, resolve emails from variable_values
+    const missingIds = completedIds.filter(id => !recipientMap[id])
+    if (missingIds.length > 0) {
+        // Collect subscriber IDs from variable_values of campaigns missing sent_history
+        const subIdSet = new Set<string>()
+        const campaignToSubIds: Record<string, string[]> = {}
+        for (const c of campaigns) {
+            if (!missingIds.includes(c.id)) continue
+            const vv = c.variable_values || {}
+            const ids: string[] = vv.subscriber_ids || (vv.subscriber_id ? [vv.subscriber_id] : [])
+            if (ids.length > 0) {
+                campaignToSubIds[c.id] = ids
+                ids.forEach(id => subIdSet.add(id))
+            }
+        }
+        if (subIdSet.size > 0) {
+            const { data: subs } = await supabase
+                .from("subscribers")
+                .select("id, email")
+                .in("id", Array.from(subIdSet))
+            if (subs) {
+                const subEmailMap = new Map(subs.map(s => [s.id, s.email]))
+                for (const [campId, subIds] of Object.entries(campaignToSubIds)) {
+                    for (const sid of subIds) {
+                        const email = subEmailMap.get(sid)
+                        if (email) {
+                            if (!recipientMap[campId]) recipientMap[campId] = []
+                            if (!recipientDetailMap[campId]) recipientDetailMap[campId] = []
+                            if (!recipientMap[campId].includes(email)) {
+                                recipientMap[campId].push(email)
+                                recipientDetailMap[campId].push({ subscriber_id: sid, email })
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Fetch all open events for completed campaigns
     const { data: openEvents } = await supabase
