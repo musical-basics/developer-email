@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { Plus, Pencil, Trash2, Loader2, Tag, Users, X, Check } from "lucide-react"
+import { Plus, Pencil, Trash2, Loader2, Tag, Users, X, Check, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { getTags, createTag, updateTag, deleteTag, TagDefinition } from "@/app/actions/tags"
+import { getTags, createTag, updateTag, deleteTag, toggleTagStar, TagDefinition } from "@/app/actions/tags"
 
 export default function TagsPage() {
     const [tags, setTags] = useState<TagDefinition[]>([])
@@ -328,7 +328,22 @@ export default function TagsPage() {
                                         </div>
 
                                         {/* Actions */}
-                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={async () => {
+                                                    const { error } = await toggleTagStar(tag.id, !tag.is_starred)
+                                                    if (!error) await fetchTags()
+                                                }}
+                                                className={cn(
+                                                    "p-1.5 rounded-md transition-colors",
+                                                    tag.is_starred
+                                                        ? "text-amber-400 hover:bg-amber-500/10"
+                                                        : "text-muted-foreground/40 hover:text-amber-400 hover:bg-amber-500/10 opacity-0 group-hover:opacity-100"
+                                                )}
+                                                title={tag.is_starred ? "Unstar tag" : "Star tag (shows as quick-add in subscriber editor)"}
+                                            >
+                                                <Star className={cn("w-3.5 h-3.5", tag.is_starred && "fill-current")} />
+                                            </button>
                                             <button
                                                 onClick={() => startEdit(tag)}
                                                 className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

@@ -11,6 +11,7 @@ export interface TagDefinition {
     id: string
     name: string
     color: string
+    is_starred: boolean
     created_at: string
     updated_at: string
     subscriber_count?: number
@@ -94,6 +95,16 @@ export async function updateTag(id: string, updates: { name?: string; color?: st
     const { error } = await supabase
         .from("tag_definitions")
         .update({ ...updates, updated_at: new Date().toISOString() })
+        .eq("id", id)
+
+    if (error) return { success: false, error: error.message }
+    return { success: true }
+}
+
+export async function toggleTagStar(id: string, isStarred: boolean): Promise<{ success: boolean; error?: string }> {
+    const { error } = await supabase
+        .from("tag_definitions")
+        .update({ is_starred: isStarred, updated_at: new Date().toISOString() })
         .eq("id", id)
 
     if (error) return { success: false, error: error.message }

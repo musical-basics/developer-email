@@ -1958,6 +1958,34 @@ export default function AudienceManagerPage() {
                         <div className="space-y-4">
                             <h3 className="text-sm font-medium text-foreground">Tag Manager</h3>
 
+                            {/* Starred tags quick-add */}
+                            {(() => {
+                                const starredUnassigned = tagDefinitions
+                                    .filter(td => td.is_starred && !(formData.tags || []).includes(td.name))
+                                if (starredUnassigned.length === 0) return null
+                                return (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {starredUnassigned.map(td => (
+                                            <button
+                                                key={td.id}
+                                                type="button"
+                                                onClick={() => handleAddTag(td.name)}
+                                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:scale-105 cursor-pointer"
+                                                style={{
+                                                    backgroundColor: `${td.color}15`,
+                                                    color: `${td.color}90`,
+                                                    borderColor: `${td.color}30`,
+                                                }}
+                                                title={`Click to add "${td.name}"`}
+                                            >
+                                                <Plus className="w-3 h-3" />
+                                                {td.name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )
+                            })()}
+
                             <div className="flex gap-2 items-start">
                                 <Popover open={tagComboboxOpen} onOpenChange={setTagComboboxOpen}>
                                     <PopoverTrigger asChild>
