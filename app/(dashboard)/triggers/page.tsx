@@ -67,7 +67,7 @@ export default function TriggersPage() {
         const supabase = createClient()
         const [{ data: campaigns }, { data: chainData }] = await Promise.all([
             supabase.from("campaigns").select("id, name").eq("email_type", "automated").order("name"),
-            supabase.from("email_chains").select("id, name").is("subscriber_id", null).is("is_snapshot", false).order("name"),
+            supabase.from("email_chains").select("id, name").is("subscriber_id", null).or("is_snapshot.is.null,is_snapshot.eq.false").order("name"),
         ])
 
         setTriggers(triggerData)
@@ -226,8 +226,8 @@ export default function TriggersPage() {
                 type="button"
                 onClick={() => onChange("send_automated_email")}
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold transition-colors ${value === "send_automated_email"
-                        ? "bg-primary/10 text-primary border-r border-border"
-                        : "bg-background text-muted-foreground hover:bg-muted/50 border-r border-border"
+                    ? "bg-primary/10 text-primary border-r border-border"
+                    : "bg-background text-muted-foreground hover:bg-muted/50 border-r border-border"
                     }`}
             >
                 <Mail className="w-3.5 h-3.5" />
@@ -237,8 +237,8 @@ export default function TriggersPage() {
                 type="button"
                 onClick={() => onChange("start_chain")}
                 className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 text-xs font-semibold transition-colors ${value === "start_chain"
-                        ? "bg-violet-500/10 text-violet-400"
-                        : "bg-background text-muted-foreground hover:bg-muted/50"
+                    ? "bg-violet-500/10 text-violet-400"
+                    : "bg-background text-muted-foreground hover:bg-muted/50"
                     }`}
             >
                 <GitBranch className="w-3.5 h-3.5" />
