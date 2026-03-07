@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTagsWithLog } from "@/lib/merge-tags";
+import { inngest } from "@/inngest/client";
 
 
 const supabase = createClient(
@@ -102,11 +103,178 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
 
         for (const trigger of triggers) {
             try {
+                // ─── CHAIN DISPATCH ───────────────────────────────
+                if (trigger.chain_id) {
+                    await logTriggerEvent("info", `Trigger "${trigger.name}" starting journey`, {
+                        trigger_id: trigger.id,
+                        chain_id: trigger.chain_id,
+                        subscriber_email: subscriberEmail,
+                    });
+
+                    // Snapshot the master chain
+                    const { data: masterChain } = await supabase
+                        .from("email_chains")
+                        .select("id, name")
+                        .eq("id", trigger.chain_id)
+                        .single();
+
+                    if (!masterChain) {
+                        await logTriggerEvent("error", `Journey not found for trigger "${trigger.name}"`, {
+                            chain_id: trigger.chain_id,
+                            subscriber_email: subscriberEmail,
+                        });
+                        continue;
+                    }
+
+                    // Cancel any existing active chains for this subscriber
+                    const { data: existingProcesses } = await supabase
+                        .from("chain_processes")
+                        .select("id, history")
+                        .eq("subscriber_id", subscriberId)
+                        .in("status", ["active", "paused"]);
+
+                    if (existingProcesses && existingProcesses.length > 0) {
+                        for (const proc of existingProcesses) {
+                            const history = proc.history || [];
+                            history.push({
+                                step_name: "System",
+                                action: "Chain Cancelled — Replaced by trigger-launched chain",
+                                timestamp: new Date().toISOString(),
+                            });
+                            await supabase
+                                .from("chain_processes")
+                                .update({ status: "cancelled", history, updated_at: new Date().toISOString() })
+                                .eq("id", proc.id);
+                            await inngest.send({ name: "chain.cancel", data: { processId: proc.id } });
+                        }
+                    }
+
+                    // Duplicate chain as snapshot
+                    // 1. Clone the chain row
+                    const { data: chainRow } = await supabase
+                        .from("email_chains")
+                        .select("*")
+                        .eq("id", trigger.chain_id)
+                        .single();
+
+                    if (!chainRow) {
+                        await logTriggerEvent("error", `Failed to fetch chain for snapshot`, { chain_id: trigger.chain_id });
+                        continue;
+                    }
+
+                    const { data: snapshot, error: snapErr } = await supabase
+                        .from("email_chains")
+                        .insert({
+                            name: `${chainRow.name} (snapshot)`,
+                            slug: `${chainRow.slug}-snap-${Date.now()}`,
+                            description: chainRow.description,
+                            trigger_label: chainRow.trigger_label,
+                            trigger_event: chainRow.trigger_event,
+                            subscriber_id: null,
+                            is_snapshot: true,
+                        })
+                        .select("id")
+                        .single();
+
+                    if (snapErr || !snapshot) {
+                        await logTriggerEvent("error", `Failed to create chain snapshot`, { error: snapErr?.message });
+                        continue;
+                    }
+
+                    // 2. Clone steps
+                    const { data: steps } = await supabase
+                        .from("chain_steps")
+                        .select("*")
+                        .eq("chain_id", trigger.chain_id)
+                        .order("position", { ascending: true });
+
+                    if (steps && steps.length > 0) {
+                        await supabase.from("chain_steps").insert(
+                            steps.map(s => ({
+                                chain_id: snapshot.id,
+                                position: s.position,
+                                label: s.label,
+                                template_key: s.template_key,
+                                wait_after: s.wait_after,
+                            }))
+                        );
+                    }
+
+                    // 3. Clone branches
+                    const { data: branches } = await supabase
+                        .from("chain_branches")
+                        .select("*")
+                        .eq("chain_id", trigger.chain_id);
+
+                    if (branches && branches.length > 0) {
+                        await supabase.from("chain_branches").insert(
+                            branches.map(b => ({
+                                chain_id: snapshot.id,
+                                description: b.description,
+                                position: b.position,
+                                label: b.label,
+                                condition: b.condition,
+                                action: b.action,
+                            }))
+                        );
+                    }
+
+                    // Create process
+                    const { data: process, error: procErr } = await supabase
+                        .from("chain_processes")
+                        .insert({
+                            chain_id: snapshot.id,
+                            subscriber_id: subscriberId,
+                            status: "active",
+                            current_step_index: 0,
+                            history: [{
+                                step_name: "System",
+                                action: `Chain started via trigger "${trigger.name}"`,
+                                timestamp: new Date().toISOString(),
+                            }],
+                        })
+                        .select("id")
+                        .single();
+
+                    if (procErr || !process) {
+                        await logTriggerEvent("error", `Failed to create chain process`, { error: procErr?.message });
+                        continue;
+                    }
+
+                    // Fetch subscriber first name for inngest event
+                    const { data: subRow } = await supabase
+                        .from("subscribers")
+                        .select("first_name")
+                        .eq("id", subscriberId)
+                        .single();
+
+                    // Fire Inngest event
+                    await inngest.send({
+                        name: "chain.run",
+                        data: {
+                            processId: process.id,
+                            chainId: snapshot.id,
+                            subscriberId,
+                            email: subscriberEmail,
+                            firstName: subRow?.first_name || "",
+                        },
+                    });
+
+                    await logTriggerEvent("info", `Journey "${masterChain.name}" started for ${subscriberEmail}`, {
+                        trigger_name: trigger.name,
+                        chain_id: trigger.chain_id,
+                        process_id: process.id,
+                    });
+
+                    continue; // Skip the email send flow
+                }
+
+                // ─── EMAIL DISPATCH ───────────────────────────────
                 if (!trigger.campaign_id) {
-                    await logTriggerEvent("warn", `Trigger "${trigger.name}" has no linked campaign`, {
+                    await logTriggerEvent("warn", `Trigger "${trigger.name}" has no linked campaign or journey`, {
                         trigger_id: trigger.id,
                         subscriber_email: subscriberEmail,
-                        hint: "Link an automated email to this trigger on the Triggers page.",
+                        hint: "Link an automated email or journey to this trigger on the Triggers page.",
                     });
                     continue;
                 }

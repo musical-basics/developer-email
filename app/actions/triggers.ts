@@ -8,8 +8,9 @@ export interface EmailTrigger {
     name: string
     trigger_type: string
     trigger_value: string
-    action_type: string
+    action_type: string          // "send_automated_email" | "start_chain"
     campaign_id: string | null
+    chain_id: string | null
     generate_discount: boolean
     discount_config: {
         type: "percentage" | "fixed_amount"
@@ -22,13 +23,14 @@ export interface EmailTrigger {
     created_at: string
     // Joined
     campaign_name?: string
+    chain_name?: string
 }
 
 export async function getTriggers(): Promise<EmailTrigger[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("email_triggers")
-        .select("*, campaigns(name)")
+        .select("*, campaigns(name), email_chains(name)")
         .order("created_at", { ascending: true })
 
     if (error) {
@@ -39,10 +41,11 @@ export async function getTriggers(): Promise<EmailTrigger[]> {
     return (data || []).map((t: any) => ({
         ...t,
         campaign_name: t.campaigns?.name || null,
+        chain_name: t.email_chains?.name || null,
     }))
 }
 
-export async function createTrigger(trigger: Omit<EmailTrigger, "id" | "created_at" | "campaign_name">) {
+export async function createTrigger(trigger: Omit<EmailTrigger, "id" | "created_at" | "campaign_name" | "chain_name">) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("email_triggers")
@@ -52,6 +55,7 @@ export async function createTrigger(trigger: Omit<EmailTrigger, "id" | "created_
             trigger_value: trigger.trigger_value,
             action_type: trigger.action_type,
             campaign_id: trigger.campaign_id,
+            chain_id: trigger.chain_id,
             generate_discount: trigger.generate_discount,
             discount_config: trigger.discount_config,
             is_active: trigger.is_active,
@@ -62,7 +66,7 @@ export async function createTrigger(trigger: Omit<EmailTrigger, "id" | "created_
     return { success: true }
 }
 
-export async function updateTrigger(id: string, updates: Partial<Omit<EmailTrigger, "id" | "created_at" | "campaign_name">>) {
+export async function updateTrigger(id: string, updates: Partial<Omit<EmailTrigger, "id" | "created_at" | "campaign_name" | "chain_name">>) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("email_triggers")
