@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { RefreshCw, Loader2, AlertTriangle, ChevronRight } from "lucide-react"
+import { RefreshCw, Loader2, ChevronRight } from "lucide-react"
 import { getRotations } from "@/app/actions/rotations"
 import { useToast } from "@/hooks/use-toast"
 
@@ -106,8 +106,8 @@ export function SendRotationModal({ open, onOpenChange, selectedIds }: SendRotat
                                             key={rot.id}
                                             onClick={() => setSelectedRotation(isSelected ? null : rot)}
                                             className={`w-full text-left p-3 rounded-lg border transition-all ${isSelected
-                                                    ? "border-primary bg-primary/5 ring-1 ring-primary/30"
-                                                    : "border-border hover:border-primary/30 hover:bg-muted/20"
+                                                ? "border-primary bg-primary/5 ring-1 ring-primary/30"
+                                                : "border-border hover:border-primary/30 hover:bg-muted/20"
                                                 }`}
                                         >
                                             <div className="flex items-center justify-between">
@@ -129,20 +129,14 @@ export function SendRotationModal({ open, onOpenChange, selectedIds }: SendRotat
                                                             <p
                                                                 key={c.id}
                                                                 className={`text-xs px-2 py-1 rounded ${isCurrent
-                                                                        ? "bg-primary/10 text-primary font-semibold"
-                                                                        : "text-muted-foreground"
+                                                                    ? "bg-primary/10 text-primary font-semibold"
+                                                                    : "text-muted-foreground"
                                                                     }`}
                                                             >
                                                                 {i + 1}. {c.name} {isCurrent && "← starts here"}
                                                             </p>
                                                         )
                                                     })}
-                                                    <div className="mt-2 p-2 bg-amber-500/10 border border-amber-500/20 rounded text-[10px] text-amber-400 flex items-start gap-1.5">
-                                                        <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                                                        <span>
-                                                            Subscribers who already received from this rotation will be skipped automatically.
-                                                        </span>
-                                                    </div>
                                                 </div>
                                             )}
                                         </button>

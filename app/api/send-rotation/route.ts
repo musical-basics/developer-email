@@ -50,47 +50,15 @@ export async function POST(request: Request) {
 
         const templateMap = Object.fromEntries(templates.map(t => [t.id, t]));
 
-        // 3. Dedup — find subscribers who already received from this rotation
-        const { data: existingChildren } = await supabaseAdmin
-            .from("campaigns")
-            .select("id")
-            .eq("rotation_id", rotationId);
-
-        const existingChildIds = (existingChildren || []).map(c => c.id);
-        let alreadyReceivedIds = new Set<string>();
-
-        if (existingChildIds.length > 0) {
-            const { data: history } = await supabaseAdmin
-                .from("sent_history")
-                .select("subscriber_id")
-                .in("campaign_id", existingChildIds);
-
-            if (history) {
-                alreadyReceivedIds = new Set(history.map(h => h.subscriber_id));
-            }
-        }
-
-        // Filter out already-received subscribers
-        const eligibleSubscriberIds = subscriberIds.filter((id: string) => !alreadyReceivedIds.has(id));
-        const skippedCount = subscriberIds.length - eligibleSubscriberIds.length;
-
-        if (eligibleSubscriberIds.length === 0) {
-            return NextResponse.json({
-                success: true,
-                message: `All ${subscriberIds.length} subscribers have already received from this rotation.`,
-                stats: { sent: 0, failed: 0, skipped: skippedCount, total: subscriberIds.length },
-            });
-        }
-
-        // 4. Fetch eligible subscriber data
+        // 3. Fetch subscriber data
         const { data: subscribers } = await supabaseAdmin
             .from("subscribers")
             .select("*")
-            .in("id", eligibleSubscriberIds)
+            .in("id", subscriberIds)
             .eq("status", "active");
 
         if (!subscribers || subscribers.length === 0) {
-            return NextResponse.json({ error: "No active eligible subscribers found" }, { status: 400 });
+            return NextResponse.json({ error: "No active subscribers found" }, { status: 400 });
         }
 
         // 5. Round-robin assignment starting from cursor_position
@@ -254,7 +222,7 @@ export async function POST(request: Request) {
             updated_at: new Date().toISOString(),
         }).eq("id", rotationId);
 
-        const message = `Rotation send complete: ${totalSent} sent, ${totalFailed} failed, ${skippedCount} skipped (already received).`;
+        const message = `Rotation send complete: ${totalSent} sent, ${totalFailed} failed.`;
         console.log(`✅ ${message}`);
 
         return NextResponse.json({
@@ -263,7 +231,6 @@ export async function POST(request: Request) {
             stats: {
                 sent: totalSent,
                 failed: totalFailed,
-                skipped: skippedCount,
                 total: subscriberIds.length,
                 perCampaign: perCampaignStats,
             },
