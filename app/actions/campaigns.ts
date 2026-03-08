@@ -582,15 +582,15 @@ export async function saveCampaignBackup(
         return { error: insertError.message }
     }
 
-    // Keep only the newest 5 backups — delete the rest
+    // Keep only the newest 10 backups — delete the rest
     const { data: backups } = await supabase
         .from("campaign_backups")
         .select("id")
         .eq("campaign_id", campaignId)
         .order("saved_at", { ascending: false })
 
-    if (backups && backups.length > 5) {
-        const idsToDelete = backups.slice(5).map((b) => b.id)
+    if (backups && backups.length > 10) {
+        const idsToDelete = backups.slice(10).map((b) => b.id)
         await supabase
             .from("campaign_backups")
             .delete()
@@ -608,7 +608,7 @@ export async function getCampaignBackups(campaignId: string) {
         .select("id, saved_at, subject_line")
         .eq("campaign_id", campaignId)
         .order("saved_at", { ascending: false })
-        .limit(5)
+        .limit(10)
 
     if (error) {
         console.error("Error fetching backups:", error)
