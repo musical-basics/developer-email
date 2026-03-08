@@ -15,7 +15,8 @@ import {
     getCompanyContext, saveCompanyContext,
     getDefaultLinks, saveDefaultLinks,
     getCustomLinks, saveCustomLinks,
-    type DefaultLinks, type AudienceContext, type Brand, type CustomLink
+    getAllTrackingSettings, saveTrackingSettings,
+    type DefaultLinks, type AudienceContext, type Brand, type CustomLink, type TrackingFlags
 } from "@/app/actions/settings"
 
 const LINK_LABELS: Record<keyof DefaultLinks, string> = {
@@ -75,7 +76,7 @@ export default function SettingsPage() {
     useEffect(() => {
         async function loadAll() {
             try {
-                const [mb, dp, cross, lMB, lDP, clDP, clMB] = await Promise.all([
+                const [mb, dp, cross, lMB, lDP, clDP, clMB, trackingMap] = await Promise.all([
                     getCompanyContext("musicalbasics"),
                     getCompanyContext("dreamplay"),
                     getCompanyContext("crossover"),
@@ -83,6 +84,7 @@ export default function SettingsPage() {
                     getDefaultLinks("dreamplay"),
                     getCustomLinks("dreamplay"),
                     getCustomLinks("musicalbasics"),
+                    getAllTrackingSettings(),
                 ])
                 setCtxMusicalBasics(mb)
                 setCtxDreamPlay(dp)
@@ -91,6 +93,13 @@ export default function SettingsPage() {
                 setLinksDP(lDP)
                 setCustomLinksDP(clDP)
                 setCustomLinksMB(clMB)
+
+                // Merge DB tracking settings with defaults
+                const loadedTracking: Record<string, TrackingFlags> = {}
+                for (const email of senderEmails) {
+                    loadedTracking[email] = trackingMap[email] || { click: false, open: true, resendClick: false, resendOpen: false }
+                }
+                setTrackingSettings(loadedTracking)
             } catch (e) {
                 console.error("Failed to load settings:", e)
             } finally {
@@ -99,7 +108,7 @@ export default function SettingsPage() {
         }
         loadAll()
 
-        // Load tier models from localStorage
+        // Load tier models from localStorage (these are fine as client-only prefs)
         const savedLow = localStorage.getItem("mb_model_low")
         const savedMed = localStorage.getItem("mb_model_medium")
         const savedHigh = localStorage.getItem("mb_model_high")
@@ -108,22 +117,6 @@ export default function SettingsPage() {
         if (savedMed) setModelMedium(savedMed)
         if (savedHigh) setModelHigh(savedHigh)
         if (savedAuto === "true") setAutoRouting(true)
-
-        // Load per-sender tracking toggles
-        const loaded: Record<string, { click: boolean; open: boolean; resendClick: boolean; resendOpen: boolean }> = {}
-        for (const email of ["lionel@musicalbasics.com", "lionel@email.dreamplaypianos.com"]) {
-            const savedClick = localStorage.getItem(`mb_click_tracking_${email}`)
-            const savedOpen = localStorage.getItem(`mb_open_tracking_${email}`)
-            const savedResendClick = localStorage.getItem(`mb_resend_click_tracking_${email}`)
-            const savedResendOpen = localStorage.getItem(`mb_resend_open_tracking_${email}`)
-            loaded[email] = {
-                click: savedClick !== null ? savedClick === "true" : true,
-                open: savedOpen !== null ? savedOpen === "true" : true,
-                resendClick: savedResendClick === "true",
-                resendOpen: savedResendOpen === "true",
-            }
-        }
-        setTrackingSettings(loaded)
 
         // Fetch available models
         getAnthropicModels().then(models => {
@@ -295,7 +288,7 @@ export default function SettingsPage() {
                     {senderEmails.map(email => {
                         const label = email.includes("musicalbasics") ? "Musical Basics" : "DreamPlay Pianos"
                         const settings = trackingSettings[email] || { click: true, open: true, resendClick: false, resendOpen: false }
-                        const toggleSetting = (field: "click" | "open" | "resendClick" | "resendOpen") => {
+                        const toggleSetting = async (field: "click" | "open" | "resendClick" | "resendOpen") => {
                             const next = !settings[field]
                             const updated = { ...settings, [field]: next }
 
@@ -303,32 +296,29 @@ export default function SettingsPage() {
                             if (next) {
                                 if (field === "click" && updated.resendClick) {
                                     updated.resendClick = false
-                                    localStorage.setItem(`mb_resend_click_tracking_${email}`, "false")
                                     toast({ title: `Resend Click Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend click tracking simultaneously." })
                                 } else if (field === "resendClick" && updated.click) {
                                     updated.click = false
-                                    localStorage.setItem(`mb_click_tracking_${email}`, "false")
                                     toast({ title: `App Click Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend click tracking simultaneously." })
                                 } else if (field === "open" && updated.resendOpen) {
                                     updated.resendOpen = false
-                                    localStorage.setItem(`mb_resend_open_tracking_${email}`, "false")
                                     toast({ title: `Resend Open Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend open tracking simultaneously." })
                                 } else if (field === "resendOpen" && updated.open) {
                                     updated.open = false
-                                    localStorage.setItem(`mb_open_tracking_${email}`, "false")
                                     toast({ title: `App Open Tracking auto-disabled for ${label}`, description: "Cannot use both App and Resend open tracking simultaneously." })
                                 }
                             }
 
                             const newSettings = { ...trackingSettings, [email]: updated }
                             setTrackingSettings(newSettings)
-                            const storageKeyMap: Record<string, string> = {
-                                click: `mb_click_tracking_${email}`,
-                                open: `mb_open_tracking_${email}`,
-                                resendClick: `mb_resend_click_tracking_${email}`,
-                                resendOpen: `mb_resend_open_tracking_${email}`,
+
+                            // Save to database
+                            try {
+                                await saveTrackingSettings(email, updated)
+                            } catch (e: any) {
+                                toast({ title: "Failed to save tracking settings", description: e.message, variant: "destructive" })
                             }
-                            localStorage.setItem(storageKeyMap[field], String(next))
+
                             const labelMap: Record<string, string> = {
                                 click: "Click Tracking",
                                 open: "Open Tracking",

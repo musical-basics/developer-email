@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { CampaignHeader } from "./campaign-header"
 import { AudienceCard, Audience } from "./audience-card"
 import { SenderIdentityCard } from "./sender-identity-card"
@@ -17,6 +17,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
+import { getTrackingSettings, type TrackingFlags } from "@/app/actions/settings"
 
 import { Subscriber } from "@/lib/types"
 
@@ -39,6 +40,12 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
 
     const { toast } = useToast()
     const router = useRouter()
+
+    // Load tracking settings from DB on mount and when fromEmail changes
+    const [trackingFlags, setTrackingFlags] = useState<TrackingFlags>({ click: false, open: true, resendClick: false, resendOpen: false })
+    useEffect(() => {
+        getTrackingSettings(fromEmail).then(setTrackingFlags)
+    }, [fromEmail])
 
     // Compute effective subscriber count based on targeting mode
     const lockedSubscriberIds: string[] | undefined = campaign.variable_values?.subscriber_ids
@@ -63,10 +70,10 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 campaignId: campaign.id,
                 fromName,
                 fromEmail,
-                clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
-                openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
-                resendClickTracking: localStorage.getItem(`mb_resend_click_tracking_${fromEmail}`) === "true",
-                resendOpenTracking: localStorage.getItem(`mb_resend_open_tracking_${fromEmail}`) === "true",
+                clickTracking: trackingFlags.click,
+                openTracking: trackingFlags.open,
+                resendClickTracking: trackingFlags.resendClick,
+                resendOpenTracking: trackingFlags.resendOpen,
             })
         })
 
@@ -103,10 +110,10 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 campaignId: campaign.id,
                 fromName,
                 fromEmail,
-                clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
-                openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
-                resendClickTracking: localStorage.getItem(`mb_resend_click_tracking_${fromEmail}`) === "true",
-                resendOpenTracking: localStorage.getItem(`mb_resend_open_tracking_${fromEmail}`) === "true",
+                clickTracking: trackingFlags.click,
+                openTracking: trackingFlags.open,
+                resendClickTracking: trackingFlags.resendClick,
+                resendOpenTracking: trackingFlags.resendOpen,
             })
         })
 
@@ -145,10 +152,10 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                 scheduledAt: date.toISOString(),
                 fromName,
                 fromEmail,
-                clickTracking: localStorage.getItem(`mb_click_tracking_${fromEmail}`) !== "false",
-                openTracking: localStorage.getItem(`mb_open_tracking_${fromEmail}`) !== "false",
-                resendClickTracking: localStorage.getItem(`mb_resend_click_tracking_${fromEmail}`) === "true",
-                resendOpenTracking: localStorage.getItem(`mb_resend_open_tracking_${fromEmail}`) === "true",
+                clickTracking: trackingFlags.click,
+                openTracking: trackingFlags.open,
+                resendClickTracking: trackingFlags.resendClick,
+                resendOpenTracking: trackingFlags.resendOpen,
             })
         })
 

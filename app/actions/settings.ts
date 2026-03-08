@@ -275,3 +275,63 @@ ${formatLinks(linksDP?.links)}`
         linksBlock,
     }
 }
+
+// ─── Tracking Settings (per sender email) ───────────────
+
+export interface TrackingFlags {
+    click: boolean
+    open: boolean
+    resendClick: boolean
+    resendOpen: boolean
+}
+
+const DEFAULT_TRACKING: TrackingFlags = { click: false, open: true, resendClick: false, resendOpen: false }
+
+function trackingKey(senderEmail: string): string {
+    return `tracking_${senderEmail}`
+}
+
+export async function getTrackingSettings(senderEmail: string): Promise<TrackingFlags> {
+    const supabase = await createClient()
+    const { data } = await supabase
+        .from("app_settings")
+        .select("value")
+        .eq("key", trackingKey(senderEmail))
+        .single()
+
+    if (data?.value) {
+        try { return { ...DEFAULT_TRACKING, ...JSON.parse(data.value) } } catch { }
+    }
+    return { ...DEFAULT_TRACKING }
+}
+
+export async function getAllTrackingSettings(): Promise<Record<string, TrackingFlags>> {
+    const supabase = await createClient()
+    const { data } = await supabase
+        .from("app_settings")
+        .select("key, value")
+        .like("key", "tracking_%")
+
+    const result: Record<string, TrackingFlags> = {}
+    data?.forEach(row => {
+        const email = row.key.replace("tracking_", "")
+        try { result[email] = { ...DEFAULT_TRACKING, ...JSON.parse(row.value) } } catch { }
+    })
+    return result
+}
+
+export async function saveTrackingSettings(senderEmail: string, flags: TrackingFlags) {
+    const supabase = await createClient()
+
+    const { error } = await supabase
+        .from("app_settings")
+        .upsert({
+            key: trackingKey(senderEmail),
+            value: JSON.stringify(flags),
+            updated_at: new Date().toISOString(),
+        })
+
+    if (error) throw new Error(error.message)
+    revalidatePath("/settings")
+    return { success: true }
+}
