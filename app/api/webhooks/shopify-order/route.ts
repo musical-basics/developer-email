@@ -1,11 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import crypto from "crypto";
+import { inngest } from "@/inngest/client";
 
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
 );
+
+// Allow up to 2 minutes for chain setup + Inngest dispatch
+export const maxDuration = 120;
 
 // Verify the request actually came from Shopify using HMAC
 function verifyShopifyWebhook(body: string, hmacHeader: string | null): boolean {
@@ -74,6 +78,9 @@ export async function POST(request: Request) {
             .eq("email", email)
             .single();
 
+        // Track previous tags so we know which ones are newly added
+        const previousTags: string[] = existingUser?.tags || [];
+
         // Merge the "Purchased" tag
         const newTag = "Purchased";
         let mergedTags: string[] = [newTag];
@@ -109,11 +116,202 @@ export async function POST(request: Request) {
 
         console.log(`[Shopify Webhook] ${existingUser ? "Updated" : "Created"} subscriber ${email} with Purchased tag (Order: ${orderName})`);
 
+        // ─── EVALUATE TRIGGERS FOR NEWLY ADDED TAGS ─────────────────
+        const addedTags = mergedTags.filter(t => !previousTags.includes(t));
+        let triggersFireCount = 0;
+
+        if (addedTags.length > 0) {
+            console.log(`[Shopify Webhook] Evaluating triggers for newly added tags:`, addedTags);
+
+            const { data: triggers, error: tErr } = await supabase
+                .from("email_triggers")
+                .select("*")
+                .eq("trigger_type", "subscriber_tag")
+                .eq("is_active", true)
+                .in("trigger_value", addedTags);
+
+            if (tErr) {
+                console.error("[Shopify Webhook] Error fetching triggers:", tErr.message);
+            } else if (triggers && triggers.length > 0) {
+                console.log(`[Shopify Webhook] Found ${triggers.length} matching trigger(s)`);
+
+                for (const trigger of triggers) {
+                    try {
+                        // ─── CHAIN DISPATCH ─────────────────────
+                        if (trigger.chain_id) {
+                            console.log(`[Shopify Webhook] Trigger "${trigger.name}" → starting chain ${trigger.chain_id}`);
+
+                            // Fetch master chain
+                            const { data: masterChain } = await supabase
+                                .from("email_chains")
+                                .select("*")
+                                .eq("id", trigger.chain_id)
+                                .single();
+
+                            if (!masterChain) {
+                                console.error(`[Shopify Webhook] Chain ${trigger.chain_id} not found`);
+                                continue;
+                            }
+
+                            // Cancel existing active chains for this subscriber
+                            const { data: existingProcesses } = await supabase
+                                .from("chain_processes")
+                                .select("id, history")
+                                .eq("subscriber_id", data.id)
+                                .in("status", ["active", "paused"]);
+
+                            if (existingProcesses && existingProcesses.length > 0) {
+                                for (const proc of existingProcesses) {
+                                    const history = proc.history || [];
+                                    history.push({
+                                        step_name: "System",
+                                        action: "Chain Cancelled — Replaced by Shopify purchase trigger",
+                                        timestamp: new Date().toISOString(),
+                                    });
+                                    await supabase
+                                        .from("chain_processes")
+                                        .update({ status: "cancelled", history, updated_at: new Date().toISOString() })
+                                        .eq("id", proc.id);
+                                    await inngest.send({ name: "chain.cancel", data: { processId: proc.id } });
+                                }
+                            }
+
+                            // Snapshot the chain
+                            const { data: snapshot, error: snapErr } = await supabase
+                                .from("email_chains")
+                                .insert({
+                                    name: `${masterChain.name} (snapshot)`,
+                                    slug: `${masterChain.slug}-snap-${Date.now()}`,
+                                    description: masterChain.description,
+                                    trigger_label: masterChain.trigger_label,
+                                    trigger_event: masterChain.trigger_event,
+                                    subscriber_id: null,
+                                    is_snapshot: true,
+                                })
+                                .select("id")
+                                .single();
+
+                            if (snapErr || !snapshot) {
+                                console.error("[Shopify Webhook] Failed to create chain snapshot:", snapErr?.message);
+                                continue;
+                            }
+
+                            // Clone steps
+                            const { data: steps } = await supabase
+                                .from("chain_steps")
+                                .select("*")
+                                .eq("chain_id", trigger.chain_id)
+                                .order("position", { ascending: true });
+
+                            if (steps && steps.length > 0) {
+                                await supabase.from("chain_steps").insert(
+                                    steps.map(s => ({
+                                        chain_id: snapshot.id,
+                                        position: s.position,
+                                        label: s.label,
+                                        template_key: s.template_key,
+                                        wait_after: s.wait_after,
+                                    }))
+                                );
+                            }
+
+                            // Clone branches
+                            const { data: branches } = await supabase
+                                .from("chain_branches")
+                                .select("*")
+                                .eq("chain_id", trigger.chain_id);
+
+                            if (branches && branches.length > 0) {
+                                await supabase.from("chain_branches").insert(
+                                    branches.map(b => ({
+                                        chain_id: snapshot.id,
+                                        description: b.description,
+                                        position: b.position,
+                                        label: b.label,
+                                        condition: b.condition,
+                                        action: b.action,
+                                    }))
+                                );
+                            }
+
+                            // Create process
+                            const { data: proc, error: procErr } = await supabase
+                                .from("chain_processes")
+                                .insert({
+                                    chain_id: snapshot.id,
+                                    subscriber_id: data.id,
+                                    status: "active",
+                                    current_step_index: 0,
+                                    history: [{
+                                        step_name: "System",
+                                        action: `Chain started via Shopify purchase trigger "${trigger.name}" (Order: ${orderName})`,
+                                        timestamp: new Date().toISOString(),
+                                    }],
+                                })
+                                .select("id")
+                                .single();
+
+                            if (procErr || !proc) {
+                                console.error("[Shopify Webhook] Failed to create process:", procErr?.message);
+                                continue;
+                            }
+
+                            // Fire Inngest event
+                            await inngest.send({
+                                name: "chain.run",
+                                data: {
+                                    processId: proc.id,
+                                    chainId: snapshot.id,
+                                    subscriberId: data.id,
+                                    email,
+                                    firstName: firstName || "",
+                                },
+                            });
+
+                            console.log(`[Shopify Webhook] ✅ Chain "${masterChain.name}" started for ${email}, process: ${proc.id}`);
+                            triggersFireCount++;
+                            continue;
+                        }
+
+                        // ─── EMAIL DISPATCH ─────────────────────
+                        if (trigger.campaign_id) {
+                            console.log(`[Shopify Webhook] Trigger "${trigger.name}" → sending email ${trigger.campaign_id}`);
+
+                            const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL || "http://localhost:3001";
+                            const webhookUrl = `${baseUrl}/api/webhooks/subscribe`;
+
+                            await fetch(webhookUrl, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    email,
+                                    first_name: firstName || "",
+                                    last_name: lastName || "",
+                                    tags: mergedTags,
+                                }),
+                            });
+
+                            console.log(`[Shopify Webhook] ✅ Webhook called for email trigger "${trigger.name}"`);
+                            triggersFireCount++;
+                            continue;
+                        }
+
+                        console.log(`[Shopify Webhook] ⚠️ Trigger "${trigger.name}" has no campaign_id or chain_id`);
+                    } catch (triggerErr: any) {
+                        console.error(`[Shopify Webhook] Error processing trigger "${trigger.name}":`, triggerErr.message);
+                    }
+                }
+            } else {
+                console.log("[Shopify Webhook] No matching triggers for tags:", addedTags);
+            }
+        }
+
         return NextResponse.json({
             success: true,
             subscriber_id: data.id,
             is_new: !existingUser,
             order_name: orderName,
+            triggers_fired: triggersFireCount,
         });
 
     } catch (error: any) {
