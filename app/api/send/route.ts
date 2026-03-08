@@ -5,6 +5,7 @@ import { renderTemplate } from "@/lib/render-template";
 import { addPlayButtonsToVideoThumbnails } from "@/lib/video-overlay";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags, applyAllMergeTagsWithLog } from "@/lib/merge-tags";
+import { injectPreheader } from "@/lib/email-preheader";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
@@ -37,8 +38,10 @@ export async function POST(request: Request) {
             Object.entries(campaign.variable_values || {}).filter(([key]) => !subscriberVars.includes(key))
         ) as Record<string, string>;
         const globalHtmlContent = renderTemplate(campaign.html_content || "", globalAssets);
+        // Inject preview text (preheader) if set
+        const htmlWithPreheader = injectPreheader(globalHtmlContent, campaign.variable_values?.preview_text);
         // Snapshot email-asset images for broadcast sends (test sends skip this)
-        let htmlContent = globalHtmlContent;
+        let htmlContent = htmlWithPreheader;
 
         if (type === "test") {
             if (!email) return NextResponse.json({ error: "Test email required" }, { status: 400 });

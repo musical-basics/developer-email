@@ -36,6 +36,7 @@ function EditorPageContent() {
     const [fromEmail, setFromEmail] = useState("lionel@email.dreamplaypianos.com")
     const [audienceContext, setAudienceContext] = useState<"dreamplay" | "musicalbasics" | "both">("dreamplay")
     const [emailType, setEmailType] = useState<"campaign" | "automated">("campaign")
+    const [previewText, setPreviewText] = useState("")
     const [aiDossier, setAiDossier] = useState("")
 
     const [loading, setLoading] = useState(!!id)
@@ -67,6 +68,7 @@ function EditorPageContent() {
                 if (data.variable_values?.from_name) setFromName(data.variable_values.from_name)
                 if (data.variable_values?.from_email) setFromEmail(data.variable_values.from_email)
                 if (data.variable_values?.audience_context) setAudienceContext(data.variable_values.audience_context)
+                if (data.variable_values?.preview_text) setPreviewText(data.variable_values.preview_text)
 
                 // Fetch AI dossier for behavioral context
                 getCampaignDossier(data.id).then(d => setAiDossier(d))
@@ -88,7 +90,8 @@ function EditorPageContent() {
                 ...assets,
                 from_name: fromName,
                 from_email: fromEmail,
-                audience_context: audienceContext
+                audience_context: audienceContext,
+                preview_text: previewText || undefined,
             },
             status: status,
             email_type: emailType,
@@ -177,6 +180,8 @@ function EditorPageContent() {
                 onHtmlChange={setHtml}
                 onAssetsChange={setAssets}
                 onSubjectChange={setSubjectLine}
+                previewText={previewText}
+                onPreviewTextChange={setPreviewText}
                 onSenderChange={(field, value) => {
                     if (field === "name") setFromName(value)
                     if (field === "email") setFromEmail(value)
@@ -191,6 +196,7 @@ function EditorPageContent() {
                     setHtml(backup.html_content || DEFAULT_HTML)
                     setAssets(backup.variable_values || DEFAULT_ASSETS)
                     setSubjectLine(backup.subject_line || "")
+                    if (backup.variable_values?.preview_text) setPreviewText(backup.variable_values.preview_text)
                     if (backup.variable_values?.from_name) setFromName(backup.variable_values.from_name)
                     if (backup.variable_values?.from_email) setFromEmail(backup.variable_values.from_email)
                     toast({ title: "Version restored", description: "Campaign reverted to saved version." })

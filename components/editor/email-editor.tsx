@@ -29,6 +29,8 @@ interface EmailEditorProps {
     onHtmlChange: (html: string) => void
     onAssetsChange: (assets: Record<string, string>) => void
     onSubjectChange: (value: string) => void
+    previewText: string
+    onPreviewTextChange: (value: string) => void
     onSenderChange: (field: "name" | "email", value: string) => void
     onAudienceChange: (value: "dreamplay" | "musicalbasics" | "both") => void
     emailType: "campaign" | "automated"
@@ -52,6 +54,8 @@ export function EmailEditor({
     onHtmlChange,
     onAssetsChange,
     onSubjectChange,
+    previewText,
+    onPreviewTextChange,
     onSenderChange,
     onAudienceChange,
     onEmailTypeChange,
@@ -167,6 +171,16 @@ export function EmailEditor({
                                     onChange={(e) => onSubjectChange(e.target.value)}
                                     className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
                                     placeholder="Enter subject line..."
+                                />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Preview Text</label>
+                                <textarea
+                                    value={previewText}
+                                    onChange={(e) => onPreviewTextChange(e.target.value)}
+                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary resize-none"
+                                    placeholder="Text shown in inbox before opening..."
+                                    rows={2}
                                 />
                             </div>
                             <div className="grid grid-cols-1 gap-2">

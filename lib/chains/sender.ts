@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags } from "@/lib/merge-tags";
+import { injectPreheader } from "@/lib/email-preheader";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
@@ -38,6 +39,7 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         email: email,
     };
     rawHtml = renderTemplate(dbTemplate.html_content || "", vars);
+    rawHtml = injectPreheader(rawHtml, dbTemplate.variable_values?.preview_text);
     subject = dbTemplate.subject_line || "No Subject";
     campaignId = dbTemplate.id;
     templateFromName = dbTemplate.variable_values?.from_name || "";

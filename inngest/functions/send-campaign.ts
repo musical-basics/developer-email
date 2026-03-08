@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags } from "@/lib/merge-tags";
+import { injectPreheader } from "@/lib/email-preheader";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const supabase = createClient(
@@ -60,6 +61,9 @@ export const sendCampaign = inngest.createFunction(
         const result = await step.run("send-emails", async () => {
             const globalHtmlContent = renderTemplate(campaign.html_content || "", campaign.variable_values || {});
 
+            // Inject preview text (preheader) if set
+            const htmlWithPreheader = injectPreheader(globalHtmlContent, campaign.variable_values?.preview_text);
+
             // Footer Template
             const unsubscribeFooter = `
 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
@@ -69,7 +73,7 @@ export const sendCampaign = inngest.createFunction(
   </p>
 </div>
 `;
-            const htmlWithFooter = globalHtmlContent + unsubscribeFooter;
+            const htmlWithFooter = htmlWithPreheader + unsubscribeFooter;
             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
 
             let successCount = 0;
