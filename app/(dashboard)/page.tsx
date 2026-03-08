@@ -1,51 +1,25 @@
-"use client"
-import { useEffect, useState } from "react"
-import { MetricsCards } from "@/components/metrics-cards"
-import { QuickActions } from "@/components/quick-actions"
-import { CampaignsTable } from "@/components/campaigns-table"
-import { createClient } from "@/lib/supabase/client"
-import { Campaign } from "@/lib/types"
+import { CampaignsTabs } from "@/components/campaigns/campaigns-tabs"
+import { CreateCampaignDialog } from "@/components/campaigns/create-campaign-dialog"
+import { getCampaigns } from "@/app/actions/campaigns"
 
-export default function HomePage() {
-    const [campaigns, setCampaigns] = useState<Campaign[]>([])
-    const [loading, setLoading] = useState(true)
-    const supabase = createClient()
+export const dynamic = "force-dynamic"
 
-    const fetchCampaigns = async () => {
-        setLoading(true)
-        const { data, error } = await supabase
-            .from("campaigns")
-            .select("*")
-            .order("created_at", { ascending: false })
-
-        if (data) setCampaigns(data)
-        if (error) console.error("Error fetching campaigns:", error)
-
-        setLoading(false)
-    }
-
-    useEffect(() => {
-        fetchCampaigns()
-    }, [supabase])
+export default async function CampaignsPage() {
+    const campaigns = await getCampaigns("campaign")
 
     return (
-        <div className="space-y-8 p-6">
-            {/* Metrics Section */}
-            <section>
-                <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-muted-foreground">Overview</h2>
-                <MetricsCards />
-            </section>
+        <div className="p-6 space-y-6">
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Campaigns</h1>
+                    <p className="text-muted-foreground mt-1">
+                        Manage your email campaigns and newsletters.
+                    </p>
+                </div>
+                <CreateCampaignDialog />
+            </div>
 
-            {/* Quick Actions */}
-            <section>
-                <h2 className="mb-4 text-sm font-medium uppercase tracking-wider text-muted-foreground">Quick Actions</h2>
-                <QuickActions />
-            </section>
-
-            {/* Recent Campaigns */}
-            <section>
-                <CampaignsTable campaigns={campaigns} loading={loading} onRefresh={fetchCampaigns} />
-            </section>
+            <CampaignsTabs campaigns={campaigns} />
         </div>
     )
 }

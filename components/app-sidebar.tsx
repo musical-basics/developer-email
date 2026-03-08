@@ -15,8 +15,7 @@ interface NavGroup {
 const navGroups: NavGroup[] = [
     {
         items: [
-            { name: "Home", href: "/", icon: Home },
-            { name: "Campaigns", href: "/campaigns", icon: Mail },
+            { name: "Campaigns", href: "/", icon: Mail },
             { name: "Automated Emails", href: "/automated-emails", icon: BotMessageSquare },
             { name: "Triggers", href: "/triggers", icon: Zap },
             { name: "Audience", href: "/audience", icon: Users },
@@ -40,6 +39,7 @@ const navGroups: NavGroup[] = [
     {
         label: "Additional",
         items: [
+            { name: "Old Homepage", href: "/old-homepage", icon: Home },
             { name: "Modular Builder", href: "/modular-editor", icon: Layers },
             { name: "Drag & Drop", href: "/dnd-editor", icon: MousePointerSquareDashed },
             { name: "Knowledge Builder", href: "/editor-v2", icon: Brain },
