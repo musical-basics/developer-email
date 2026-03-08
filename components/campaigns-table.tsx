@@ -433,25 +433,46 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                 </div>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-center">
-                                            <Badge variant="outline" className={`
-                                            capitalize border-opacity-50
-                                            ${campaign.is_template ? 'text-amber-400 border-amber-500/50 bg-amber-500/10' : ''}
-                                            ${!campaign.is_template && campaign.status === 'completed' ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : ''}
-                                            ${!campaign.is_template && campaign.status === 'draft' ? 'text-zinc-400 border-zinc-500/50 bg-zinc-500/10' : ''}
-                                        `}>
-                                                {campaign.is_template ? 'Master Template' : campaign.status}
-                                            </Badge>
-                                            {campaign.is_template && campaign.is_ready && (
-                                                <Badge variant="outline" className="ml-1 text-emerald-400 border-emerald-500/50 bg-emerald-500/10">
+                                        <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
+                                            <div className="flex items-center justify-center gap-1 flex-wrap">
+                                                <button
+                                                    onClick={async () => {
+                                                        setTogglingTemplateId(campaign.id)
+                                                        await toggleTemplateStatus(campaign.id, !campaign.is_template)
+                                                        router.refresh()
+                                                        setTogglingTemplateId(null)
+                                                    }}
+                                                    disabled={togglingTemplateId === campaign.id}
+                                                    className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-all cursor-pointer ${campaign.is_template
+                                                        ? 'text-amber-400 border-amber-500/50 bg-amber-500/10 hover:bg-amber-500/20'
+                                                        : 'text-muted-foreground/40 border-border/50 bg-transparent hover:text-amber-400 hover:border-amber-500/30 hover:bg-amber-500/5'
+                                                        }`}
+                                                    title={campaign.is_template ? "Remove from Master Templates" : "Promote to Master Template"}
+                                                >
+                                                    Master Template
+                                                </button>
+                                                <button
+                                                    onClick={async () => {
+                                                        setTogglingReadyId(campaign.id)
+                                                        await toggleReadyStatus(campaign.id, !campaign.is_ready)
+                                                        router.refresh()
+                                                        setTogglingReadyId(null)
+                                                    }}
+                                                    disabled={togglingReadyId === campaign.id}
+                                                    className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-all cursor-pointer ${campaign.is_ready
+                                                        ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10 hover:bg-emerald-500/20'
+                                                        : 'text-muted-foreground/40 border-border/50 bg-transparent hover:text-emerald-400 hover:border-emerald-500/30 hover:bg-emerald-500/5'
+                                                        }`}
+                                                    title={campaign.is_ready ? "Mark as Not Ready" : "Mark as Ready"}
+                                                >
                                                     Ready
-                                                </Badge>
-                                            )}
-                                            {campaign.is_template && campaign.category && (
-                                                <Badge variant="outline" className="ml-1 text-violet-400 border-violet-500/50 bg-violet-500/10 text-xs">
-                                                    {campaign.category}
-                                                </Badge>
-                                            )}
+                                                </button>
+                                                {campaign.is_template && campaign.category && (
+                                                    <Badge variant="outline" className="text-violet-400 border-violet-500/50 bg-violet-500/10 text-xs">
+                                                        {campaign.category}
+                                                    </Badge>
+                                                )}
+                                            </div>
                                         </TableCell>
 
                                         {/* METRICS */}
@@ -529,24 +550,6 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                         {/* Actions */}
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={async () => {
-                                                        setTogglingTemplateId(campaign.id)
-                                                        await toggleTemplateStatus(campaign.id, !campaign.is_template)
-                                                        router.refresh()
-                                                        setTogglingTemplateId(null)
-                                                    }}
-                                                    disabled={togglingTemplateId === campaign.id}
-                                                    className={`h-8 w-8 ${campaign.is_template
-                                                        ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
-                                                        : "text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
-                                                        }`}
-                                                    title={campaign.is_template ? "Remove from Master Templates" : "Promote to Master Template"}
-                                                >
-                                                    <Star className={`w-4 h-4 ${campaign.is_template ? "fill-current" : ""}`} />
-                                                </Button>
                                                 {campaign.is_template && (
                                                     <>
                                                         <Button
@@ -560,8 +563,8 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                             }}
                                                             disabled={togglingStarredId === campaign.id}
                                                             className={`h-8 w-8 ${campaign.is_starred_template
-                                                                ? "text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
-                                                                : "text-muted-foreground hover:text-sky-400 hover:bg-sky-500/10"
+                                                                ? "text-amber-400 hover:text-amber-300 hover:bg-amber-500/10"
+                                                                : "text-muted-foreground hover:text-amber-400 hover:bg-amber-500/10"
                                                                 }`}
                                                             title={campaign.is_starred_template ? "Unpin from Favorites" : "Pin to Favorites"}
                                                         >
@@ -639,26 +642,6 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                             </PopoverContent>
                                                         </Popover>
                                                     </>
-                                                )}
-                                                {campaign.is_template && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={async () => {
-                                                            setTogglingReadyId(campaign.id)
-                                                            await toggleReadyStatus(campaign.id, !campaign.is_ready)
-                                                            router.refresh()
-                                                            setTogglingReadyId(null)
-                                                        }}
-                                                        disabled={togglingReadyId === campaign.id}
-                                                        className={`h-8 w-8 ${campaign.is_ready
-                                                            ? "text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
-                                                            : "text-muted-foreground hover:text-emerald-400 hover:bg-emerald-500/10"
-                                                            }`}
-                                                        title={campaign.is_ready ? "Mark as Not Ready" : "Mark as Ready"}
-                                                    >
-                                                        <CheckCircle2 className={`w-4 h-4 ${campaign.is_ready ? "fill-current" : ""}`} />
-                                                    </Button>
                                                 )}
                                                 <Button
                                                     variant="ghost"
