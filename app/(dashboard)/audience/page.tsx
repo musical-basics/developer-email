@@ -13,7 +13,6 @@ import {
     Trash2,
     X,
     UserCheck,
-    UserX,
     LayoutGrid,
     List,
     Check,
@@ -1221,17 +1220,8 @@ export default function AudienceManagerPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="bg-card border-border">
-                    <CardContent className="flex items-center gap-4 p-6">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-zinc-500/10">
-                            <UserX className="h-6 w-6 text-zinc-500" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Unsubscribed</p>
-                            <p className="text-3xl font-bold text-foreground">{stats.unsubscribed.toLocaleString()}</p>
-                        </div>
-                    </CardContent>
-                </Card>
+
+
             </div>
 
             {/* Saved Views Bar */}
