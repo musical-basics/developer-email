@@ -3,6 +3,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { getAllContextForAudience, formatContextForPrompt } from "@/app/actions/settings";
 
+// Allow up to 2 minutes for AI model response (prevents Vercel timeout → "Error: terminated")
+export const maxDuration = 120;
+
 const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_KEY!
