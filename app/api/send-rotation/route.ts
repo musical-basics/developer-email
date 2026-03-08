@@ -86,6 +86,7 @@ export async function POST(request: Request) {
         for (const [templateId, subs] of Object.entries(grouped)) {
             const template = templateMap[templateId];
             if (!template) continue;
+            console.log(`🚀 Rotation batch: template="${template.name}" (${templateId}), ${subs.length} recipients`);
 
             // Create child campaign for this batch
             const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
@@ -152,10 +153,12 @@ export async function POST(request: Request) {
 
                     // Open tracking pixel (matches /api/send pattern)
                     const openPixel = `<img src="${baseUrl}/api/track/open?c=${child.id}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+                    const hadBody = personalHtml.includes('</body>');
                     personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
                     if (!personalHtml.includes(openPixel)) {
                         personalHtml += openPixel;
                     }
+                    console.log(`[Open Pixel] Injected for ${sub.email} — campaign=${child.id}, hadBody=${hadBody}, baseUrl=${baseUrl}`);
 
                     const personalSubject = await applyAllMergeTags(template.subject_line || "", sub);
 
@@ -175,9 +178,10 @@ export async function POST(request: Request) {
                     } as any);
 
                     if (error) {
-                        console.error(`Rotation send failed for ${sub.email}:`, error);
+                        console.error(`❌ Rotation send failed for ${sub.email}:`, error);
                         campaignFailed++;
                     } else {
+                        console.log(`✅ Sent to ${sub.email} — campaign=${child.id}, template="${template.name}"`);
                         campaignSent++;
                         sentRecords.push({
                             campaign_id: child.id,

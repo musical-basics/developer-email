@@ -55,7 +55,10 @@
       "lib/dnd-blocks/**",
       "lib/parsers/**",
       "app/dnd-editor/**",
-      "app/modular-editor/**"
+      "app/modular-editor/**",
+      "_backup_files/**",
+      "docs/**",
+      "public/**"
     ]
   },
   "security": {
