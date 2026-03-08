@@ -31,8 +31,8 @@ export function DiscountAuditCard({ variableValues }: DiscountAuditCardProps) {
     const legacyCode = vars.discount_code
     const legacyIsPerUser = !!vars.discount_preset_id && !!legacyConfig
 
-    // Backward compat: wrap legacy into a slot
-    if (rawSlots.length === 0 && legacyCode) {
+    // Backward compat: wrap legacy into a slot (requires config — bare discount_code is vestigial)
+    if (rawSlots.length === 0 && legacyCode && legacyConfig) {
         rawSlots.push({
             config: legacyConfig || {},
             preview_code: legacyCode,
@@ -92,14 +92,14 @@ export function DiscountAuditCard({ variableValues }: DiscountAuditCardProps) {
                     <div key={i} className="border border-border rounded-lg p-3 space-y-2 bg-background/50">
                         <div className="flex items-center justify-between">
                             <span className={`text-xs font-semibold px-2 py-0.5 rounded ${slot.config.type === "percentage"
-                                    ? "bg-emerald-500/10 text-emerald-400"
-                                    : "bg-violet-500/10 text-violet-400"
+                                ? "bg-emerald-500/10 text-emerald-400"
+                                : "bg-violet-500/10 text-violet-400"
                                 }`}>
                                 {slot.label}
                             </span>
                             <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${slot.code_mode === "per_user"
-                                    ? "bg-violet-500/10 text-violet-400"
-                                    : "bg-emerald-500/10 text-emerald-400"
+                                ? "bg-violet-500/10 text-violet-400"
+                                : "bg-emerald-500/10 text-emerald-400"
                                 }`}>
                                 {slot.code_mode === "per_user" ? "Per User" : "Shared"}
                             </span>
