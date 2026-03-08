@@ -181,6 +181,10 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
             const img = new Image()
             const reader = new FileReader()
 
+            // Preserve PNG format (supports transparency); compress others as JPEG
+            const isPng = file.type === "image/png"
+            const outputType = isPng ? "image/png" : "image/jpeg"
+
             reader.onload = (e) => {
                 img.src = e.target?.result as string
             }
@@ -210,19 +214,25 @@ export function AssetPickerModal({ isOpen, onClose, onSelect }: AssetPickerModal
 
                 canvas.width = width
                 canvas.height = height
+
+                // For PNGs: clear canvas to transparent before drawing
+                if (isPng) {
+                    ctx.clearRect(0, 0, width, height)
+                }
+
                 ctx.drawImage(img, 0, 0, width, height)
 
                 canvas.toBlob(
                     (blob) => {
                         if (!blob) return reject(new Error("Compression failed"))
                         const compressedFile = new File([blob], file.name, {
-                            type: "image/jpeg",
+                            type: outputType,
                             lastModified: Date.now(),
                         })
                         resolve(compressedFile)
                     },
-                    "image/jpeg",
-                    0.9,
+                    outputType,
+                    isPng ? undefined : 0.9,
                 )
             }
 
