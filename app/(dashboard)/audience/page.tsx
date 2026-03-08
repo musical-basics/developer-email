@@ -1194,35 +1194,6 @@ export default function AudienceManagerPage() {
                 </p>
             </div>
 
-            {/* Stats */}
-            <div className="grid gap-4 md:grid-cols-3 mb-8">
-                <Card className="bg-card border-border">
-                    <CardContent className="flex items-center gap-4 p-6">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
-                            <Users className="h-6 w-6 text-amber-500" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Total Subscribers</p>
-                            <p className="text-3xl font-bold text-foreground">{stats.total.toLocaleString()}</p>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                <Card className="bg-card border-border">
-                    <CardContent className="flex items-center gap-4 p-6">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500/10">
-                            <UserCheck className="h-6 w-6 text-emerald-500" />
-                        </div>
-                        <div>
-                            <p className="text-sm text-muted-foreground">Active</p>
-                            <p className="text-3xl font-bold text-foreground">{stats.active.toLocaleString()}</p>
-                        </div>
-                    </CardContent>
-                </Card>
-
-
-
-            </div>
 
             {/* Saved Views Bar */}
             <div className="flex items-center gap-2 mb-4 flex-wrap">
