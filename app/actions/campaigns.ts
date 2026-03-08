@@ -191,8 +191,8 @@ export async function getCampaigns(emailType?: string) {
 
         return {
             ...c,
-            total_opens: uniqueOpens[c.id]?.size ?? c.total_opens ?? 0,
-            total_clicks: uniqueClicks[c.id]?.size ?? c.total_clicks ?? 0,
+            total_opens: completedIds.includes(c.id) ? (uniqueOpens[c.id]?.size ?? 0) : (c.total_opens ?? 0),
+            total_clicks: completedIds.includes(c.id) ? (uniqueClicks[c.id]?.size ?? 0) : (c.total_clicks ?? 0),
             total_conversions: uniqueConversions[c.id]?.size ?? 0,
             sent_to_emails: recipientMap[c.id] || [],
             recipient_breakdown: breakdown,

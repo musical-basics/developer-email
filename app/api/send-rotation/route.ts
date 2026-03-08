@@ -150,6 +150,13 @@ export async function POST(request: Request) {
                         return `href=${quote}${url}${sep}sid=${sub.id}&cid=${child.id}${quote}`;
                     });
 
+                    // Open tracking pixel (matches /api/send pattern)
+                    const openPixel = `<img src="${baseUrl}/api/track/open?c=${child.id}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+                    personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
+                    if (!personalHtml.includes(openPixel)) {
+                        personalHtml += openPixel;
+                    }
+
                     const personalSubject = await applyAllMergeTags(template.subject_line || "", sub);
 
                     const { error } = await resend.emails.send({
