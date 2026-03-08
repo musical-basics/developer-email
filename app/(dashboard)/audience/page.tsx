@@ -39,6 +39,7 @@ import {
     Mail,
     MailX,
     Clock,
+    RefreshCw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -98,6 +99,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { createClient } from "@/lib/supabase/client"
 import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, createBulkCampaign, getRecentlyUsedTemplateIds } from "@/app/actions/campaigns"
 import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
+import { SendRotationModal } from "@/components/audience/send-rotation-modal"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
 import { getTags, ensureTagDefinitions, type TagDefinition } from "@/app/actions/tags"
@@ -177,6 +179,7 @@ export default function AudienceManagerPage() {
 
     // Bulk Send State
     const [bulkSendMode, setBulkSendMode] = useState(false)
+    const [isRotationModalOpen, setIsRotationModalOpen] = useState(false)
 
     // Start Chain State
     const [isChainPickerOpen, setIsChainPickerOpen] = useState(false)
@@ -1501,6 +1504,10 @@ export default function AudienceManagerPage() {
                         <GitBranch className="h-4 w-4" />
                         Bulk Start Chain
                     </Button>
+                    <Button variant="secondary" onClick={() => setIsRotationModalOpen(true)} className="gap-2">
+                        <RefreshCw className="h-4 w-4" />
+                        Send via Rotation
+                    </Button>
                     <Button variant="destructive" onClick={() => setIsDeleteAlertOpen(true)} className="gap-2">
                         <Trash2 className="h-4 w-4" />
                         Delete Selected
@@ -2154,6 +2161,13 @@ export default function AudienceManagerPage() {
                 onSelectCampaign={handleSelectCampaign}
                 duplicating={duplicating}
                 onBulkSendModeChange={setBulkSendMode}
+            />
+
+            {/* Send via Rotation Dialog */}
+            <SendRotationModal
+                open={isRotationModalOpen}
+                onOpenChange={setIsRotationModalOpen}
+                selectedIds={selectedIds}
             />
 
             {/* Chain Picker Dialog */}
