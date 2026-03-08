@@ -46,7 +46,7 @@ export async function getCampaigns(emailType?: string) {
     // Fetch campaigns
     let query = supabase
         .from("campaigns")
-        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type, scheduled_at, scheduled_status")
+        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type, scheduled_at, scheduled_status, category, is_starred_template")
         .order("created_at", { ascending: false })
 
     if (emailType) {
@@ -205,7 +205,7 @@ export async function getCampaignList() {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, subject_line, created_at, is_template, is_ready")
+        .select("id, name, status, subject_line, created_at, is_template, is_ready, category, is_starred_template")
         .order("created_at", { ascending: false })
 
     if (error) {
@@ -493,6 +493,68 @@ export async function toggleReadyStatus(campaignId: string, isReady: boolean) {
 
     revalidatePath("/campaigns")
     return { success: true }
+}
+
+export async function updateCampaignCategory(campaignId: string, category: string | null) {
+    const supabase = await createClient()
+    const { error } = await supabase
+        .from("campaigns")
+        .update({ category: category || null })
+        .eq("id", campaignId)
+
+    if (error) {
+        console.error("Error updating campaign category:", error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { success: true }
+}
+
+export async function toggleCampaignStarred(campaignId: string, isStarred: boolean) {
+    const supabase = await createClient()
+    const { error } = await supabase
+        .from("campaigns")
+        .update({ is_starred_template: isStarred })
+        .eq("id", campaignId)
+
+    if (error) {
+        console.error("Error toggling campaign starred:", error)
+        return { success: false, error: error.message }
+    }
+
+    revalidatePath("/campaigns")
+    return { success: true }
+}
+
+export async function getRecentlyUsedTemplateIds(): Promise<string[]> {
+    const supabase = await createClient()
+
+    // Find the 5 most recently used templates by looking at child campaigns
+    const { data, error } = await supabase
+        .from("campaigns")
+        .select("parent_template_id, created_at")
+        .not("parent_template_id", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(50)
+
+    if (error || !data) {
+        console.error("Error fetching recently used templates:", error)
+        return []
+    }
+
+    // Deduplicate by parent_template_id, keeping only the most recent per template
+    const seen = new Set<string>()
+    const recentIds: string[] = []
+    for (const row of data) {
+        if (row.parent_template_id && !seen.has(row.parent_template_id)) {
+            seen.add(row.parent_template_id)
+            recentIds.push(row.parent_template_id)
+            if (recentIds.length >= 5) break
+        }
+    }
+
+    return recentIds
 }
 
 // ─── Version History ────────────────────────────────────────────────

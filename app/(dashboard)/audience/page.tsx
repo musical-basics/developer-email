@@ -96,7 +96,8 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
-import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, createBulkCampaign } from "@/app/actions/campaigns"
+import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, createBulkCampaign, getRecentlyUsedTemplateIds } from "@/app/actions/campaigns"
+import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
 import { getTags, ensureTagDefinitions, type TagDefinition } from "@/app/actions/tags"
@@ -172,6 +173,7 @@ export default function AudienceManagerPage() {
     const [existingCampaigns, setExistingCampaigns] = useState<Campaign[]>([])
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
     const [duplicating, setDuplicating] = useState(false)
+    const [recentlyUsedIds, setRecentlyUsedIds] = useState<string[]>([])
 
     // Bulk Send State
     const [bulkSendMode, setBulkSendMode] = useState(false)
@@ -675,8 +677,12 @@ export default function AudienceManagerPage() {
         setLoadingCampaigns(true)
 
         try {
-            const campaigns = await getCampaignList()
+            const [campaigns, recentIds] = await Promise.all([
+                getCampaignList(),
+                getRecentlyUsedTemplateIds(),
+            ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
+            setRecentlyUsedIds(recentIds)
         } catch (error) {
             console.error("Failed to load campaigns", error)
             toast({ title: "Error loading campaigns", variant: "destructive" })
@@ -762,8 +768,12 @@ export default function AudienceManagerPage() {
         setLoadingCampaigns(true)
 
         try {
-            const campaigns = await getCampaignList()
+            const [campaigns, recentIds] = await Promise.all([
+                getCampaignList(),
+                getRecentlyUsedTemplateIds(),
+            ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
+            setRecentlyUsedIds(recentIds)
         } catch (error) {
             console.error("Failed to load campaigns", error)
             toast({ title: "Error loading campaigns", variant: "destructive" })
@@ -2132,77 +2142,19 @@ export default function AudienceManagerPage() {
             </AlertDialog>
 
             {/* Select Campaign Dialog */}
-            <Dialog open={isSelectCampaignOpen} onOpenChange={(open) => { setIsSelectCampaignOpen(open); if (!open) setBulkSendMode(false) }}>
-                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>{bulkSendMode ? 'Bulk Send Template' : 'Send Existing Campaign'}</DialogTitle>
-                        <DialogDescription>
-                            {bulkSendMode
-                                ? `Select a template to send to ${selectedIds.length} selected subscriber${selectedIds.length !== 1 ? 's' : ''}.`
-                                : `Select a campaign to duplicate and send to ${targetSubscriber?.email}.`
-                            }
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="py-4">
-                        {loadingCampaigns ? (
-                            <div className="flex justify-center py-8">
-                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                            </div>
-                        ) : existingCampaigns.length === 0 ? (
-                            <p className="text-center text-muted-foreground py-8">No campaigns found.</p>
-                        ) : (
-                            <ScrollArea className="h-[300px] pr-4">
-                                <div className="space-y-2">
-                                    {[...existingCampaigns].sort((a, b) => (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)).map(campaign => (
-                                        <div
-                                            key={campaign.id}
-                                            onClick={() => !duplicating && handleSelectCampaign(campaign)}
-                                            className={cn(
-                                                "p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors",
-                                                duplicating && "opacity-50 pointer-events-none"
-                                            )}
-                                        >
-                                            <div className="space-y-1">
-                                                <h4 className="font-medium text-sm text-foreground line-clamp-2 break-words">{campaign.name}</h4>
-                                                {campaign.subject_line && (
-                                                    <p className="text-xs text-muted-foreground/70 italic line-clamp-1">{campaign.subject_line}</p>
-                                                )}
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={cn(
-                                                            "text-xs shrink-0",
-                                                            campaign.is_template
-                                                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                                                                : campaign.status === 'draft' && "bg-zinc-500/10 text-zinc-400 border-zinc-500/30",
-                                                            !campaign.is_template && campaign.status === 'active' && "bg-blue-500/10 text-blue-400 border-blue-500/30",
-                                                            !campaign.is_template && campaign.status === 'completed' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                                        )}
-                                                    >
-                                                        {campaign.is_template ? "template" : campaign.status}
-                                                    </Badge>
-                                                    {campaign.is_ready && (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="text-xs shrink-0 bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                                        >
-                                                            ready
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <p className="text-[10px] text-muted-foreground mt-2">
-                                                Created: {formatDate(campaign.created_at)}
-                                            </p>
-                                        </div>
-                                    ))}
-                                </div>
-                            </ScrollArea>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <SendCampaignModal
+                open={isSelectCampaignOpen}
+                onOpenChange={setIsSelectCampaignOpen}
+                campaigns={existingCampaigns}
+                loading={loadingCampaigns}
+                bulkSendMode={bulkSendMode}
+                selectedIds={selectedIds}
+                targetSubscriber={targetSubscriber}
+                recentlyUsedIds={recentlyUsedIds}
+                onSelectCampaign={handleSelectCampaign}
+                duplicating={duplicating}
+                onBulkSendModeChange={setBulkSendMode}
+            />
 
             {/* Chain Picker Dialog */}
             <Dialog open={isChainPickerOpen} onOpenChange={(open) => { setIsChainPickerOpen(open); if (!open) setBulkChainMode(false) }}>

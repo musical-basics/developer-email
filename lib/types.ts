@@ -19,6 +19,8 @@ export interface Campaign {
     resend_email_id?: string | null
     is_template?: boolean
     is_ready?: boolean
+    category?: string | null
+    is_starred_template?: boolean
     email_type?: string
     sent_from_email?: string | null
     sent_to_emails?: string[]

@@ -10,11 +10,12 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, Download, ChevronDown, ChevronUp } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, Download, ChevronDown, ChevronUp, Tag, X } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 import { createClient } from "@/lib/supabase/client"
-import { duplicateCampaign, deleteCampaign, toggleTemplateStatus, toggleReadyStatus } from "@/app/actions/campaigns"
+import { duplicateCampaign, deleteCampaign, toggleTemplateStatus, toggleReadyStatus, updateCampaignCategory, toggleCampaignStarred } from "@/app/actions/campaigns"
 import { exportToBlog } from "@/app/actions/export-to-blog"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
@@ -59,6 +60,9 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
     const [currentPage, setCurrentPage] = useState(0)
     const [pageSize, setPageSize] = useState(25)
+    const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
+    const [categoryInput, setCategoryInput] = useState("")
+    const [togglingStarredId, setTogglingStarredId] = useState<string | null>(null)
 
     const toggleExpand = (id: string) => {
         setExpandedRows(prev => {
@@ -443,6 +447,11 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                     Ready
                                                 </Badge>
                                             )}
+                                            {campaign.is_template && campaign.category && (
+                                                <Badge variant="outline" className="ml-1 text-violet-400 border-violet-500/50 bg-violet-500/10 text-xs">
+                                                    {campaign.category}
+                                                </Badge>
+                                            )}
                                         </TableCell>
 
                                         {/* METRICS */}
@@ -538,6 +547,99 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                 >
                                                     <Star className={`w-4 h-4 ${campaign.is_template ? "fill-current" : ""}`} />
                                                 </Button>
+                                                {campaign.is_template && (
+                                                    <>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            onClick={async () => {
+                                                                setTogglingStarredId(campaign.id)
+                                                                await toggleCampaignStarred(campaign.id, !campaign.is_starred_template)
+                                                                router.refresh()
+                                                                setTogglingStarredId(null)
+                                                            }}
+                                                            disabled={togglingStarredId === campaign.id}
+                                                            className={`h-8 w-8 ${campaign.is_starred_template
+                                                                ? "text-sky-400 hover:text-sky-300 hover:bg-sky-500/10"
+                                                                : "text-muted-foreground hover:text-sky-400 hover:bg-sky-500/10"
+                                                                }`}
+                                                            title={campaign.is_starred_template ? "Unpin from Favorites" : "Pin to Favorites"}
+                                                        >
+                                                            <Star className={`w-4 h-4 ${campaign.is_starred_template ? "fill-current" : ""}`} />
+                                                        </Button>
+                                                        <Popover
+                                                            open={editingCategoryId === campaign.id}
+                                                            onOpenChange={(open) => {
+                                                                if (open) {
+                                                                    setEditingCategoryId(campaign.id)
+                                                                    setCategoryInput(campaign.category || "")
+                                                                } else {
+                                                                    setEditingCategoryId(null)
+                                                                }
+                                                            }}
+                                                        >
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className={`h-8 w-8 ${campaign.category
+                                                                        ? "text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
+                                                                        : "text-muted-foreground hover:text-violet-400 hover:bg-violet-500/10"
+                                                                        }`}
+                                                                    title={campaign.category ? `Category: ${campaign.category}` : "Set category"}
+                                                                >
+                                                                    <Tag className="w-4 h-4" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-56 p-3" align="end">
+                                                                <div className="space-y-2">
+                                                                    <Label className="text-xs font-medium">Category</Label>
+                                                                    <div className="flex gap-1.5">
+                                                                        <Input
+                                                                            value={categoryInput}
+                                                                            onChange={(e) => setCategoryInput(e.target.value)}
+                                                                            placeholder="e.g. Promo, Onboarding"
+                                                                            className="h-8 text-sm"
+                                                                            onKeyDown={async (e) => {
+                                                                                if (e.key === "Enter") {
+                                                                                    await updateCampaignCategory(campaign.id, categoryInput.trim() || null)
+                                                                                    setEditingCategoryId(null)
+                                                                                    router.refresh()
+                                                                                }
+                                                                            }}
+                                                                        />
+                                                                        {campaign.category && (
+                                                                            <Button
+                                                                                variant="ghost"
+                                                                                size="icon"
+                                                                                className="h-8 w-8 shrink-0 text-red-400 hover:text-red-300"
+                                                                                onClick={async () => {
+                                                                                    await updateCampaignCategory(campaign.id, null)
+                                                                                    setEditingCategoryId(null)
+                                                                                    router.refresh()
+                                                                                }}
+                                                                                title="Remove category"
+                                                                            >
+                                                                                <X className="w-3.5 h-3.5" />
+                                                                            </Button>
+                                                                        )}
+                                                                    </div>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="w-full h-7 text-xs"
+                                                                        onClick={async () => {
+                                                                            await updateCampaignCategory(campaign.id, categoryInput.trim() || null)
+                                                                            setEditingCategoryId(null)
+                                                                            router.refresh()
+                                                                        }}
+                                                                    >
+                                                                        Save
+                                                                    </Button>
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </>
+                                                )}
                                                 {campaign.is_template && (
                                                     <Button
                                                         variant="ghost"
