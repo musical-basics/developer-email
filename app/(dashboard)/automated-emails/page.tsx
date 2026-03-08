@@ -5,7 +5,7 @@ import { getCampaigns } from "@/app/actions/campaigns"
 export const dynamic = "force-dynamic"
 
 export default async function AutomatedEmailsPage() {
-    const campaigns = await getCampaigns("automated")
+    const { campaigns, totalCompleted } = await getCampaigns("automated")
 
     return (
         <div className="p-6 space-y-6">
@@ -19,7 +19,7 @@ export default async function AutomatedEmailsPage() {
                 <CreateAutomatedDialog />
             </div>
 
-            <CampaignsTabs campaigns={campaigns} />
+            <CampaignsTabs campaigns={campaigns} totalCompleted={totalCompleted} emailType="automated" />
         </div>
     )
 }

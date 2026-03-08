@@ -37,13 +37,38 @@ export async function createCampaign(prevState: any, formData: FormData) {
     return { data }
 }
 
-export async function getCampaigns(emailType?: string) {
+/**
+ * Batched .in() helper — splits large ID arrays into chunks to avoid
+ * Node.js HeadersOverflowError (16 KB default limit).
+ */
+async function batchedIn<T>(
+    queryFn: (ids: string[]) => Promise<{ data: T[] | null; error: any }>,
+    ids: string[],
+    batchSize = 80
+): Promise<T[]> {
+    const results: T[] = []
+    for (let i = 0; i < ids.length; i += batchSize) {
+        const chunk = ids.slice(i, i + batchSize)
+        const { data, error } = await queryFn(chunk)
+        if (error) console.error("[batchedIn] chunk error:", error)
+        if (data) results.push(...data)
+    }
+    return results
+}
+
+export async function getCampaigns(
+    emailType?: string,
+    opts?: { completedPage?: number; completedPageSize?: number }
+) {
     const supabase = createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_KEY!
     )
 
-    // Fetch campaigns
+    const completedPage = opts?.completedPage ?? 0
+    const completedPageSize = opts?.completedPageSize ?? 25
+
+    // Fetch campaigns (lightweight metadata only)
     let query = supabase
         .from("campaigns")
         .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type, scheduled_at, scheduled_status, category, is_starred_template")
@@ -57,27 +82,41 @@ export async function getCampaigns(emailType?: string) {
 
     if (error) {
         console.error("Error fetching campaigns:", error)
-        return []
+        return { campaigns: [], totalCompleted: 0 }
     }
 
-    if (!campaigns || campaigns.length === 0) return []
+    if (!campaigns || campaigns.length === 0) return { campaigns: [], totalCompleted: 0 }
 
-    // Get unique open counts per campaign from subscriber_events
-    const completedIds = campaigns.filter(c => c.status === "completed").map(c => c.id)
+    // Separate completed campaigns (sorted by updated_at desc for the completed tab)
+    const allCompletedIds = campaigns
+        .filter(c => c.status === "completed")
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        .map(c => c.id)
 
-    if (completedIds.length === 0) return campaigns
+    const totalCompleted = allCompletedIds.length
 
-    // Fetch recipient emails for completed campaigns
-    const { data: sentRows } = await supabase
-        .from("sent_history")
-        .select("campaign_id, subscriber_id, subscribers ( email )")
-        .in("campaign_id", completedIds)
+    if (allCompletedIds.length === 0) return { campaigns, totalCompleted: 0 }
+
+    // Only enrich the current page of completed campaigns
+    const paginatedCompletedIds = allCompletedIds.slice(
+        completedPage * completedPageSize,
+        (completedPage + 1) * completedPageSize
+    )
+
+    // Fetch recipient emails for paginated completed campaigns
+    const sentRows = await batchedIn<any>(
+        async (ids) => await supabase
+            .from("sent_history")
+            .select("campaign_id, subscriber_id, subscribers ( email )")
+            .in("campaign_id", ids),
+        paginatedCompletedIds
+    )
 
     // Build map: campaign_id -> list of recipient emails
     const recipientMap: Record<string, string[]> = {}
     // Also build: campaign_id -> [{ subscriber_id, email }]
     const recipientDetailMap: Record<string, { subscriber_id: string; email: string }[]> = {}
-    sentRows?.forEach((row: any) => {
+    sentRows.forEach((row: any) => {
         const email = row.subscribers?.email
         if (email && row.campaign_id) {
             if (!recipientMap[row.campaign_id]) recipientMap[row.campaign_id] = []
@@ -92,10 +131,9 @@ export async function getCampaigns(emailType?: string) {
         }
     })
 
-    // Fallback: for campaigns with no sent_history rows, resolve emails from variable_values
-    const missingIds = completedIds.filter(id => !recipientMap[id])
+    // Fallback: for paginated campaigns with no sent_history rows, resolve emails from variable_values
+    const missingIds = paginatedCompletedIds.filter(id => !recipientMap[id])
     if (missingIds.length > 0) {
-        // Collect subscriber IDs from variable_values of campaigns missing sent_history
         const subIdSet = new Set<string>()
         const campaignToSubIds: Record<string, string[]> = {}
         for (const c of campaigns) {
@@ -108,22 +146,20 @@ export async function getCampaigns(emailType?: string) {
             }
         }
         if (subIdSet.size > 0) {
-            const { data: subs } = await supabase
-                .from("subscribers")
-                .select("id, email")
-                .in("id", Array.from(subIdSet))
-            if (subs) {
-                const subEmailMap = new Map(subs.map(s => [s.id, s.email]))
-                for (const [campId, subIds] of Object.entries(campaignToSubIds)) {
-                    for (const sid of subIds) {
-                        const email = subEmailMap.get(sid)
-                        if (email) {
-                            if (!recipientMap[campId]) recipientMap[campId] = []
-                            if (!recipientDetailMap[campId]) recipientDetailMap[campId] = []
-                            if (!recipientMap[campId].includes(email)) {
-                                recipientMap[campId].push(email)
-                                recipientDetailMap[campId].push({ subscriber_id: sid, email })
-                            }
+            const subs = await batchedIn<{ id: string; email: string }>(
+                async (ids) => await supabase.from("subscribers").select("id, email").in("id", ids),
+                Array.from(subIdSet)
+            )
+            const subEmailMap = new Map(subs.map(s => [s.id, s.email]))
+            for (const [campId, subIds] of Object.entries(campaignToSubIds)) {
+                for (const sid of subIds) {
+                    const email = subEmailMap.get(sid)
+                    if (email) {
+                        if (!recipientMap[campId]) recipientMap[campId] = []
+                        if (!recipientDetailMap[campId]) recipientDetailMap[campId] = []
+                        if (!recipientMap[campId].includes(email)) {
+                            recipientMap[campId].push(email)
+                            recipientDetailMap[campId].push({ subscriber_id: sid, email })
                         }
                     }
                 }
@@ -131,53 +167,62 @@ export async function getCampaigns(emailType?: string) {
         }
     }
 
-    // Fetch all open events for completed campaigns
-    const { data: openEvents } = await supabase
-        .from("subscriber_events")
-        .select("campaign_id, subscriber_id")
-        .eq("type", "open")
-        .in("campaign_id", completedIds)
+    // Fetch events only for paginated completed campaigns
+    const openEvents = await batchedIn<{ campaign_id: string; subscriber_id: string }>(
+        async (ids) => await supabase
+            .from("subscriber_events")
+            .select("campaign_id, subscriber_id")
+            .eq("type", "open")
+            .in("campaign_id", ids),
+        paginatedCompletedIds
+    )
 
-    // Fetch all click events for completed campaigns
-    const { data: clickEvents } = await supabase
-        .from("subscriber_events")
-        .select("campaign_id, subscriber_id")
-        .eq("type", "click")
-        .in("campaign_id", completedIds)
+    const clickEvents = await batchedIn<{ campaign_id: string; subscriber_id: string }>(
+        async (ids) => await supabase
+            .from("subscriber_events")
+            .select("campaign_id, subscriber_id")
+            .eq("type", "click")
+            .in("campaign_id", ids),
+        paginatedCompletedIds
+    )
 
-    // Fetch Conversion Events (hitting the customize/checkout page)
-    const { data: conversionEvents } = await supabase
-        .from("subscriber_events")
-        .select("campaign_id, subscriber_id")
-        .eq("type", "page_view")
-        .ilike("url", "%/customize%")
-        .in("campaign_id", completedIds)
+    const conversionEvents = await batchedIn<{ campaign_id: string; subscriber_id: string; url?: string }>(
+        async (ids) => await supabase
+            .from("subscriber_events")
+            .select("campaign_id, subscriber_id")
+            .eq("type", "page_view")
+            .ilike("url", "%/customize%")
+            .in("campaign_id", ids),
+        paginatedCompletedIds
+    )
 
     // Count unique subscribers per campaign
     const uniqueOpens: Record<string, Set<string>> = {}
     const uniqueClicks: Record<string, Set<string>> = {}
     const uniqueConversions: Record<string, Set<string>> = {}
 
-    openEvents?.forEach(e => {
+    openEvents.forEach(e => {
         if (!uniqueOpens[e.campaign_id]) uniqueOpens[e.campaign_id] = new Set()
         uniqueOpens[e.campaign_id].add(e.subscriber_id)
     })
 
-    clickEvents?.forEach(e => {
+    clickEvents.forEach(e => {
         if (!uniqueClicks[e.campaign_id]) uniqueClicks[e.campaign_id] = new Set()
         uniqueClicks[e.campaign_id].add(e.subscriber_id)
     })
 
-    conversionEvents?.forEach(e => {
+    conversionEvents.forEach(e => {
         if (e.campaign_id) {
             if (!uniqueConversions[e.campaign_id]) uniqueConversions[e.campaign_id] = new Set()
             uniqueConversions[e.campaign_id].add(e.subscriber_id)
         }
     })
 
-    // Override the stored counters with computed unique counts
-    return campaigns.map(c => {
-        // Build per-recipient breakdown for multi-recipient campaigns
+    // Enrich only paginated completed campaigns with analytics
+    const enrichedSet = new Set(paginatedCompletedIds)
+    const enrichedCampaigns = campaigns.map(c => {
+        if (!enrichedSet.has(c.id)) return c
+
         const details = recipientDetailMap[c.id] || []
         const breakdown = details.length > 1
             ? details.map(d => ({
@@ -191,13 +236,15 @@ export async function getCampaigns(emailType?: string) {
 
         return {
             ...c,
-            total_opens: completedIds.includes(c.id) ? (uniqueOpens[c.id]?.size ?? 0) : (c.total_opens ?? 0),
-            total_clicks: completedIds.includes(c.id) ? (uniqueClicks[c.id]?.size ?? 0) : (c.total_clicks ?? 0),
+            total_opens: uniqueOpens[c.id]?.size ?? 0,
+            total_clicks: uniqueClicks[c.id]?.size ?? 0,
             total_conversions: uniqueConversions[c.id]?.size ?? 0,
             sent_to_emails: recipientMap[c.id] || [],
             recipient_breakdown: breakdown,
         }
     })
+
+    return { campaigns: enrichedCampaigns, totalCompleted }
 }
 
 

@@ -34,6 +34,13 @@ const formatDuration = (seconds: number) => {
     return `${m}m ${s}s`
 }
 
+interface ServerPagination {
+    totalItems: number
+    currentPage: number
+    pageSize: number
+    onPageChange: (page: number, pageSize: number) => void
+}
+
 interface CampaignsTableProps {
     campaigns: Campaign[]
     loading: boolean
@@ -43,9 +50,10 @@ interface CampaignsTableProps {
     enableBulkDelete?: boolean
     sortBy?: "created_at" | "updated_at"
     paginate?: boolean
+    serverPagination?: ServerPagination
 }
 
-export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false, sortBy = "created_at", paginate = false }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false, sortBy = "created_at", paginate = false, serverPagination }: CampaignsTableProps) {
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [newName, setNewName] = useState("")
@@ -373,7 +381,8 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                 }
                                 return (b.is_ready ? 1 : 0) - (a.is_ready ? 1 : 0)
                             })
-                            const displayed = paginate ? sorted.slice(currentPage * pageSize, (currentPage + 1) * pageSize) : sorted
+                            // If server pagination, all items are already the right page — don't slice client-side
+                            const displayed = serverPagination ? sorted : (paginate ? sorted.slice(currentPage * pageSize, (currentPage + 1) * pageSize) : sorted)
                             return displayed
                         })().map((campaign) => {
                             const recipients = campaign.total_recipients || 0
@@ -770,8 +779,12 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
             </Table>
 
             {/* Pagination */}
-            {paginate && campaigns.length > 0 && (() => {
-                const totalPages = Math.ceil(campaigns.length / pageSize)
+            {paginate && (serverPagination ? serverPagination.totalItems > 0 : campaigns.length > 0) && (() => {
+                const sp = serverPagination
+                const effectiveTotal = sp ? sp.totalItems : campaigns.length
+                const effectivePage = sp ? sp.currentPage : currentPage
+                const effectivePageSize = sp ? sp.pageSize : pageSize
+                const totalPages = Math.ceil(effectiveTotal / effectivePageSize)
                 return (
                     <div className="flex items-center justify-between border-t border-border px-6 py-3">
                         <div className="flex items-center gap-2">
@@ -779,8 +792,14 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                             {[25, 50, 100].map(size => (
                                 <button
                                     key={size}
-                                    onClick={() => { setPageSize(size); setCurrentPage(0) }}
-                                    className={`text-xs px-2 py-1 rounded transition-colors ${pageSize === size ? 'bg-[#D4AF37]/20 text-[#D4AF37] font-medium' : 'text-muted-foreground hover:text-foreground'}`}
+                                    onClick={() => {
+                                        if (sp) {
+                                            sp.onPageChange(0, size)
+                                        } else {
+                                            setPageSize(size); setCurrentPage(0)
+                                        }
+                                    }}
+                                    className={`text-xs px-2 py-1 rounded transition-colors ${effectivePageSize === size ? 'bg-[#D4AF37]/20 text-[#D4AF37] font-medium' : 'text-muted-foreground hover:text-foreground'}`}
                                 >
                                     {size}
                                 </button>
@@ -788,14 +807,20 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                         </div>
                         <div className="flex items-center gap-3">
                             <span className="text-xs text-muted-foreground">
-                                {currentPage * pageSize + 1}–{Math.min((currentPage + 1) * pageSize, campaigns.length)} of {campaigns.length}
+                                {effectivePage * effectivePageSize + 1}–{Math.min((effectivePage + 1) * effectivePageSize, effectiveTotal)} of {effectiveTotal}
                             </span>
                             <div className="flex gap-1">
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setCurrentPage(p => Math.max(0, p - 1))}
-                                    disabled={currentPage === 0}
+                                    onClick={() => {
+                                        if (sp) {
+                                            sp.onPageChange(Math.max(0, effectivePage - 1), effectivePageSize)
+                                        } else {
+                                            setCurrentPage(p => Math.max(0, p - 1))
+                                        }
+                                    }}
+                                    disabled={effectivePage === 0}
                                     className="h-7 px-2 text-xs"
                                 >
                                     Prev
@@ -803,8 +828,14 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setCurrentPage(p => Math.min(totalPages - 1, p + 1))}
-                                    disabled={currentPage >= totalPages - 1}
+                                    onClick={() => {
+                                        if (sp) {
+                                            sp.onPageChange(Math.min(totalPages - 1, effectivePage + 1), effectivePageSize)
+                                        } else {
+                                            setCurrentPage(p => Math.min(totalPages - 1, p + 1))
+                                        }
+                                    }}
+                                    disabled={effectivePage >= totalPages - 1}
                                     className="h-7 px-2 text-xs"
                                 >
                                     Next
