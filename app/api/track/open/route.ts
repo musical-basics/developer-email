@@ -11,13 +11,21 @@ export async function GET(request: Request) {
     const campaignId = searchParams.get("c");
     const subscriberId = searchParams.get("s");
 
+    console.log(`[Open Pixel] Hit — c=${campaignId}, s=${subscriberId}`);
+
     if (campaignId && subscriberId) {
-        // Just log the event — rates are computed from unique events at read time
-        await supabase.from("subscriber_events").insert({
+        const { error } = await supabase.from("subscriber_events").insert({
             type: "open",
             campaign_id: campaignId,
             subscriber_id: subscriberId,
         });
+        if (error) {
+            console.error(`[Open Pixel] Insert FAILED — c=${campaignId}, s=${subscriberId}:`, error.message, error.details, error.code);
+        } else {
+            console.log(`[Open Pixel] Insert OK — c=${campaignId}, s=${subscriberId}`);
+        }
+    } else {
+        console.warn(`[Open Pixel] Missing params — c=${campaignId}, s=${subscriberId}`);
     }
 
     // Return a 1x1 transparent GIF

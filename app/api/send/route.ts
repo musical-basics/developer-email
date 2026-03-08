@@ -282,10 +282,14 @@ export async function POST(request: Request) {
                     // Open tracking pixel (loaded from our own domain)
                     if (openTracking) {
                         const openPixel = `<img src="${baseUrl}/api/track/open?c=${trackingCampaignId}&s=${sub.id}" width="1" height="1" alt="" style="display:none !important;width:1px;height:1px;opacity:0;" />`;
+                        const hadBody = personalHtml.includes('</body>');
                         personalHtml = personalHtml.replace(/<\/body>/i, `${openPixel}</body>`);
                         if (!personalHtml.includes(openPixel)) {
                             personalHtml += openPixel;
                         }
+                        console.log(`[Open Pixel] Injected for ${sub.email} — campaign=${trackingCampaignId}, hadBody=${hadBody}, baseUrl=${baseUrl}`);
+                    } else {
+                        console.log(`[Open Pixel] SKIPPED for ${sub.email} — openTracking=${openTracking}`);
                     }
 
                     const personalSubject = await applyAllMergeTags(campaign.subject_line || "", sub);
