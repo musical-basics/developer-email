@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -16,9 +17,9 @@ interface SendRotationModalProps {
 
 export function SendRotationModal({ open, onOpenChange, selectedIds }: SendRotationModalProps) {
     const { toast } = useToast()
+    const router = useRouter()
     const [rotations, setRotations] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
-    const [sending, setSending] = useState(false)
     const [selectedRotation, setSelectedRotation] = useState<any>(null)
 
     useEffect(() => {
@@ -32,44 +33,10 @@ export function SendRotationModal({ open, onOpenChange, selectedIds }: SendRotat
         fetch()
     }, [open])
 
-    const handleSend = async () => {
+    const handleReview = () => {
         if (!selectedRotation) return
-        setSending(true)
-
-        try {
-            const res = await fetch("/api/send-rotation", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    rotationId: selectedRotation.id,
-                    subscriberIds: selectedIds,
-                }),
-            })
-
-            const data = await res.json()
-
-            if (data.success) {
-                toast({
-                    title: "Rotation send complete",
-                    description: data.message,
-                })
-                onOpenChange(false)
-            } else {
-                toast({
-                    title: "Rotation send failed",
-                    description: data.error || "Unknown error",
-                    variant: "destructive",
-                })
-            }
-        } catch (err: any) {
-            toast({
-                title: "Error",
-                description: err.message,
-                variant: "destructive",
-            })
-        }
-
-        setSending(false)
+        onOpenChange(false)
+        router.push(`/rotation-send/${selectedRotation.id}?subscriberIds=${selectedIds.join(",")}`)
     }
 
     return (
@@ -150,21 +117,12 @@ export function SendRotationModal({ open, onOpenChange, selectedIds }: SendRotat
                 <DialogFooter>
                     <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button
-                        onClick={handleSend}
-                        disabled={!selectedRotation || sending}
+                        onClick={handleReview}
+                        disabled={!selectedRotation}
                         className="gap-2"
                     >
-                        {sending ? (
-                            <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                Sending...
-                            </>
-                        ) : (
-                            <>
-                                <RefreshCw className="w-4 h-4" />
-                                Send via Rotation
-                            </>
-                        )}
+                        <RefreshCw className="w-4 h-4" />
+                        Review & Send
                     </Button>
                 </DialogFooter>
             </DialogContent>

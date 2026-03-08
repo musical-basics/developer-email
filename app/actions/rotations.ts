@@ -73,6 +73,42 @@ export async function getRotation(id: string) {
     }
 }
 
+// ─── Get rotation with full template content (for preview rendering) ──
+export async function getRotationWithTemplates(id: string) {
+    const supabase = await createClient()
+    const { data: rotation, error } = await supabase
+        .from("rotations")
+        .select("*")
+        .eq("id", id)
+        .single()
+
+    if (error || !rotation) {
+        console.error("Error fetching rotation:", error)
+        return null
+    }
+
+    const campaignIds = rotation.campaign_ids || []
+    let campaigns: any[] = []
+    if (campaignIds.length > 0) {
+        const { data } = await supabase
+            .from("campaigns")
+            .select("id, name, subject_line, html_content, variable_values")
+            .in("id", campaignIds)
+        campaigns = data || []
+    }
+
+    // Preserve order from campaign_ids
+    const campaignMap = Object.fromEntries(campaigns.map((c: any) => [c.id, c]))
+    const orderedCampaigns = campaignIds.map((id: string) => campaignMap[id] || {
+        id, name: "Unknown", subject_line: "", html_content: null, variable_values: null
+    })
+
+    return {
+        ...rotation,
+        campaigns: orderedCampaigns,
+    }
+}
+
 // ─── Get rotation analytics (per-campaign stats from child campaigns) ──
 export async function getRotationAnalytics(rotationId: string) {
     const supabase = await createClient()
