@@ -748,9 +748,16 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Per-Recipient Breakdown</div>
                                                     {campaign.recipient_breakdown!.map((r) => (
                                                         <div key={r.subscriber_id} className="flex items-center gap-3 py-1.5 px-3 rounded-md bg-neutral-800/50 border border-neutral-700/50">
-                                                            <Link href={`/audience/${r.subscriber_id}`} className="text-xs text-foreground font-mono truncate min-w-[180px] max-w-[220px] hover:text-blue-400 hover:underline transition-colors" title={`${r.email} — View profile`} onClick={(e) => e.stopPropagation()}>
-                                                                {r.email}
-                                                            </Link>
+                                                            <div className="flex items-center gap-2 min-w-[180px] max-w-[400px]">
+                                                                <Link href={`/audience/${r.subscriber_id}`} className="text-xs text-foreground font-mono truncate hover:text-blue-400 hover:underline transition-colors" title={`${r.email} — View profile`} onClick={(e) => e.stopPropagation()}>
+                                                                    {r.email}
+                                                                </Link>
+                                                                {r.campaign_name && (
+                                                                    <span className="text-[10px] text-muted-foreground truncate max-w-[200px]" title={r.campaign_name}>
+                                                                        — {r.campaign_name}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                             <div className="flex items-center gap-2 ml-auto">
                                                                 <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${r.opened ? 'text-emerald-400 border-emerald-500/50 bg-emerald-500/10' : 'text-neutral-500 border-neutral-600/50 bg-neutral-800/50'}`}>
                                                                     <Eye className="w-3 h-3 mr-1" />

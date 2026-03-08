@@ -30,6 +30,7 @@ export interface Campaign {
     recipient_breakdown?: {
         subscriber_id: string
         email: string
+        campaign_name?: string
         opened: boolean
         clicked: boolean
         converted: boolean

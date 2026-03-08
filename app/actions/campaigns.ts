@@ -107,15 +107,15 @@ export async function getCampaigns(
     const sentRows = await batchedIn<any>(
         async (ids) => await supabase
             .from("sent_history")
-            .select("campaign_id, subscriber_id, subscribers ( email )")
+            .select("campaign_id, subscriber_id, variant_sent, subscribers ( email ), campaigns ( name )")
             .in("campaign_id", ids),
         paginatedCompletedIds
     )
 
     // Build map: campaign_id -> list of recipient emails
     const recipientMap: Record<string, string[]> = {}
-    // Also build: campaign_id -> [{ subscriber_id, email }]
-    const recipientDetailMap: Record<string, { subscriber_id: string; email: string }[]> = {}
+    // Also build: campaign_id -> [{ subscriber_id, email, campaign_name }]
+    const recipientDetailMap: Record<string, { subscriber_id: string; email: string; campaign_name?: string }[]> = {}
     sentRows.forEach((row: any) => {
         const email = row.subscribers?.email
         if (email && row.campaign_id) {
@@ -126,6 +126,7 @@ export async function getCampaigns(
                 recipientDetailMap[row.campaign_id].push({
                     subscriber_id: row.subscriber_id,
                     email,
+                    campaign_name: row.campaigns?.name || row.variant_sent || undefined,
                 })
             }
         }
@@ -228,6 +229,7 @@ export async function getCampaigns(
             ? details.map(d => ({
                 subscriber_id: d.subscriber_id,
                 email: d.email,
+                campaign_name: d.campaign_name,
                 opened: uniqueOpens[c.id]?.has(d.subscriber_id) ?? false,
                 clicked: uniqueClicks[c.id]?.has(d.subscriber_id) ?? false,
                 converted: uniqueConversions[c.id]?.has(d.subscriber_id) ?? false,
