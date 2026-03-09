@@ -246,8 +246,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
 
                         <PreflightCheckCard
                             subjectLine={campaign.subject_line}
-                            htmlContent={campaign.html_content}
-                            variableValues={campaign.variable_values}
+                            previewText={campaign.variable_values?.preview_text ?? null}
                         />
                     </div>
 

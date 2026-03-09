@@ -9,29 +9,12 @@ interface CheckItem {
 
 interface PreflightCheckCardProps {
     subjectLine: string | null
-    htmlContent: string | null
-    variableValues: Record<string, any> | null
+    previewText: string | null
 }
 
-export function PreflightCheckCard({ subjectLine, htmlContent, variableValues }: PreflightCheckCardProps) {
-    // Extract Mustache variables from HTML content
-    const extractVariables = (html: string): string[] => {
-        const regex = /\{\{(\w+)\}\}/g
-        const matches = new Set<string>()
-        let match
-        while ((match = regex.exec(html)) !== null) {
-            matches.add(match[1])
-        }
-        return Array.from(matches)
-    }
-
-    const safeHtml = htmlContent || ""
+export function PreflightCheckCard({ subjectLine, previewText }: PreflightCheckCardProps) {
     const safeSubject = subjectLine || ""
-    const safeVariables = variableValues || {}
-
-    const detectedVariables = extractVariables(safeHtml)
-    const hasUnsubscribeLink =
-        safeHtml.toLowerCase().includes("unsubscribe") || safeHtml.includes("{{unsubscribe_url}}")
+    const safePreview = previewText || ""
 
     // Build checklist items
     const checks: CheckItem[] = [
@@ -41,29 +24,11 @@ export function PreflightCheckCard({ subjectLine, htmlContent, variableValues }:
             detail: safeSubject ? "Present" : "Missing",
         },
         {
-            label: "Unsubscribe Link",
-            status: hasUnsubscribeLink ? "pass" : "warning",
-            detail: hasUnsubscribeLink ? "Detected" : "Not found",
-        },
-        {
-            label: "Variables",
-            status: detectedVariables.length > 0 ? "pass" : "pass",
-            detail:
-                detectedVariables.length > 0
-                    ? `${detectedVariables.length} found (${detectedVariables.map((v) => `{{${v}}}`).join(", ")})`
-                    : "None detected",
+            label: "Preview Text",
+            status: safePreview && safePreview.trim().length > 0 ? "pass" : "fail",
+            detail: safePreview ? "Present" : "Missing",
         },
     ]
-
-    // Check if all variables have values
-    const missingValues = detectedVariables.filter((v) => !safeVariables[v] || String(safeVariables[v]).trim() === "")
-    if (missingValues.length > 0) {
-        checks.push({
-            label: "Variable Values",
-            status: "warning",
-            detail: `Missing: ${missingValues.map((v) => `{{${v}}}`).join(", ")}`,
-        })
-    }
 
     const getStatusIcon = (status: CheckItem["status"]) => {
         switch (status) {
