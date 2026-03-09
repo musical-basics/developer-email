@@ -786,6 +786,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
             </Table>
 
             {/* Pagination */}
+            {(() => { console.log("[CampaignsTable] paginate:", paginate, "serverPagination:", serverPagination, "campaigns.length:", campaigns.length); return null })()}
             {paginate && (serverPagination ? serverPagination.totalItems > 0 : campaigns.length > 0) && (() => {
                 const sp = serverPagination
                 const effectiveTotal = sp ? sp.totalItems : campaigns.length

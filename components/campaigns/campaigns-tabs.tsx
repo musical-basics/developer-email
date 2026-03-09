@@ -12,6 +12,7 @@ interface CampaignsTabsProps {
 }
 
 export function CampaignsTabs({ campaigns, totalCompleted, emailType = "campaign" }: CampaignsTabsProps) {
+    console.log("[CampaignsTabs] totalCompleted:", totalCompleted, "campaigns.length:", campaigns.length)
     const [activeTab, setActiveTab] = useState<"templates" | "drafts" | "scheduled" | "completed">("templates")
     const [completedCampaigns, setCompletedCampaigns] = useState<Campaign[]>(
         () => campaigns.filter(c => ["sent", "completed", "active"].includes(c.status) && !c.is_template)
