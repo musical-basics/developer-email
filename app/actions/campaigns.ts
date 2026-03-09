@@ -89,7 +89,7 @@ export async function getCampaigns(
 
     // Separate completed campaigns (sorted by updated_at desc for the completed tab)
     const allCompletedIds = campaigns
-        .filter(c => c.status === "completed")
+        .filter(c => ["sent", "completed", "active"].includes(c.status) && !c.is_template)
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
         .map(c => c.id)
 
