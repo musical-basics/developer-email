@@ -227,15 +227,16 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
                         )}
                         <p className="mt-2 text-xs text-purple-300/60">Only these subscribers will receive this campaign.</p>
                     </div>
-                ) : campaign?.is_template ? (
+                ) : (campaign?.is_template || campaign?.status === "draft") ? (
                     <div className="flex items-start gap-4 bg-muted/30 p-4 rounded-lg border border-border">
                         <Users className="h-8 w-8 text-muted-foreground mt-1 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                             <p className="font-bold text-lg text-muted-foreground">0 Recipients</p>
                             <p className="mt-2 text-sm text-muted-foreground">
-                                This is a master template. To send, select subscribers from the{" "}
-                                <a href="/audience" className="text-[#D4AF37] hover:underline">Audience page</a>{" "}
-                                and use &quot;Send Existing Campaign.&quot;
+                                {campaign?.is_template
+                                    ? <>This is a master template. To send, select subscribers from the{" "}<a href="/audience" className="text-[#D4AF37] hover:underline">Audience page</a>{" "}and use &quot;Send Existing Campaign.&quot;</>
+                                    : <>This is a draft. To send, select subscribers from the{" "}<a href="/audience" className="text-[#D4AF37] hover:underline">Audience page</a>{" "}and use &quot;Send Existing Campaign.&quot;</>
+                                }
                             </p>
                         </div>
                     </div>

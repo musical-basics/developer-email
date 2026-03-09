@@ -106,7 +106,7 @@ export function CampaignHeader({ campaign, onSendBroadcast, isSent, broadcastSta
                         </Link>
                     </Button>
 
-                    {onSendBroadcast && !campaign.is_template && (
+                    {onSendBroadcast && !campaign.is_template && campaign.status !== "draft" && (
                         <Button
                             onClick={onSendBroadcast}
                             disabled={isSent}
