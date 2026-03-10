@@ -159,8 +159,23 @@ export default function AudienceManagerPage() {
     const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null)
     const [expandedSubscriberId, setExpandedSubscriberId] = useState<string | null>(null)
     const [lastEmailedSort, setLastEmailedSort] = useState<"asc" | "desc" | null>(null)
+    const [addedSort, setAddedSort] = useState<"asc" | "desc" | null>(null)
     const [statusFilter, setStatusFilter] = useState<string[]>([])
     const [neverEmailedFilter, setNeverEmailedFilter] = useState(false)
+
+    const hasActiveFilters = searchQuery !== "" || selectedTags.length > 0 || excludedTags.length > 0 || statusFilter.length > 0 || showTestOnly || neverEmailedFilter || lastEmailedSort !== null || addedSort !== null
+
+    const clearAllFilters = () => {
+        setSearchQuery("")
+        setSelectedTags([])
+        setExcludedTags([])
+        setStatusFilter([])
+        setShowTestOnly(false)
+        setNeverEmailedFilter(false)
+        setLastEmailedSort(null)
+        setAddedSort(null)
+        clearActiveView()
+    }
 
     // Pagination
     const [pageSize, setPageSize] = useState(25)
@@ -440,8 +455,16 @@ export default function AudienceManagerPage() {
             })
         }
 
+        if (addedSort) {
+            filtered.sort((a, b) => {
+                const aTime = new Date(a.created_at).getTime()
+                const bTime = new Date(b.created_at).getTime()
+                return addedSort === "asc" ? aTime - bTime : bTime - aTime
+            })
+        }
+
         return filtered
-    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, lastSentSubjects, scheduledCampaigns, neverEmailedFilter])
+    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, addedSort, lastSentSubjects, scheduledCampaigns, neverEmailedFilter])
 
     // Reset page when filters change
     useEffect(() => {
@@ -1477,6 +1500,17 @@ export default function AudienceManagerPage() {
                         Not Yet Emailed
                     </Button>
 
+                    {hasActiveFilters && (
+                        <Button
+                            variant="ghost"
+                            className="gap-2 text-muted-foreground hover:text-foreground"
+                            onClick={clearAllFilters}
+                        >
+                            <X className="h-4 w-4" />
+                            Clear All Filters
+                        </Button>
+                    )}
+
                     <div className="h-8 w-px bg-border mx-2 hidden sm:block" />
 
                     <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as "list" | "tags")} className="w-[180px]">
@@ -1583,7 +1617,7 @@ export default function AudienceManagerPage() {
                                     <TableHead>
                                         <button
                                             className="flex items-center gap-1 hover:text-foreground transition-colors"
-                                            onClick={() => setLastEmailedSort(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null)}
+                                            onClick={() => { setLastEmailedSort(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null); setAddedSort(null) }}
                                         >
                                             Last Emailed
                                             {lastEmailedSort === "desc" ? (
@@ -1595,7 +1629,21 @@ export default function AudienceManagerPage() {
                                             )}
                                         </button>
                                     </TableHead>
-                                    <TableHead>Added</TableHead>
+                                    <TableHead>
+                                        <button
+                                            className="flex items-center gap-1 hover:text-foreground transition-colors"
+                                            onClick={() => { setAddedSort(prev => prev === null ? "desc" : prev === "desc" ? "asc" : null); setLastEmailedSort(null) }}
+                                        >
+                                            Added
+                                            {addedSort === "desc" ? (
+                                                <ArrowDown className="h-3.5 w-3.5 text-amber-400" />
+                                            ) : addedSort === "asc" ? (
+                                                <ArrowUp className="h-3.5 w-3.5 text-amber-400" />
+                                            ) : (
+                                                <ArrowUpDown className="h-3.5 w-3.5 opacity-40" />
+                                            )}
+                                        </button>
+                                    </TableHead>
                                     <TableHead className="w-12">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
