@@ -68,3 +68,23 @@ export async function deleteSavedView(id: string): Promise<boolean> {
     revalidatePath("/audience")
     return true
 }
+
+export async function updateSavedView(
+    id: string,
+    updates: Partial<Omit<SavedView, "id" | "created_at" | "updated_at">>
+): Promise<SavedView | null> {
+    const supabase = await createClient()
+    const { data, error } = await supabase
+        .from("audience_saved_views")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single()
+
+    if (error) {
+        console.error("Error updating saved view:", error)
+        return null
+    }
+    revalidatePath("/audience")
+    return data
+}

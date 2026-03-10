@@ -107,7 +107,14 @@ import { useRouter } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { softDeleteSubscriber, bulkSoftDeleteSubscribers } from "@/app/actions/subscribers"
-import { getSavedViews, createSavedView, deleteSavedView, type SavedView } from "@/app/actions/saved-views"
+import { getSavedViews, createSavedView, deleteSavedView, updateSavedView, type SavedView } from "@/app/actions/saved-views"
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuSeparator,
+    ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import { getLastSentPerSubscriber, getScheduledPerSubscriber } from "@/app/actions/subscriber-history"
 
 const statusStyles: Record<string, string> = {
@@ -167,6 +174,8 @@ export default function AudienceManagerPage() {
     })
     const [savingViewName, setSavingViewName] = useState(false)
     const [newViewName, setNewViewName] = useState("")
+    const [renamingViewId, setRenamingViewId] = useState<string | null>(null)
+    const [renameViewName, setRenameViewName] = useState("")
 
     // Send Existing Campaign State
     const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
@@ -344,6 +353,31 @@ export default function AudienceManagerPage() {
         if (ok) {
             setSavedViews(prev => prev.filter(v => v.id !== viewId))
             if (activeViewId === viewId) clearActiveView()
+        }
+    }
+
+    const handleRenameView = async (viewId: string) => {
+        if (!renameViewName.trim()) return
+        const updated = await updateSavedView(viewId, { name: renameViewName.trim() })
+        if (updated) {
+            setSavedViews(prev => prev.map(v => v.id === viewId ? updated : v))
+        }
+        setRenamingViewId(null)
+        setRenameViewName("")
+    }
+
+    const handleUpdateViewFilters = async (viewId: string) => {
+        const updated = await updateSavedView(viewId, {
+            search_query: searchQuery,
+            selected_tags: selectedTags,
+            excluded_tags: excludedTags,
+            status_filter: statusFilter,
+            show_test_only: showTestOnly,
+            last_emailed_sort: lastEmailedSort,
+        })
+        if (updated) {
+            setSavedViews(prev => prev.map(v => v.id === viewId ? updated : v))
+            toast({ title: `"${updated.name}" filters updated` })
         }
     }
 
@@ -1202,38 +1236,85 @@ export default function AudienceManagerPage() {
 
                 {savedViews.map((view) => (
                     <div key={view.id} className="group relative">
-                        <Button
-                            variant={activeViewId === view.id ? "default" : "outline"}
-                            size="sm"
-                            className={cn(
-                                "h-7 text-xs gap-1 pr-1.5",
-                                activeViewId === view.id
-                                    ? "bg-amber-500 text-zinc-900 hover:bg-amber-400"
-                                    : "border-border bg-transparent"
-                            )}
-                            onClick={() => {
-                                if (activeViewId === view.id) {
-                                    clearActiveView()
-                                } else {
-                                    applyView(view)
-                                }
-                            }}
-                        >
-                            <Eye className="h-3 w-3" />
-                            {view.name}
-                            {activeViewId === view.id && (
-                                <X className="h-3 w-3 ml-0.5 opacity-70 hover:opacity-100" onClick={(e) => {
-                                    e.stopPropagation()
-                                    clearActiveView()
-                                }} />
-                            )}
-                        </Button>
-                        <button
-                            className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[8px] leading-none"
-                            onClick={() => handleDeleteView(view.id)}
-                        >
-                            ×
-                        </button>
+                        {renamingViewId === view.id ? (
+                            <div className="flex items-center gap-1">
+                                <Input
+                                    value={renameViewName}
+                                    onChange={(e) => setRenameViewName(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleRenameView(view.id)
+                                        if (e.key === "Escape") { setRenamingViewId(null); setRenameViewName("") }
+                                    }}
+                                    placeholder="View name..."
+                                    className="h-7 w-32 text-xs bg-card border-border"
+                                    autoFocus
+                                />
+                                <Button size="sm" className="h-7 text-xs" onClick={() => handleRenameView(view.id)} disabled={!renameViewName.trim()}>
+                                    <Check className="h-3 w-3" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setRenamingViewId(null); setRenameViewName("") }}>
+                                    <X className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <ContextMenu>
+                                <ContextMenuTrigger asChild>
+                                    <Button
+                                        variant={activeViewId === view.id ? "default" : "outline"}
+                                        size="sm"
+                                        className={cn(
+                                            "h-7 text-xs gap-1 pr-1.5",
+                                            activeViewId === view.id
+                                                ? "bg-amber-500 text-zinc-900 hover:bg-amber-400"
+                                                : "border-border bg-transparent"
+                                        )}
+                                        onClick={() => {
+                                            if (activeViewId === view.id) {
+                                                clearActiveView()
+                                            } else {
+                                                applyView(view)
+                                            }
+                                        }}
+                                    >
+                                        <Eye className="h-3 w-3" />
+                                        {view.name}
+                                        {activeViewId === view.id && (
+                                            <X className="h-3 w-3 ml-0.5 opacity-70 hover:opacity-100" onClick={(e) => {
+                                                e.stopPropagation()
+                                                clearActiveView()
+                                            }} />
+                                        )}
+                                    </Button>
+                                </ContextMenuTrigger>
+                                <ContextMenuContent className="w-48">
+                                    <ContextMenuItem
+                                        onClick={() => {
+                                            setRenamingViewId(view.id)
+                                            setRenameViewName(view.name)
+                                        }}
+                                        className="gap-2"
+                                    >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Rename
+                                    </ContextMenuItem>
+                                    <ContextMenuItem
+                                        onClick={() => handleUpdateViewFilters(view.id)}
+                                        className="gap-2"
+                                    >
+                                        <Save className="h-3.5 w-3.5" />
+                                        Update Filters
+                                    </ContextMenuItem>
+                                    <ContextMenuSeparator />
+                                    <ContextMenuItem
+                                        onClick={() => handleDeleteView(view.id)}
+                                        className="gap-2 text-red-400 focus:text-red-400"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                        Delete View
+                                    </ContextMenuItem>
+                                </ContextMenuContent>
+                            </ContextMenu>
+                        )}
                     </div>
                 ))}
 
