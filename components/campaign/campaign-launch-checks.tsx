@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { CampaignHeader } from "./campaign-header"
 import { AudienceCard, Audience } from "./audience-card"
 import { SenderIdentityCard } from "./sender-identity-card"
@@ -12,6 +12,7 @@ import { EmailPreviewCard } from "./email-preview-card"
 import { MergeTagAuditCard } from "./merge-tag-audit-card"
 import { AnalyticsSection } from "./analytics-section"
 import { BroadcastConfirmDialog } from "./broadcast-confirm-dialog"
+import { SendConsoleCard, type LogEntry } from "./send-console-card"
 import { Music, AlertCircle, CheckCircle2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Campaign } from "@/lib/types"
@@ -40,6 +41,11 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
 
     const { toast } = useToast()
     const router = useRouter()
+
+    // Send console state
+    const [sendLogs, setSendLogs] = useState<LogEntry[]>([])
+    const [isStreaming, setIsStreaming] = useState(false)
+    const [showConsole, setShowConsole] = useState(false)
 
     // Load tracking settings from DB on mount and when fromEmail changes
     const [trackingFlags, setTrackingFlags] = useState<TrackingFlags>({ click: false, open: true, resendClick: false, resendOpen: false })
@@ -98,45 +104,93 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
         setShowConfirmDialog(false)
         setBroadcastStatus("idle")
         setBroadcastMessage("")
+        setSendLogs([])
+        setShowConsole(true)
+        setIsStreaming(true)
 
-        // Optimistic UI update or loading state could be added here
-        toast({ title: "Initiating broadcast...", description: "This may take a moment." })
+        toast({ title: "Initiating broadcast...", description: "Watch the console for real-time progress." })
 
-        const response = await fetch("/api/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                type: "broadcast",
-                campaignId: campaign.id,
-                fromName,
-                fromEmail,
-                clickTracking: trackingFlags.click,
-                openTracking: trackingFlags.open,
-                resendClickTracking: trackingFlags.resendClick,
-                resendOpenTracking: trackingFlags.resendOpen,
+        try {
+            const response = await fetch("/api/send-stream", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    campaignId: campaign.id,
+                    fromName,
+                    fromEmail,
+                    clickTracking: trackingFlags.click,
+                    openTracking: trackingFlags.open,
+                    resendClickTracking: trackingFlags.resendClick,
+                    resendOpenTracking: trackingFlags.resendOpen,
+                })
             })
-        })
 
-        const data = await response.json()
+            if (!response.ok) {
+                const errText = await response.text()
+                setBroadcastStatus("error")
+                setBroadcastMessage(errText || "Broadcast failed")
+                setIsStreaming(false)
+                toast({ title: "Broadcast failed", description: errText, variant: "destructive" })
+                return
+            }
 
-        if (!response.ok) {
+            const reader = response.body?.getReader()
+            if (!reader) {
+                setIsStreaming(false)
+                return
+            }
+
+            const decoder = new TextDecoder()
+            let buffer = ""
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split("\n")
+                buffer = lines.pop() || "" // keep incomplete last line in buffer
+
+                for (const line of lines) {
+                    if (!line.trim()) continue
+                    try {
+                        const entry: LogEntry = JSON.parse(line)
+                        setSendLogs(prev => [...prev, entry])
+
+                        // Check for final log
+                        if (entry.done) {
+                            setBroadcastStatus("success")
+                            setBroadcastMessage(entry.message || "Broadcast complete")
+                            toast({ title: "Campaign Sent!", description: entry.message })
+                            router.refresh()
+                        }
+                    } catch {
+                        // skip malformed lines
+                    }
+                }
+            }
+
+            // Process any remaining buffer
+            if (buffer.trim()) {
+                try {
+                    const entry: LogEntry = JSON.parse(buffer)
+                    setSendLogs(prev => [...prev, entry])
+                    if (entry.done) {
+                        setBroadcastStatus("success")
+                        setBroadcastMessage(entry.message || "Broadcast complete")
+                        router.refresh()
+                    }
+                } catch {
+                    // skip
+                }
+            }
+
+        } catch (err: any) {
             setBroadcastStatus("error")
-            setBroadcastMessage(data.message || data.error || "Broadcast failed")
-
-            toast({
-                title: "Error sending broadcast",
-                description: data.message || data.error,
-                variant: "destructive"
-            })
-        } else {
-            setBroadcastStatus("success")
-            setBroadcastMessage(data.message)
-
-            toast({
-                title: "Campaign Sent!",
-                description: data.message
-            })
-            router.refresh()
+            setBroadcastMessage(err.message || "Network error")
+            toast({ title: "Broadcast error", description: err.message, variant: "destructive" })
+        } finally {
+            setIsStreaming(false)
         }
     }
 
@@ -248,6 +302,10 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                             subjectLine={campaign.subject_line}
                             previewText={campaign.variable_values?.preview_text ?? null}
                         />
+
+                        {showConsole && (
+                            <SendConsoleCard logs={sendLogs} isStreaming={isStreaming} />
+                        )}
                     </div>
 
                     {/* Right Column - Preview + Merge Tag Audit */}
