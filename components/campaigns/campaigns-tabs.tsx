@@ -16,6 +16,8 @@ export function CampaignsTabs({ campaigns, totalCompleted, emailType = "campaign
     const [activeTab, setActiveTab] = useState<"templates" | "drafts" | "scheduled" | "completed">("templates")
     const [completedCampaigns, setCompletedCampaigns] = useState<Campaign[]>(
         () => campaigns.filter(c => ["sent", "completed", "active"].includes(c.status) && !c.is_template)
+            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+            .slice(0, 25)
     )
     const [completedPage, setCompletedPage] = useState(0)
     const [completedPageSize, setCompletedPageSize] = useState(25)
