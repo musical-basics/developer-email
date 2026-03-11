@@ -18,6 +18,7 @@ import {
     AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { ChainStepPreview } from "@/components/chain/chain-step-preview"
+import { SendConsoleCard, type LogEntry } from "@/components/campaign/send-console-card"
 
 type SubscriberInfo = {
     id: string
@@ -56,6 +57,9 @@ export function RotationLaunch({ rotation, subscribers, assignments, campaignMap
     const [sending, setSending] = useState(false)
     const [sendStatus, setSendStatus] = useState<"idle" | "success" | "error">("idle")
     const [sendMessage, setSendMessage] = useState("")
+    const [sendLogs, setSendLogs] = useState<LogEntry[]>([])
+    const [isStreaming, setIsStreaming] = useState(false)
+    const [showConsole, setShowConsole] = useState(false)
     const { toast } = useToast()
     const router = useRouter()
 
@@ -81,6 +85,12 @@ export function RotationLaunch({ rotation, subscribers, assignments, campaignMap
         setShowConfirmDialog(false)
         setSending(true)
         setSendStatus("idle")
+        setSendMessage("")
+        setSendLogs([])
+        setShowConsole(true)
+        setIsStreaming(true)
+
+        toast({ title: "Initiating rotation send...", description: "Watch the console for real-time progress." })
 
         try {
             const res = await fetch("/api/send-rotation", {
@@ -92,18 +102,65 @@ export function RotationLaunch({ rotation, subscribers, assignments, campaignMap
                 }),
             })
 
-            const data = await res.json()
-
-            if (data.success) {
-                setSendStatus("success")
-                setSendMessage(data.message)
-                toast({
-                    title: "Rotation Send Complete!",
-                    description: data.message,
-                })
-            } else {
-                throw new Error(data.error || "Unknown error")
+            if (!res.ok) {
+                const errText = await res.text()
+                setSendStatus("error")
+                setSendMessage(errText || "Rotation send failed")
+                setIsStreaming(false)
+                toast({ title: "Rotation send failed", description: errText, variant: "destructive" })
+                return
             }
+
+            const reader = res.body?.getReader()
+            if (!reader) {
+                setIsStreaming(false)
+                return
+            }
+
+            const decoder = new TextDecoder()
+            let buffer = ""
+
+            while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+
+                buffer += decoder.decode(value, { stream: true })
+                const lines = buffer.split("\n")
+                buffer = lines.pop() || ""
+
+                for (const line of lines) {
+                    if (!line.trim()) continue
+                    try {
+                        const entry: LogEntry = JSON.parse(line)
+                        setSendLogs(prev => [...prev, entry])
+
+                        if (entry.done) {
+                            setSendStatus("success")
+                            setSendMessage(entry.message || "Rotation send complete")
+                            toast({ title: "Rotation Send Complete!", description: entry.message })
+                            router.refresh()
+                        }
+                    } catch {
+                        // skip malformed lines
+                    }
+                }
+            }
+
+            // Process remaining buffer
+            if (buffer.trim()) {
+                try {
+                    const entry: LogEntry = JSON.parse(buffer)
+                    setSendLogs(prev => [...prev, entry])
+                    if (entry.done) {
+                        setSendStatus("success")
+                        setSendMessage(entry.message || "Rotation send complete")
+                        router.refresh()
+                    }
+                } catch {
+                    // skip
+                }
+            }
+
         } catch (error: any) {
             setSendStatus("error")
             setSendMessage(error.message)
@@ -114,6 +171,7 @@ export function RotationLaunch({ rotation, subscribers, assignments, campaignMap
             })
         } finally {
             setSending(false)
+            setIsStreaming(false)
         }
     }
 
@@ -291,6 +349,11 @@ export function RotationLaunch({ rotation, subscribers, assignments, campaignMap
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* Send Console */}
+                        {showConsole && (
+                            <SendConsoleCard logs={sendLogs} isStreaming={isStreaming} />
+                        )}
                     </div>
 
                     {/* Right Column — Assigned Campaign Preview */}
