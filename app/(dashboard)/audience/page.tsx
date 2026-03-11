@@ -509,10 +509,15 @@ export default function AudienceManagerPage() {
     }
 
     const handleSelectAll = () => {
-        if (selectedIds.length === filteredSubscribers.length) {
-            setSelectedIds([])
+        const pageIds = paginatedSubscribers.map((s) => s.id)
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+        if (allPageSelected) {
+            setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)))
         } else {
-            setSelectedIds(filteredSubscribers.map((s) => s.id))
+            setSelectedIds(prev => {
+                const combined = new Set([...prev, ...pageIds])
+                return Array.from(combined)
+            })
         }
     }
 
@@ -1213,8 +1218,9 @@ export default function AudienceManagerPage() {
         toast({ title: `Exported ${rows.length} subscribers` })
     }
 
-    const allSelected = filteredSubscribers.length > 0 && selectedIds.length === filteredSubscribers.length
-    const someSelected = selectedIds.length > 0 && selectedIds.length < filteredSubscribers.length
+    const pageIds = paginatedSubscribers.map(s => s.id)
+    const allSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+    const someSelected = selectedIds.length > 0 && !allSelected
 
     return (
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
