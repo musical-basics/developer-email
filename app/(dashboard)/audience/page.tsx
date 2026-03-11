@@ -37,6 +37,7 @@ import {
     Eye,
     Mail,
     MailX,
+    MailCheck,
     Clock,
     RefreshCw,
 } from "lucide-react"
@@ -162,8 +163,9 @@ export default function AudienceManagerPage() {
     const [addedSort, setAddedSort] = useState<"asc" | "desc" | null>(null)
     const [statusFilter, setStatusFilter] = useState<string[]>([])
     const [neverEmailedFilter, setNeverEmailedFilter] = useState(false)
+    const [alreadyEmailedFilter, setAlreadyEmailedFilter] = useState(false)
 
-    const hasActiveFilters = searchQuery !== "" || selectedTags.length > 0 || excludedTags.length > 0 || statusFilter.length > 0 || showTestOnly || neverEmailedFilter || lastEmailedSort !== null || addedSort !== null
+    const hasActiveFilters = searchQuery !== "" || selectedTags.length > 0 || excludedTags.length > 0 || statusFilter.length > 0 || showTestOnly || neverEmailedFilter || alreadyEmailedFilter || lastEmailedSort !== null || addedSort !== null
 
     const clearAllFilters = () => {
         setSearchQuery("")
@@ -172,6 +174,7 @@ export default function AudienceManagerPage() {
         setStatusFilter([])
         setShowTestOnly(false)
         setNeverEmailedFilter(false)
+        setAlreadyEmailedFilter(false)
         setLastEmailedSort(null)
         setAddedSort(null)
         clearActiveView()
@@ -422,8 +425,9 @@ export default function AudienceManagerPage() {
             const matchesStatus = statusFilter.length === 0 || statusFilter.includes(subscriber.status)
 
             const matchesNeverEmailed = !neverEmailedFilter || !lastSentSubjects[subscriber.id]
+            const matchesAlreadyEmailed = !alreadyEmailedFilter || !!lastSentSubjects[subscriber.id]
 
-            return matchesSearch && matchesIncludeTags && matchesExcludeTags && matchesTest && matchesStatus && matchesNeverEmailed
+            return matchesSearch && matchesIncludeTags && matchesExcludeTags && matchesTest && matchesStatus && matchesNeverEmailed && matchesAlreadyEmailed
         })
 
         if (lastEmailedSort) {
@@ -464,12 +468,12 @@ export default function AudienceManagerPage() {
         }
 
         return filtered
-    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, addedSort, lastSentSubjects, scheduledCampaigns, neverEmailedFilter])
+    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, addedSort, lastSentSubjects, scheduledCampaigns, neverEmailedFilter, alreadyEmailedFilter])
 
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1)
-    }, [searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, neverEmailedFilter, pageSize])
+    }, [searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, neverEmailedFilter, alreadyEmailedFilter, pageSize])
 
     // Paginated slice
     const totalPages = Math.max(1, Math.ceil(filteredSubscribers.length / pageSize))
@@ -1500,10 +1504,30 @@ export default function AudienceManagerPage() {
                                 ? "bg-blue-500 text-white hover:bg-blue-400"
                                 : "bg-transparent"
                         )}
-                        onClick={() => setNeverEmailedFilter(!neverEmailedFilter)}
+                        onClick={() => {
+                            setNeverEmailedFilter(!neverEmailedFilter)
+                            if (!neverEmailedFilter) setAlreadyEmailedFilter(false)
+                        }}
                     >
                         <MailX className="h-4 w-4" />
                         Not Yet Emailed
+                    </Button>
+
+                    <Button
+                        variant={alreadyEmailedFilter ? "default" : "outline"}
+                        className={cn(
+                            "gap-2 border-border",
+                            alreadyEmailedFilter
+                                ? "bg-emerald-500 text-white hover:bg-emerald-400"
+                                : "bg-transparent"
+                        )}
+                        onClick={() => {
+                            setAlreadyEmailedFilter(!alreadyEmailedFilter)
+                            if (!alreadyEmailedFilter) setNeverEmailedFilter(false)
+                        }}
+                    >
+                        <MailCheck className="h-4 w-4" />
+                        Already Emailed
                     </Button>
 
                     {hasActiveFilters && (
