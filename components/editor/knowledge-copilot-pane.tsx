@@ -107,10 +107,17 @@ export function KnowledgeCopilotPane({ html, onHtmlChange, audienceContext = "dr
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
+    const KNOWLEDGE_SUGGESTIONS = [
+        "✍️ Write a welcome email for new beginners",
+        "🎵 Create a promo email for the latest sheet music",
+        "💡 Suggest 3 engaging subject lines for this draft",
+        "📝 Rewrite this copy to be shorter and punchier"
+    ]
+
     const handleNewSession = () => {
         const newId = `ks-${Date.now()}`
         setCurrentSessionId(newId)
-        setMessages([{ role: "result", content: "Knowledge Copilot ready. I have access to brand context, research, and personas from DreamPlay Knowledge." }])
+        setMessages([{ role: "result", content: "👋 Hi! I'm your Knowledge Copilot. I have access to your brand context, research, and personas.\n\nTell me what you'd like to write or change." }])
         setSessionPickerOpen(false)
     }
 
@@ -121,7 +128,7 @@ export function KnowledgeCopilotPane({ html, onHtmlChange, audienceContext = "dr
     }
 
     const [messages, setMessages] = useState<Message[]>([
-        { role: "result", content: "Knowledge Copilot ready. I have access to brand context, research, and personas from DreamPlay Knowledge." },
+        { role: "result", content: "👋 Hi! I'm your Knowledge Copilot. I have access to your brand context, research, and personas.\n\nTell me what you'd like to write or change." },
     ])
 
     const [input, setInput] = useState("")
@@ -178,10 +185,11 @@ export function KnowledgeCopilotPane({ html, onHtmlChange, audienceContext = "dr
     }
 
     // ─── SSE-based send ──────────────────────────────
-    const handleSendMessage = async () => {
-        if ((!input.trim() && pendingAttachments.length === 0) || isLoading || isUploading) return
+    const handleSendMessage = async (textOverride?: string) => {
+        const actualInput = textOverride || input;
+        if ((!actualInput.trim() && pendingAttachments.length === 0) || isLoading || isUploading) return
 
-        const userMessage = input.trim()
+        const userMessage = actualInput.trim()
         const attachments = [...pendingAttachments]
 
         setInput("")
@@ -500,6 +508,24 @@ export function KnowledgeCopilotPane({ html, onHtmlChange, audienceContext = "dr
                     <div className="mr-auto flex items-center gap-2 text-muted-foreground text-sm p-2">
                         <Brain className="w-4 h-4 animate-pulse" />
                         Connecting to Knowledge API...
+                    </div>
+                )}
+
+                {/* Suggestions for New Sessions */}
+                {messages.length === 1 && !isLoading && pipelineSteps.length === 0 && (
+                    <div className="mr-auto items-start flex flex-col gap-2 max-w-[90%] pt-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider ml-1">Try asking Copilot to:</p>
+                        <div className="flex flex-col gap-2 w-full">
+                            {KNOWLEDGE_SUGGESTIONS.map((suggestion, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => handleSendMessage(suggestion.replace(/^[^a-zA-Z]+/, ""))}
+                                    className="text-left text-sm bg-muted/50 hover:bg-amber-500/10 border border-border hover:border-amber-500/30 rounded-xl px-4 py-2.5 transition-colors text-foreground/80 hover:text-amber-500"
+                                >
+                                    {suggestion}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>

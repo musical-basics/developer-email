@@ -8,7 +8,7 @@ import { CopilotPane } from "./copilot-pane"
 import { CampaignPicker } from "./campaign-picker"
 import { DiscountManagerModal } from "./discount-manager-modal"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, Code } from "lucide-react"
 
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -67,6 +67,11 @@ export function EmailEditor({
 }: EmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
+
+    // Hide code pane by default for a friendlier view
+    const [isCodeOpen, setIsCodeOpen] = useState(false)
+    const codeRef = useRef<ImperativePanelHandle>(null)
+
     const [isCopilotOpen, setIsCopilotOpen] = useState(true)
     const copilotRef = useRef<ImperativePanelHandle>(null)
     const searchParams = useSearchParams()
@@ -136,14 +141,19 @@ export function EmailEditor({
         setTimeout(() => setSaveStatus('idle'), 2000)
     }
 
+    const toggleCode = () => {
+        const panel = codeRef.current
+        if (panel) {
+            if (isCodeOpen) panel.collapse()
+            else panel.expand()
+        }
+    }
+
     const toggleCopilot = () => {
         const panel = copilotRef.current
         if (panel) {
-            if (isCopilotOpen) {
-                panel.collapse()
-            } else {
-                panel.expand()
-            }
+            if (isCopilotOpen) panel.collapse()
+            else panel.expand()
         }
     }
 
@@ -242,16 +252,29 @@ export function EmailEditor({
                 <PanelResizeHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
 
                 {/* Center Left - Code Pane */}
-                <Panel defaultSize={30} minSize={20} className="bg-background border-r border-border">
-                    <div className="h-full overflow-hidden">
+                <Panel
+                    ref={codeRef}
+                    defaultSize={0}
+                    minSize={20}
+                    maxSize={50}
+                    collapsible={true}
+                    collapsedSize={0}
+                    onCollapse={() => setIsCodeOpen(false)}
+                    onExpand={() => setIsCodeOpen(true)}
+                    className={cn(
+                        "bg-background transition-all duration-300 ease-in-out",
+                        isCodeOpen ? "border-r border-border" : "border-none"
+                    )}
+                >
+                    <div className="h-full overflow-hidden min-w-[250px]">
                         <CodePane code={html} onChange={onHtmlChange} className="h-full" />
                     </div>
                 </Panel>
 
-                <PanelResizeHandle className="w-1 bg-border hover:bg-primary/20 transition-colors" />
+                <PanelResizeHandle className={cn("w-1 bg-border hover:bg-primary/20 transition-colors", !isCodeOpen && "hidden")} />
 
                 {/* Center Right - Preview Pane */}
-                <Panel defaultSize={35} minSize={25} className="bg-background flex flex-col">
+                <Panel defaultSize={65} minSize={25} className="bg-background flex flex-col">
                     <div className="h-full flex flex-col overflow-hidden">
                         <div className="h-14 border-b border-border flex items-center justify-between px-4 bg-card flex-shrink-0">
                             <h2 className="text-sm font-semibold">Preview</h2>
@@ -385,19 +408,33 @@ export function EmailEditor({
                                     </Link>
                                 )}
 
-                                {/* Copilot Toggle */}
-                                <button
-                                    onClick={toggleCopilot}
-                                    className={cn(
-                                        "p-2 rounded-md transition-all text-sm font-medium border ml-2",
-                                        isCopilotOpen
-                                            ? "bg-muted text-muted-foreground hover:text-foreground border-transparent"
-                                            : "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
-                                    )}
-                                    title={isCopilotOpen ? "Hide Copilot" : "Show Copilot"}
-                                >
-                                    {isCopilotOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-                                </button>
+                                {/* Copilot & Code Toggles */}
+                                <div className="flex items-center gap-1 ml-2">
+                                    <button
+                                        onClick={toggleCode}
+                                        className={cn(
+                                            "p-2 rounded-md transition-all text-sm font-medium border",
+                                            isCodeOpen
+                                                ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                                                : "bg-muted text-muted-foreground hover:text-foreground border-transparent"
+                                        )}
+                                        title={isCodeOpen ? "Hide Code" : "Show Code"}
+                                    >
+                                        <Code className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={toggleCopilot}
+                                        className={cn(
+                                            "p-2 rounded-md transition-all text-sm font-medium border",
+                                            isCopilotOpen
+                                                ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                                                : "bg-muted text-muted-foreground hover:text-foreground border-transparent"
+                                        )}
+                                        title={isCopilotOpen ? "Hide Copilot" : "Show Copilot"}
+                                    >
+                                        {isCopilotOpen ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
+                                    </button>
+                                </div>
                             </div>
                         </div>
 

@@ -10,7 +10,7 @@ import { CopilotPane } from "./copilot-pane"
 import { BlockManager, Block } from "./block-manager"
 import { DiscountManagerModal } from "./discount-manager-modal"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, ArrowLeft, Undo, Redo, History } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, ArrowLeft, Undo, Redo, History, Code } from "lucide-react"
 
 import { useToast } from "@/hooks/use-toast"
 import { saveVersion } from "@/app/actions/versions"
@@ -143,6 +143,7 @@ export function ModularEmailEditor({
 }: ModularEmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
+    const [isCodeOpen, setIsCodeOpen] = useState(false)
     const { toast } = useToast()
 
 
@@ -375,12 +376,14 @@ export function ModularEmailEditor({
             </div>
 
             {/* 2. CODE PANE (Edits Active Block Only) */}
-            <div className="flex-[3] min-w-[350px] border-r border-border h-full flex flex-col">
-                <div className="h-10 border-b border-border bg-muted/30 px-4 flex items-center justify-between text-xs">
-                    <span className="text-muted-foreground">Editing: <span className="font-bold text-foreground">{activeBlock.name}</span></span>
+            {isCodeOpen && (
+                <div className="flex-[3] min-w-[350px] border-r border-border h-full flex flex-col transition-all duration-300 ease-in-out">
+                    <div className="h-10 border-b border-border bg-muted/30 px-4 flex items-center justify-between text-xs flex-shrink-0">
+                        <span className="text-muted-foreground">Editing: <span className="font-bold text-foreground">{activeBlock.name}</span></span>
+                    </div>
+                    <CodePane code={activeBlock.content} onChange={handleBlockContentChange} className="flex-1" />
                 </div>
-                <CodePane code={activeBlock.content} onChange={handleBlockContentChange} className="flex-1" />
-            </div>
+            )}
 
             {/* 3. PREVIEW PANE */}
             <div className="flex-[4] flex flex-col min-w-[500px] h-full overflow-hidden">
@@ -431,6 +434,22 @@ export function ModularEmailEditor({
                         <div className="flex bg-muted p-1 rounded-lg">
                             <button onClick={() => setViewMode('desktop')} className={cn("p-1.5 rounded-md", viewMode === 'desktop' && "bg-background shadow-sm")}><Monitor className="w-4 h-4" /></button>
                             <button onClick={() => setViewMode('mobile')} className={cn("p-1.5 rounded-md", viewMode === 'mobile' && "bg-background shadow-sm")}><Smartphone className="w-4 h-4" /></button>
+                        </div>
+
+                        {/* Code Toggle */}
+                        <div className="flex items-center gap-1 ml-2">
+                            <button
+                                onClick={() => setIsCodeOpen(!isCodeOpen)}
+                                className={cn(
+                                    "p-2 rounded-md transition-all text-sm font-medium border",
+                                    isCodeOpen
+                                        ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary/20"
+                                        : "bg-muted text-muted-foreground hover:text-foreground border-transparent"
+                                )}
+                                title={isCodeOpen ? "Hide Code" : "Show Code"}
+                            >
+                                <Code className="w-4 h-4" />
+                            </button>
                         </div>
                     </div>
 

@@ -145,10 +145,17 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
+    const SUGGESTIONS = [
+        "✨ Design a Black Friday promo email",
+        "🎨 Update the layout to look more modern",
+        "📝 Rewrite the copy to create more urgency",
+        "📱 Make sure the design is mobile-friendly"
+    ]
+
     const handleNewSession = () => {
         const newId = `s-${Date.now()}`
         setCurrentSessionId(newId)
-        setMessages([{ role: "result", content: "I'm ready. Upload screenshots or reference images and I'll adapt the code." }])
+        setMessages([{ role: "result", content: "👋 Hi! I'm your AI design assistant. I can help you build or edit this email. What would you like to do?" }])
         setSessionPickerOpen(false)
     }
 
@@ -159,7 +166,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
     }
 
     const [messages, setMessages] = useState<Message[]>([
-        { role: "result", content: "I'm ready. Upload screenshots or reference images and I'll adapt the code." },
+        { role: "result", content: "👋 Hi! I'm your AI design assistant. I can help you build or edit this email. What would you like to do?" },
     ])
 
     const [input, setInput] = useState("")
@@ -320,10 +327,11 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         setRefTemplateName(null)
     }
 
-    const handleSendMessage = async (tier?: ComputeTier) => {
-        if ((!input.trim() && pendingAttachments.length === 0) || isLoading || isUploading) return
+    const handleSendMessage = async (tier?: ComputeTier | string, textOverride?: string) => {
+        const actualInput = textOverride || input;
+        if ((!actualInput.trim() && pendingAttachments.length === 0) || isLoading || isUploading) return
 
-        const userMessage = input.trim()
+        const userMessage = actualInput.trim()
         const attachments = [...pendingAttachments]
 
         // Prepend reference CSS context if present
@@ -373,7 +381,7 @@ ${userMessage}`
             // Auto mode: send "auto" + tier model info so API can pick
             model = "auto"
         } else {
-            model = getModelForTier(tier || "medium")
+            model = getModelForTier((tier as ComputeTier) || "medium")
         }
 
         // Clear input immediately
@@ -583,6 +591,24 @@ ${userMessage}`
                     <div className="mr-auto flex items-center gap-2 text-muted-foreground text-sm p-2">
                         <Brain className="w-4 h-4 animate-pulse" />
                         Thinking...
+                    </div>
+                )}
+
+                {/* Suggestions for New Sessions */}
+                {messages.length === 1 && !isLoading && (
+                    <div className="mr-auto items-start flex flex-col gap-2 max-w-[90%] pt-2">
+                        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider ml-1">Try asking Copilot to:</p>
+                        <div className="flex flex-col gap-2 w-full">
+                            {SUGGESTIONS.map((suggestion, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => handleSendMessage(autoRouting && !overrideModel ? undefined : "low", suggestion.replace(/^[^a-zA-Z]+/, ""))}
+                                    className="text-left text-sm bg-muted/50 hover:bg-primary/10 border border-border hover:border-primary/30 rounded-xl px-4 py-2.5 transition-colors text-foreground/80 hover:text-primary"
+                                >
+                                    {suggestion}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
