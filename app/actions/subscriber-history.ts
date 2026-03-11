@@ -130,17 +130,24 @@ export async function getLastSentPerSubscriber(): Promise<Record<string, { subje
 export async function getScheduledPerSubscriber(): Promise<Record<string, { subject: string; scheduledAt: string; campaignName: string }>> {
     const supabase = await createClient()
 
-    // Fetch all campaigns with scheduled_status = 'pending'
-    const { data: campaigns, error } = await supabase
-        .from("campaigns")
-        .select("id, name, subject_line, scheduled_at, variable_values")
-        .eq("scheduled_status", "pending")
-        .not("scheduled_at", "is", null)
-
-    if (error || !campaigns) return {}
+    // Fetch scheduled campaigns AND scheduled rotations in parallel
+    const [campaignResult, rotationResult] = await Promise.all([
+        supabase
+            .from("campaigns")
+            .select("id, name, subject_line, scheduled_at, variable_values")
+            .eq("scheduled_status", "pending")
+            .not("scheduled_at", "is", null),
+        supabase
+            .from("rotations")
+            .select("id, name, scheduled_at, scheduled_subscriber_ids")
+            .eq("scheduled_status", "pending")
+            .not("scheduled_at", "is", null),
+    ])
 
     const lookup: Record<string, { subject: string; scheduledAt: string; campaignName: string }> = {}
 
+    // Process scheduled campaigns
+    const campaigns = campaignResult.data || []
     for (const campaign of campaigns) {
         const subjectLine = campaign.subject_line || campaign.name || "Untitled"
         const scheduledAt = campaign.scheduled_at
@@ -163,6 +170,25 @@ export async function getScheduledPerSubscriber(): Promise<Record<string, { subj
         }
         // Campaigns with no subscriber targeting are broadcast-scheduled
         // — don't show per-subscriber since it applies to everyone
+    }
+
+    // Process scheduled rotations
+    const rotations = rotationResult.data || []
+    for (const rotation of rotations) {
+        const scheduledAt = rotation.scheduled_at
+        const subscriberIds: string[] | undefined = rotation.scheduled_subscriber_ids
+
+        if (subscriberIds && subscriberIds.length > 0) {
+            for (const sid of subscriberIds) {
+                if (!lookup[sid]) {
+                    lookup[sid] = {
+                        subject: `Rotation: ${rotation.name || "Untitled"}`,
+                        scheduledAt,
+                        campaignName: rotation.name || "Rotation",
+                    }
+                }
+            }
+        }
     }
 
     return lookup
