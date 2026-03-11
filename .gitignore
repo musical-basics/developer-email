@@ -33,3 +33,6 @@ next-env.d.ts
 
 # repomix
 *repomix-output*
+
+# Cold email angle templates (not for repo)
+public/emails/cold-angles/
