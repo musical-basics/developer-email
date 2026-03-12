@@ -164,8 +164,10 @@ export default function AudienceManagerPage() {
     const [statusFilter, setStatusFilter] = useState<string[]>([])
     const [neverEmailedFilter, setNeverEmailedFilter] = useState(false)
     const [alreadyEmailedFilter, setAlreadyEmailedFilter] = useState(false)
+    const [unsubHistoryFilter, setUnsubHistoryFilter] = useState(false)
+    const [unsubHistoryIds, setUnsubHistoryIds] = useState<Set<string>>(new Set())
 
-    const hasActiveFilters = searchQuery !== "" || selectedTags.length > 0 || excludedTags.length > 0 || statusFilter.length > 0 || showTestOnly || neverEmailedFilter || alreadyEmailedFilter || lastEmailedSort !== null || addedSort !== null
+    const hasActiveFilters = searchQuery !== "" || selectedTags.length > 0 || excludedTags.length > 0 || statusFilter.length > 0 || showTestOnly || neverEmailedFilter || alreadyEmailedFilter || unsubHistoryFilter || lastEmailedSort !== null || addedSort !== null
 
     const clearAllFilters = () => {
         setSearchQuery("")
@@ -175,6 +177,7 @@ export default function AudienceManagerPage() {
         setShowTestOnly(false)
         setNeverEmailedFilter(false)
         setAlreadyEmailedFilter(false)
+        setUnsubHistoryFilter(false)
         setLastEmailedSort(null)
         setAddedSort(null)
         clearActiveView()
@@ -302,6 +305,17 @@ export default function AudienceManagerPage() {
         setLoading(false)
     }
 
+    // Fetch subscriber IDs that have ever had an unsubscribe event
+    const fetchUnsubHistory = async () => {
+        const { data, error } = await supabase
+            .from("subscriber_events")
+            .select("subscriber_id")
+            .eq("type", "unsubscribe")
+        if (!error && data) {
+            setUnsubHistoryIds(new Set(data.map((r: { subscriber_id: string }) => r.subscriber_id)))
+        }
+    }
+
     const fetchTagDefinitions = async () => {
         const { tags: defs } = await getTags()
         setTagDefinitions(defs)
@@ -310,6 +324,7 @@ export default function AudienceManagerPage() {
     useEffect(() => {
         fetchSubscribers()
         fetchTagDefinitions()
+        fetchUnsubHistory()
         // Load saved views from DB
         getSavedViews().then(views => {
             setSavedViews(views)
@@ -426,8 +441,9 @@ export default function AudienceManagerPage() {
 
             const matchesNeverEmailed = !neverEmailedFilter || !lastSentSubjects[subscriber.id]
             const matchesAlreadyEmailed = !alreadyEmailedFilter || !!lastSentSubjects[subscriber.id]
+            const matchesUnsubHistory = !unsubHistoryFilter || unsubHistoryIds.has(subscriber.id)
 
-            return matchesSearch && matchesIncludeTags && matchesExcludeTags && matchesTest && matchesStatus && matchesNeverEmailed && matchesAlreadyEmailed
+            return matchesSearch && matchesIncludeTags && matchesExcludeTags && matchesTest && matchesStatus && matchesNeverEmailed && matchesAlreadyEmailed && matchesUnsubHistory
         })
 
         if (lastEmailedSort) {
@@ -468,12 +484,12 @@ export default function AudienceManagerPage() {
         }
 
         return filtered
-    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, addedSort, lastSentSubjects, scheduledCampaigns, neverEmailedFilter, alreadyEmailedFilter])
+    }, [subscribers, searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, lastEmailedSort, addedSort, lastSentSubjects, scheduledCampaigns, neverEmailedFilter, alreadyEmailedFilter, unsubHistoryFilter, unsubHistoryIds])
 
     // Reset page when filters change
     useEffect(() => {
         setCurrentPage(1)
-    }, [searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, neverEmailedFilter, alreadyEmailedFilter, pageSize])
+    }, [searchQuery, selectedTags, excludedTags, showTestOnly, statusFilter, neverEmailedFilter, alreadyEmailedFilter, unsubHistoryFilter, pageSize])
 
     // Paginated slice
     const totalPages = Math.max(1, Math.ceil(filteredSubscribers.length / pageSize))
@@ -1528,6 +1544,20 @@ export default function AudienceManagerPage() {
                     >
                         <MailCheck className="h-4 w-4" />
                         Already Emailed
+                    </Button>
+
+                    <Button
+                        variant={unsubHistoryFilter ? "default" : "outline"}
+                        className={cn(
+                            "gap-2 border-border",
+                            unsubHistoryFilter
+                                ? "bg-red-500 text-white hover:bg-red-400"
+                                : "bg-transparent"
+                        )}
+                        onClick={() => setUnsubHistoryFilter(!unsubHistoryFilter)}
+                    >
+                        <UserCheck className="h-4 w-4" />
+                        Unsub History ({unsubHistoryIds.size})
                     </Button>
 
                     {hasActiveFilters && (
