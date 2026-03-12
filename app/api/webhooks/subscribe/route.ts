@@ -608,10 +608,10 @@ export async function POST(request: Request) {
             }
         }
 
-        // Check for existing user to merge tags
+        // Check for existing user to merge tags and respect unsubscribe status
         const { data: existingUser } = await supabase
             .from("subscribers")
-            .select("tags")
+            .select("tags, status")
             .eq("email", email)
             .single();
 
@@ -620,6 +620,9 @@ export async function POST(request: Request) {
             mergedTags = Array.from(new Set([...existingUser.tags, ...finalTags]));
         }
 
+        // Don't override status if user has explicitly unsubscribed
+        const shouldSetActive = !existingUser || existingUser.status !== "unsubscribed";
+
         const { data, error } = await supabase
             .from("subscribers")
             .upsert({
@@ -627,7 +630,7 @@ export async function POST(request: Request) {
                 first_name: first_name || "",
                 last_name: last_name || "",
                 tags: mergedTags,
-                status: "active",
+                ...(shouldSetActive ? { status: "active" } : {}),
                 location_city: city,
                 location_country: country,
                 ip_address: ip_address
