@@ -174,6 +174,14 @@ function ChainCard({
                                                         </p>
                                                     </div>
                                                 </div>
+                                                <a
+                                                    href={`/editor?id=${step.template_key}`}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="text-xs text-sky-400 hover:text-sky-300 flex items-center gap-1 transition-colors shrink-0"
+                                                >
+                                                    <Eye className="h-3 w-3" />
+                                                    View
+                                                </a>
                                             </div>
                                         </div>
                                     </div>
