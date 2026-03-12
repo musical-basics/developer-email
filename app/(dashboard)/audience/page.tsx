@@ -236,6 +236,10 @@ export default function AudienceManagerPage() {
     const [bulkTagSelections, setBulkTagSelections] = useState<string[]>([])
     const [bulkTagging, setBulkTagging] = useState(false)
 
+    // Bulk Status State
+    const [isBulkStatusOpen, setIsBulkStatusOpen] = useState(false)
+    const [bulkSettingStatus, setBulkSettingStatus] = useState(false)
+
     // Form State
     const [formData, setFormData] = useState<Partial<Subscriber>>({
         email: "",
@@ -1199,6 +1203,27 @@ export default function AudienceManagerPage() {
         fetchSubscribers()
     }
 
+    // Bulk set status for selected subscribers
+    const handleBulkSetStatus = async (newStatus: string) => {
+        if (selectedIds.length === 0) return
+        setBulkSettingStatus(true)
+
+        const { error } = await supabase
+            .from("subscribers")
+            .update({ status: newStatus })
+            .in("id", selectedIds)
+
+        if (error) {
+            toast({ title: "Error updating status", description: error.message, variant: "destructive" })
+        } else {
+            toast({ title: `Status updated`, description: `Set ${selectedIds.length} subscriber${selectedIds.length !== 1 ? 's' : ''} to "${newStatus}"` })
+            setSelectedIds([])
+            fetchSubscribers()
+        }
+        setBulkSettingStatus(false)
+        setIsBulkStatusOpen(false)
+    }
+
     // Export subscribers as CSV in our import-compatible format
     const handleExportCsv = () => {
         const headers = ["email", "first_name", "last_name", "country", "country_code", "phone_code", "phone_number", "shipping_address1", "shipping_address2", "shipping_city", "shipping_zip", "shipping_province", "tags", "status"]
@@ -1630,6 +1655,43 @@ export default function AudienceManagerPage() {
                                 >
                                     {bulkTagging ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying...</> : `Apply ${bulkTagSelections.length} Tag${bulkTagSelections.length !== 1 ? 's' : ''}`}
                                 </Button>
+                            </div>
+                        </PopoverContent>
+                    </Popover>
+                    <Popover open={isBulkStatusOpen} onOpenChange={setIsBulkStatusOpen}>
+                        <PopoverTrigger asChild>
+                            <Button variant="secondary" className="gap-2">
+                                <UserCheck className="h-4 w-4" />
+                                Set Status
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-48 p-2">
+                            <div className="space-y-1">
+                                <p className="text-sm font-medium px-2 py-1">Set status for {selectedIds.length} subscriber{selectedIds.length !== 1 ? 's' : ''}</p>
+                                {bulkSettingStatus ? (
+                                    <div className="flex items-center justify-center py-3">
+                                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                        <span className="text-sm text-muted-foreground">Updating...</span>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {["active", "unsubscribed", "inactive", "bounced"].map((status) => (
+                                            <button
+                                                key={status}
+                                                onClick={() => handleBulkSetStatus(status)}
+                                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted text-sm capitalize text-left"
+                                            >
+                                                <span className={cn("w-2 h-2 rounded-full", {
+                                                    "bg-emerald-400": status === "active",
+                                                    "bg-zinc-400": status === "unsubscribed",
+                                                    "bg-amber-400": status === "inactive",
+                                                    "bg-red-400": status === "bounced",
+                                                })} />
+                                                {status}
+                                            </button>
+                                        ))}
+                                    </>
+                                )}
                             </div>
                         </PopoverContent>
                     </Popover>
