@@ -4,12 +4,13 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getRotations, createRotation, deleteRotation } from "@/app/actions/rotations"
 import { getCampaignList } from "@/app/actions/campaigns"
-import { RefreshCw, Plus, Trash2, ChevronRight, Layers } from "lucide-react"
+import { RefreshCw, Plus, Trash2, ChevronRight, Layers, Clock, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { useToast } from "@/hooks/use-toast"
+import { cn } from "@/lib/utils"
 
 export default function RotationsPage() {
     const router = useRouter()
@@ -22,6 +23,8 @@ export default function RotationsPage() {
     const [selectedTemplateIds, setSelectedTemplateIds] = useState<string[]>([])
     const [creating, setCreating] = useState(false)
     const [deletingId, setDeletingId] = useState<string | null>(null)
+    const [cancellingId, setCancellingId] = useState<string | null>(null)
+    const [showScheduledOnly, setShowScheduledOnly] = useState(false)
 
     const fetchData = async () => {
         setLoading(true)
@@ -61,11 +64,35 @@ export default function RotationsPage() {
         setDeletingId(null)
     }
 
+    const handleCancelSchedule = async (rotationId: string, rotationName: string) => {
+        if (!confirm(`Cancel the scheduled send for "${rotationName}"?`)) return
+        setCancellingId(rotationId)
+        try {
+            await fetch('/api/schedule-rotation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ type: 'cancel_schedule', rotationId }),
+            })
+            toast({ title: 'Schedule cancelled', description: `"${rotationName}" has been unscheduled.` })
+            fetchData()
+        } catch (err) {
+            console.error('Cancel error:', err)
+            toast({ title: 'Failed to cancel', variant: 'destructive' })
+        } finally {
+            setCancellingId(null)
+        }
+    }
+
     const toggleTemplate = (id: string) => {
         setSelectedTemplateIds(prev =>
             prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
         )
     }
+
+    const scheduledCount = rotations.filter(r => r.scheduled_status === "pending" && r.scheduled_at).length
+    const displayedRotations = showScheduledOnly
+        ? rotations.filter(r => r.scheduled_status === "pending" && r.scheduled_at)
+        : rotations
 
     return (
         <div className="space-y-6">
@@ -80,73 +107,133 @@ export default function RotationsPage() {
                         Round-robin split tests — cycle through campaigns evenly to compare performance.
                     </p>
                 </div>
-                <Button onClick={() => setCreateOpen(true)} className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    New Rotation
-                </Button>
+                <div className="flex items-center gap-2">
+                    {scheduledCount > 0 && (
+                        <Button
+                            variant={showScheduledOnly ? "default" : "outline"}
+                            className={cn(
+                                "gap-2",
+                                showScheduledOnly
+                                    ? "bg-sky-500 text-white hover:bg-sky-400"
+                                    : ""
+                            )}
+                            onClick={() => setShowScheduledOnly(!showScheduledOnly)}
+                        >
+                            <Clock className="w-4 h-4" />
+                            Scheduled ({scheduledCount})
+                        </Button>
+                    )}
+                    <Button onClick={() => setCreateOpen(true)} className="gap-2">
+                        <Plus className="w-4 h-4" />
+                        New Rotation
+                    </Button>
+                </div>
             </div>
 
             {/* List */}
             {loading ? (
                 <div className="text-center py-12 text-muted-foreground">Loading...</div>
-            ) : rotations.length === 0 ? (
+            ) : displayedRotations.length === 0 ? (
                 <div className="text-center py-16 border border-dashed border-border rounded-xl">
                     <RefreshCw className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
-                    <p className="text-muted-foreground">No rotations yet</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">Create one to start split testing your campaigns.</p>
+                    <p className="text-muted-foreground">{showScheduledOnly ? "No scheduled rotations" : "No rotations yet"}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">
+                        {showScheduledOnly ? "No rotations are currently scheduled to send." : "Create one to start split testing your campaigns."}
+                    </p>
                 </div>
             ) : (
                 <div className="grid gap-3">
-                    {rotations.map((rot: any) => (
-                        <button
-                            key={rot.id}
-                            onClick={() => router.push(`/rotations/${rot.id}`)}
-                            className="w-full text-left p-4 rounded-xl border border-border bg-card hover:bg-muted/30 transition-all group"
-                        >
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                                        <Layers className="w-5 h-5 text-primary" />
+                    {displayedRotations.map((rot: any) => {
+                        const isScheduled = rot.scheduled_status === "pending" && rot.scheduled_at
+                        const scheduledDate = isScheduled ? new Date(rot.scheduled_at) : null
+                        const recipientCount = rot.scheduled_subscriber_ids?.length || 0
+                        const isPast = scheduledDate && scheduledDate < new Date()
+
+                        return (
+                            <button
+                                key={rot.id}
+                                onClick={() => router.push(`/rotations/${rot.id}`)}
+                                className={cn(
+                                    "w-full text-left p-4 rounded-xl border transition-all group",
+                                    isScheduled
+                                        ? "border-sky-500/30 bg-sky-500/5 hover:bg-sky-500/10"
+                                        : "border-border bg-card hover:bg-muted/30"
+                                )}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className={cn(
+                                            "h-10 w-10 rounded-lg flex items-center justify-center shrink-0",
+                                            isScheduled ? "bg-sky-500/10" : "bg-primary/10"
+                                        )}>
+                                            {isScheduled
+                                                ? <Clock className="w-5 h-5 text-sky-400" />
+                                                : <Layers className="w-5 h-5 text-primary" />
+                                            }
+                                        </div>
+                                        <div className="min-w-0">
+                                            <p className="font-semibold text-foreground truncate">{rot.name}</p>
+                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                {rot.campaigns.length} campaigns · Cursor at position {rot.cursor_position + 1}
+                                            </p>
+                                            {isScheduled && scheduledDate && (
+                                                <p className={cn(
+                                                    "text-xs mt-0.5 flex items-center gap-1",
+                                                    isPast ? "text-red-400" : "text-sky-400"
+                                                )}>
+                                                    <Clock className="h-3 w-3" />
+                                                    {isPast ? "Missed: " : "Scheduled: "}
+                                                    {scheduledDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}{" "}
+                                                    {scheduledDate.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                                    {recipientCount > 0 && ` · ${recipientCount} recipient${recipientCount !== 1 ? 's' : ''}`}
+                                                    <span
+                                                        role="button"
+                                                        onClick={(e) => { e.stopPropagation(); handleCancelSchedule(rot.id, rot.name) }}
+                                                        className="ml-1 p-0.5 rounded hover:bg-red-500/20 text-current opacity-60 hover:text-red-400 hover:opacity-100 transition-colors inline-flex"
+                                                        title="Cancel scheduled send"
+                                                    >
+                                                        {cancellingId === rot.id
+                                                            ? <Loader2 className="h-3 w-3 animate-spin" />
+                                                            : <X className="h-3 w-3" />
+                                                        }
+                                                    </span>
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="min-w-0">
-                                        <p className="font-semibold text-foreground truncate">{rot.name}</p>
-                                        <p className="text-xs text-muted-foreground mt-0.5">
-                                            {rot.campaigns.length} campaigns · Cursor at position {rot.cursor_position + 1}
-                                        </p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    {/* Campaign pills */}
-                                    <div className="hidden sm:flex items-center gap-1.5">
-                                        {rot.campaigns.slice(0, 4).map((c: any, i: number) => (
-                                            <span
-                                                key={c.id}
-                                                className={`text-[10px] px-2 py-0.5 rounded-full border ${i === rot.cursor_position % rot.campaigns.length
+                                    <div className="flex items-center gap-2">
+                                        {/* Campaign pills */}
+                                        <div className="hidden sm:flex items-center gap-1.5">
+                                            {rot.campaigns.slice(0, 4).map((c: any, i: number) => (
+                                                <span
+                                                    key={c.id}
+                                                    className={`text-[10px] px-2 py-0.5 rounded-full border ${i === rot.cursor_position % rot.campaigns.length
                                                         ? "bg-primary/10 text-primary border-primary/30 font-semibold"
                                                         : "bg-muted text-muted-foreground border-border"
-                                                    }`}
-                                            >
-                                                {c.name.length > 20 ? c.name.slice(0, 20) + "…" : c.name}
-                                            </span>
-                                        ))}
-                                        {rot.campaigns.length > 4 && (
-                                            <span className="text-[10px] text-muted-foreground">+{rot.campaigns.length - 4}</span>
-                                        )}
+                                                        }`}
+                                                >
+                                                    {c.name.length > 20 ? c.name.slice(0, 20) + "…" : c.name}
+                                                </span>
+                                            ))}
+                                            {rot.campaigns.length > 4 && (
+                                                <span className="text-[10px] text-muted-foreground">+{rot.campaigns.length - 4}</span>
+                                            )}
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            onClick={(e) => { e.stopPropagation(); handleDelete(rot.id) }}
+                                            disabled={deletingId === rot.id}
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        onClick={(e) => { e.stopPropagation(); handleDelete(rot.id) }}
-                                        disabled={deletingId === rot.id}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                    <ChevronRight className="w-4 h-4 text-muted-foreground" />
                                 </div>
-                            </div>
-                        </button>
-                    ))}
+                            </button>
+                        )
+                    })}
                 </div>
             )}
 
