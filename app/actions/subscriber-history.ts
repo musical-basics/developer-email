@@ -127,7 +127,7 @@ export async function getLastSentPerSubscriber(): Promise<Record<string, { subje
  * Get pending scheduled campaigns per subscriber.
  * Returns a lookup of subscriber_id -> { subject, scheduledAt, campaignName }
  */
-export async function getScheduledPerSubscriber(): Promise<Record<string, { subject: string; scheduledAt: string; campaignName: string }>> {
+export async function getScheduledPerSubscriber(): Promise<Record<string, { subject: string; scheduledAt: string; campaignName: string; scheduleId: string; scheduleType: 'campaign' | 'rotation' }>> {
     const supabase = await createClient()
 
     // Fetch scheduled campaigns AND scheduled rotations in parallel
@@ -144,7 +144,7 @@ export async function getScheduledPerSubscriber(): Promise<Record<string, { subj
             .not("scheduled_at", "is", null),
     ])
 
-    const lookup: Record<string, { subject: string; scheduledAt: string; campaignName: string }> = {}
+    const lookup: Record<string, { subject: string; scheduledAt: string; campaignName: string; scheduleId: string; scheduleType: 'campaign' | 'rotation' }> = {}
 
     // Process scheduled campaigns
     const campaigns = campaignResult.data || []
@@ -159,13 +159,13 @@ export async function getScheduledPerSubscriber(): Promise<Record<string, { subj
             // Multi-subscriber targeting
             for (const sid of subscriberIds) {
                 if (!lookup[sid]) {
-                    lookup[sid] = { subject: subjectLine, scheduledAt, campaignName: campaign.name }
+                    lookup[sid] = { subject: subjectLine, scheduledAt, campaignName: campaign.name, scheduleId: campaign.id, scheduleType: 'campaign' }
                 }
             }
         } else if (subscriberId) {
             // Single-subscriber targeting
             if (!lookup[subscriberId]) {
-                lookup[subscriberId] = { subject: subjectLine, scheduledAt, campaignName: campaign.name }
+                lookup[subscriberId] = { subject: subjectLine, scheduledAt, campaignName: campaign.name, scheduleId: campaign.id, scheduleType: 'campaign' }
             }
         }
         // Campaigns with no subscriber targeting are broadcast-scheduled
@@ -185,6 +185,8 @@ export async function getScheduledPerSubscriber(): Promise<Record<string, { subj
                         subject: `Rotation: ${rotation.name || "Untitled"}`,
                         scheduledAt,
                         campaignName: rotation.name || "Rotation",
+                        scheduleId: rotation.id,
+                        scheduleType: 'rotation',
                     }
                 }
             }

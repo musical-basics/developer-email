@@ -144,7 +144,8 @@ export default function AudienceManagerPage() {
     const [subscribers, setSubscribers] = useState<Subscriber[]>([])
     const [loading, setLoading] = useState(true)
     const [lastSentSubjects, setLastSentSubjects] = useState<Record<string, { subject: string; sentAt: string }>>({})
-    const [scheduledCampaigns, setScheduledCampaigns] = useState<Record<string, { subject: string; scheduledAt: string; campaignName: string }>>({})
+    const [scheduledCampaigns, setScheduledCampaigns] = useState<Record<string, { subject: string; scheduledAt: string; campaignName: string; scheduleId: string; scheduleType: 'campaign' | 'rotation' }>>({})
+    const [cancellingScheduleId, setCancellingScheduleId] = useState<string | null>(null)
     const [searchQuery, setSearchQuery] = useState("")
     const [showTestOnly, setShowTestOnly] = useState(false)
     const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -1754,9 +1755,50 @@ export default function AudienceManagerPage() {
                                                                     </p>
                                                                 )}
                                                                 {scheduledCampaigns[subscriber.id] ? (
-                                                                    <p className="text-xs text-sky-400/80 italic truncate max-w-[300px] flex items-center gap-1">
+                                                                    <p className="text-xs text-sky-400/80 italic truncate max-w-[350px] flex items-center gap-1">
                                                                         <Clock className="h-3 w-3 shrink-0" />
                                                                         Scheduled: {scheduledCampaigns[subscriber.id].subject} · {new Date(scheduledCampaigns[subscriber.id].scheduledAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })} {new Date(scheduledCampaigns[subscriber.id].scheduledAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                                                                        <button
+                                                                            onClick={async (e) => {
+                                                                                e.stopPropagation()
+                                                                                const sched = scheduledCampaigns[subscriber.id]
+                                                                                if (!sched) return
+                                                                                if (!confirm(`Cancel scheduled ${sched.scheduleType === 'rotation' ? 'rotation' : 'campaign'}: "${sched.campaignName}"?`)) return
+                                                                                setCancellingScheduleId(sched.scheduleId)
+                                                                                try {
+                                                                                    if (sched.scheduleType === 'rotation') {
+                                                                                        await fetch('/api/schedule-rotation', {
+                                                                                            method: 'POST',
+                                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                                            body: JSON.stringify({ type: 'cancel_schedule', rotationId: sched.scheduleId }),
+                                                                                        })
+                                                                                    } else {
+                                                                                        await fetch('/api/send', {
+                                                                                            method: 'POST',
+                                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                                            body: JSON.stringify({ type: 'cancel_schedule', campaignId: sched.scheduleId }),
+                                                                                        })
+                                                                                    }
+                                                                                    toast({ title: 'Schedule cancelled', description: `"${sched.campaignName}" has been unscheduled.` })
+                                                                                    // Refresh scheduled data
+                                                                                    const updated = await getScheduledPerSubscriber()
+                                                                                    setScheduledCampaigns(updated)
+                                                                                } catch (err) {
+                                                                                    console.error('Cancel error:', err)
+                                                                                    toast({ title: 'Failed to cancel', variant: 'destructive' })
+                                                                                } finally {
+                                                                                    setCancellingScheduleId(null)
+                                                                                }
+                                                                            }}
+                                                                            className="ml-1 p-0.5 rounded hover:bg-red-500/20 text-sky-400/60 hover:text-red-400 transition-colors shrink-0"
+                                                                            title="Cancel this scheduled send"
+                                                                        >
+                                                                            {cancellingScheduleId === scheduledCampaigns[subscriber.id].scheduleId ? (
+                                                                                <Loader2 className="h-3 w-3 animate-spin" />
+                                                                            ) : (
+                                                                                <X className="h-3 w-3" />
+                                                                            )}
+                                                                        </button>
                                                                     </p>
                                                                 ) : lastSentSubjects[subscriber.id] ? (
                                                                     <p className="text-xs text-muted-foreground/70 italic truncate max-w-[300px]">
