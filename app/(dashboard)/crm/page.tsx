@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDistanceToNow } from "date-fns"
 import { useRouter } from "next/navigation"
-import { getCRMLeads, type CRMLead, type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/app/actions/crm"
+import { getCRMLeads } from "@/app/actions/crm"
+import { type CRMLead, type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/lib/crm-types"
 import { CRMConfigPanel, getActiveConfig } from "@/components/crm/crm-config-panel"
 
 type Tab = "leads" | "config"
@@ -73,8 +74,8 @@ export default function CRMPage() {
                 <button
                     onClick={() => setActiveTab("leads")}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "leads"
-                            ? "border-amber-500 text-amber-500"
-                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        ? "border-amber-500 text-amber-500"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                 >
                     <Target className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
@@ -88,8 +89,8 @@ export default function CRMPage() {
                 <button
                     onClick={() => setActiveTab("config")}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === "config"
-                            ? "border-amber-500 text-amber-500"
-                            : "border-transparent text-muted-foreground hover:text-foreground"
+                        ? "border-amber-500 text-amber-500"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
                         }`}
                 >
                     <Settings2 className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
@@ -142,10 +143,10 @@ export default function CRMPage() {
                                     <div
                                         key={lead.id}
                                         className={`bg-card border rounded-xl p-5 flex items-center gap-5 transition-colors ${isHot
-                                                ? "border-red-500/30 hover:border-red-500/50"
-                                                : isWarm
-                                                    ? "border-amber-500/20 hover:border-amber-500/40"
-                                                    : "hover:border-border/80"
+                                            ? "border-red-500/30 hover:border-red-500/50"
+                                            : isWarm
+                                                ? "border-amber-500/20 hover:border-amber-500/40"
+                                                : "hover:border-border/80"
                                             }`}
                                     >
                                         {/* Rank */}
@@ -156,10 +157,10 @@ export default function CRMPage() {
                                         {/* Score Badge */}
                                         <div
                                             className={`flex flex-col items-center rounded-lg min-w-[72px] p-2.5 border ${isHot
-                                                    ? "bg-red-500/10 border-red-500/20"
-                                                    : isWarm
-                                                        ? "bg-amber-500/10 border-amber-500/20"
-                                                        : "bg-muted/50 border-border"
+                                                ? "bg-red-500/10 border-red-500/20"
+                                                : isWarm
+                                                    ? "bg-amber-500/10 border-amber-500/20"
+                                                    : "bg-muted/50 border-border"
                                                 }`}
                                         >
                                             <Flame

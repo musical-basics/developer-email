@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
-import { type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/app/actions/crm"
+import { type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/lib/crm-types"
 
 const PRESETS_KEY = "dp_crm_presets"
 const ACTIVE_PRESET_KEY = "dp_crm_active_preset"
