@@ -108,6 +108,14 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
         setShowConsole(true)
         setIsStreaming(true)
 
+        // Prevent browser from throttling this tab when user switches away
+        let wakeLock: WakeLockSentinel | null = null
+        try {
+            wakeLock = await navigator.wakeLock?.request("screen")
+        } catch {
+            // Wake Lock not supported or denied — send will still work if tab stays active
+        }
+
         toast({ title: "Initiating broadcast...", description: "Watch the console for real-time progress." })
 
         try {
@@ -191,6 +199,8 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
             toast({ title: "Broadcast error", description: err.message, variant: "destructive" })
         } finally {
             setIsStreaming(false)
+            // Release wake lock so screen can sleep again
+            wakeLock?.release().catch(() => { })
         }
     }
 
