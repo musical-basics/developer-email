@@ -65,6 +65,7 @@ export default function DiscountsPage() {
             target_url_key: "",
             usage_limit: 1,
             code_mode: "all_users",
+            variant_id: null,
             sort_order: presets.length + newPresets.length,
             is_active: true,
         }])
@@ -463,6 +464,10 @@ function PresetCard({
                                 onChange={e => onChange("usage_limit", Math.max(1, Number(e.target.value)))} min={1}
                                 disabled={draft.code_mode === "per_user"} className={`h-9 ${draft.code_mode === "per_user" ? "opacity-50" : ""}`}
                             />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-xs text-muted-foreground">Variant ID <span className="text-[10px] text-muted-foreground/50">(optional)</span></Label>
+                            <Input value={draft.variant_id || ""} onChange={e => onChange("variant_id", e.target.value || null)} placeholder="All products" className="h-9 font-mono text-xs" />
                         </div>
                     </div>
                     <div className="flex justify-end mt-4">

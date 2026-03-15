@@ -15,6 +15,7 @@ export interface DiscountPreset {
     target_url_key: string
     usage_limit: number
     code_mode: "per_user" | "all_users"
+    variant_id?: string | null
     is_active: boolean
     sort_order: number
     created_at: string
