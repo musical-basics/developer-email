@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare, ArrowDownToLine, ScrollText, RefreshCw } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare, ArrowDownToLine, ScrollText, RefreshCw, Target } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
@@ -19,6 +19,7 @@ const navGroups: NavGroup[] = [
             { name: "Automated Emails", href: "/automated-emails", icon: BotMessageSquare },
             { name: "Triggers", href: "/triggers", icon: Zap },
             { name: "Audience", href: "/audience", icon: Users },
+            { name: "Sales CRM", href: "/crm", icon: Target },
             { name: "Email Builder", href: "/editor", icon: PenTool },
         ],
     },
