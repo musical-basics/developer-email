@@ -189,15 +189,8 @@ export async function POST(request: Request) {
                             // Append subscriber context to links
                             personalHtml = personalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
                                 if (url.includes('/unsubscribe')) return match;
-                                try {
-                                    const parsedUrl = new URL(url);
-                                    parsedUrl.searchParams.set("sid", sub.id);
-                                    parsedUrl.searchParams.set("cid", child.id);
-                                    return `href=${quote}${parsedUrl.toString()}${quote}`;
-                                } catch (e) {
-                                    const sep = url.includes('?') ? '&' : '?';
-                                    return `href=${quote}${url}${sep}sid=${sub.id}&cid=${child.id}${quote}`;
-                                }
+                                const sep = url.includes('?') ? '&' : '?';
+                                return `href=${quote}${url}${sep}sid=${sub.id}&cid=${child.id}${quote}`;
                             });
 
                             // Open tracking pixel

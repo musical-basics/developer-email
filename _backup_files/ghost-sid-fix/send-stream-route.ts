@@ -215,29 +215,15 @@ export async function POST(request: Request) {
                             personalHtml = personalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
                                 if (url.includes('/unsubscribe')) return match;
                                 if (url.includes('/api/track/')) return match;
-                                let cleanUrl = url;
-                                try {
-                                    const parsedUrl = new URL(url);
-                                    parsedUrl.searchParams.delete("sid");
-                                    parsedUrl.searchParams.delete("cid");
-                                    cleanUrl = parsedUrl.toString();
-                                } catch (e) { }
-                                const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(cleanUrl)}&c=${trackingCampaignId}&s=${sub.id}`;
+                                const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${trackingCampaignId}&s=${sub.id}`;
                                 return `href=${quote}${trackUrl}${quote}`;
                             });
                             sendLog(controller, encoder, "info", `${progress} Click tracking: links rewritten`);
                         } else {
                             personalHtml = personalHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
                                 if (url.includes('/unsubscribe')) return match;
-                                try {
-                                    const parsedUrl = new URL(url);
-                                    parsedUrl.searchParams.set("sid", sub.id);
-                                    parsedUrl.searchParams.set("cid", trackingCampaignId);
-                                    return `href=${quote}${parsedUrl.toString()}${quote}`;
-                                } catch (e) {
-                                    const sep = url.includes('?') ? '&' : '?';
-                                    return `href=${quote}${url}${sep}sid=${sub.id}&cid=${trackingCampaignId}${quote}`;
-                                }
+                                const sep = url.includes('?') ? '&' : '?';
+                                return `href=${quote}${url}${sep}sid=${sub.id}&cid=${trackingCampaignId}${quote}`;
                             });
                         }
 

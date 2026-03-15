@@ -130,29 +130,15 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
         finalHtml = finalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
             if (url.includes('/unsubscribe')) return match;
             if (url.includes('/api/track/')) return match;
-            let cleanUrl = url;
-            try {
-                const parsedUrl = new URL(url);
-                parsedUrl.searchParams.delete("sid");
-                parsedUrl.searchParams.delete("cid");
-                cleanUrl = parsedUrl.toString();
-            } catch (e) { }
-            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(cleanUrl)}&c=${campaignId}&s=${subscriberId}`;
+            const trackUrl = `${baseUrl}/api/track/click?u=${encodeURIComponent(url)}&c=${campaignId}&s=${subscriberId}`;
             return `href=${quote}${trackUrl}${quote}`;
         });
     } else {
-        // No redirect tracking — just set sid/cid params inline
+        // No redirect tracking — just append sid/cid/em params inline
         finalHtml = finalHtml.replace(/href=([\"'])(https?:\/\/[^\"']+)\1/g, (match, quote, url) => {
             if (url.includes('/unsubscribe')) return match;
-            try {
-                const parsedUrl = new URL(url);
-                parsedUrl.searchParams.set("sid", subscriberId);
-                parsedUrl.searchParams.set("cid", campaignId);
-                return `href=${quote}${parsedUrl.toString()}${quote}`;
-            } catch (e) {
-                const sep = url.includes('?') ? '&' : '?';
-                return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaignId}${quote}`;
-            }
+            const sep = url.includes('?') ? '&' : '?';
+            return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${campaignId}${quote}`;
         });
     }
 

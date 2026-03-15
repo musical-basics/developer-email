@@ -473,15 +473,8 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                 renderedHtml = renderedHtml.replace(/href=(["'])(https?:\/\/[^"']+)\1/g, (match, quote, url) => {
                     if (url.includes('/unsubscribe')) return match;
                     if (url.includes('/api/track/')) return match;
-                    try {
-                        const parsedUrl = new URL(url);
-                        parsedUrl.searchParams.set("sid", subscriberId);
-                        parsedUrl.searchParams.set("cid", trackingCampaignId);
-                        return `href=${quote}${parsedUrl.toString()}${quote}`;
-                    } catch (e) {
-                        const sep = url.includes('?') ? '&' : '?';
-                        return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${trackingCampaignId}${quote}`;
-                    }
+                    const sep = url.includes('?') ? '&' : '?';
+                    return `href=${quote}${url}${sep}sid=${subscriberId}&cid=${trackingCampaignId}${quote}`;
                 });
 
                 // Determine sender
