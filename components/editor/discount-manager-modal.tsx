@@ -34,6 +34,7 @@ const CODE_VARIABLE_OPTIONS = [
 interface DiscountManagerModalProps {
     assets: Record<string, any>
     onAssetsChange: (assets: Record<string, any>) => void
+    templateVariables?: string[]
 }
 
 /**
@@ -55,7 +56,7 @@ function getUrlEntries(assets: Record<string, any>): { key: string; value: strin
         .map(([key, value]) => ({ key, value: (value as string) || "" }))
 }
 
-export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManagerModalProps) {
+export function DiscountManagerModal({ assets, onAssetsChange, templateVariables = [] }: DiscountManagerModalProps) {
     const [open, setOpen] = useState(false)
     const [presets, setPresets] = useState<DiscountPreset[]>([])
     const [loadingPresets, setLoadingPresets] = useState(false)
@@ -65,8 +66,21 @@ export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManager
     // Read current slots from assets
     const slots: DiscountSlot[] = useMemo(() => assets.discount_slots || [], [assets.discount_slots])
 
-    // URL entries available for mapping
-    const urlEntries = useMemo(() => getUrlEntries(assets), [assets])
+    // URL entries available for mapping — merge assets + unset template variables
+    const urlEntries = useMemo(() => {
+        const fromAssets = getUrlEntries(assets)
+        const assetKeys = new Set(Object.keys(assets))
+        // Include template variables that look URL-like but aren't in assets yet
+        const fromTemplate = templateVariables
+            .filter(v => {
+                if (assetKeys.has(v)) return false
+                const k = v.toLowerCase()
+                if (k.includes("discount") || k.includes("preset") || k.includes("slot") || k.includes("from_")) return false
+                return k.includes("url") || k.includes("link") || k.includes("cta") || k.includes("href")
+            })
+            .map(v => ({ key: v, value: "" }))
+        return [...fromAssets, ...fromTemplate]
+    }, [assets, templateVariables])
 
     // Load presets when modal opens
     useEffect(() => {

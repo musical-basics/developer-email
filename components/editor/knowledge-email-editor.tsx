@@ -214,7 +214,7 @@ export function KnowledgeEmailEditor({
                                 </select>
                             </div>
                             <div className="pt-3 border-t border-border mt-3">
-                                <DiscountManagerModal assets={assets} onAssetsChange={onAssetsChange} />
+                                <DiscountManagerModal assets={assets} onAssetsChange={onAssetsChange} templateVariables={extractedVariables} />
                             </div>
                         </div>
 
