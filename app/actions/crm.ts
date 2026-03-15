@@ -79,12 +79,12 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
     }
 
     const leads: CRMLead[] = []
-    const purchasedTag = "Purchased"
+    const excludeTags = ["Purchased", "Test Account"]
     const hotTags = ["VIP Account", "$300 Off Lead", "Free Shipping Lead", "Hesitated at Checkout"]
 
     for (const sub of subscribers) {
-        // Skip purchased
-        if (sub.tags?.includes(purchasedTag)) continue
+        // Skip purchased / test accounts
+        if (sub.tags?.some((t: string) => excludeTags.includes(t))) continue
 
         const subEvents = eventsBySubscriber.get(sub.id) || []
         let score = 0
@@ -130,7 +130,7 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
 
         // Filter: only return hot leads
         const hasHotTag = sub.tags?.some((t: string) => hotTags.includes(t))
-        if (score <= 15 && !hasHotTag) continue
+        if (score <= 5 && !hasHotTag) continue
 
         leads.push({
             id: sub.id,

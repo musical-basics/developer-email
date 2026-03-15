@@ -49,8 +49,9 @@ BEGIN
   WHERE 
     s.status = 'active'
     AND NOT ('Purchased' = ANY(COALESCE(s.tags, ARRAY[]::text[])))
+    AND NOT ('Test Account' = ANY(COALESCE(s.tags, ARRAY[]::text[])))
     AND (
-      COALESCE(es.score, 0) > 15 
+      COALESCE(es.score, 0) > 5 
       OR s.tags && ARRAY['VIP Account', '$300 Off Lead', 'Free Shipping Lead', 'Hesitated at Checkout']
     )
   ORDER BY engagement_score DESC
