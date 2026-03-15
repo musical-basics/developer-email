@@ -42,15 +42,17 @@ interface DiscountManagerModalProps {
 function getUrlEntries(assets: Record<string, any>): { key: string; value: string }[] {
     return Object.entries(assets)
         .filter(([key, value]) => {
-            if (typeof value !== "string") return false
+            if (typeof value !== "string" && value !== undefined && value !== null && value !== "") return false
             const k = key.toLowerCase()
-            const v = value.toLowerCase()
+            const v = (typeof value === "string" ? value : "").toLowerCase()
             if (k.includes("discount") || k.includes("preset") || k.includes("slot") || k.includes("from_")) return false
-            if (v.startsWith("http") || v.includes(".com") || v.includes(".io")) return true
+            // Always include keys that look like URL variables by name
             if (k.includes("url") || k.includes("link") || k.includes("cta") || k.includes("href")) return true
+            // Also include if the value looks like a URL
+            if (v.startsWith("http") || v.includes(".com") || v.includes(".io")) return true
             return false
         })
-        .map(([key, value]) => ({ key, value: value as string }))
+        .map(([key, value]) => ({ key, value: (value as string) || "" }))
 }
 
 export function DiscountManagerModal({ assets, onAssetsChange }: DiscountManagerModalProps) {
