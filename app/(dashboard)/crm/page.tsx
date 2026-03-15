@@ -11,6 +11,31 @@ import { type CRMLead, type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/lib/c
 import { CRMConfigPanel, getActiveConfig } from "@/components/crm/crm-config-panel"
 
 type Tab = "leads" | "config"
+const CRM_CACHE_KEY = "dp_crm_leads_cache"
+
+function getCacheKey(config: CRMScoringConfig): string {
+    // Simple hash based on config values that affect results
+    return `${config.min_score}_${config.max_score}_${config.event_lookback_days}_${config.exclude_tags.join(",")}`
+}
+
+function getCachedLeads(config: CRMScoringConfig): CRMLead[] | null {
+    try {
+        const raw = sessionStorage.getItem(CRM_CACHE_KEY)
+        if (!raw) return null
+        const cached = JSON.parse(raw)
+        if (cached.key === getCacheKey(config)) return cached.leads
+        return null
+    } catch { return null }
+}
+
+function setCachedLeads(config: CRMScoringConfig, leads: CRMLead[]) {
+    try {
+        sessionStorage.setItem(CRM_CACHE_KEY, JSON.stringify({
+            key: getCacheKey(config),
+            leads,
+        }))
+    } catch { /* ignore quota errors */ }
+}
 
 export default function CRMPage() {
     const [leads, setLeads] = useState<CRMLead[]>([])
@@ -20,11 +45,23 @@ export default function CRMPage() {
     const [activeConfig, setActiveConfig] = useState<CRMScoringConfig>(DEFAULT_CRM_CONFIG)
     const router = useRouter()
 
-    const fetchLeads = useCallback(async (config?: CRMScoringConfig) => {
-        setLoading(true)
+    const fetchLeads = useCallback(async (config?: CRMScoringConfig, skipCache = false) => {
         const cfg = config || activeConfig
+
+        // Check sessionStorage cache first (instant restore on back-nav)
+        if (!skipCache) {
+            const cached = getCachedLeads(cfg)
+            if (cached) {
+                setLeads(cached)
+                setLoading(false)
+                return
+            }
+        }
+
+        setLoading(true)
         const data = await getCRMLeads(cfg)
         setLeads(data)
+        setCachedLeads(cfg, data)
         setLoading(false)
     }, [activeConfig])
 
@@ -36,13 +73,13 @@ export default function CRMPage() {
     }, [])
 
     const handleRefresh = () => {
-        startTransition(() => { fetchLeads() })
+        startTransition(() => { fetchLeads(undefined, true) })
     }
 
     const handleConfigChange = (newConfig: CRMScoringConfig) => {
         setActiveConfig(newConfig)
         setActiveTab("leads")
-        fetchLeads(newConfig)
+        fetchLeads(newConfig, true) // always refetch on config change
     }
 
     return (
