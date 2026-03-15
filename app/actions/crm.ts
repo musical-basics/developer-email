@@ -14,32 +14,70 @@ export interface CRMLead {
     recent_pages: string[] | null
 }
 
-/**
- * Fetches CRM leads using the get_crm_leads() Postgres function.
- * Falls back to a manual query if the function doesn't exist yet.
- */
-export async function getCRMLeads(): Promise<CRMLead[]> {
-    const supabase = await createClient()
+export interface CRMScoringConfig {
+    // Base points per event type
+    points_conversion: number
+    points_checkout_page: number
+    points_click: number
+    points_page_view: number
+    points_open: number
+    points_session_max: number // max points from session duration
 
-    // Try the optimized Postgres function first
-    const { data, error } = await supabase.rpc("get_crm_leads")
+    // Time decay multipliers
+    decay_recent_days: number       // "recent" window in days
+    decay_recent_multiplier: number // multiplier for events within recent window
+    decay_mid_days: number          // "mid" window in days
+    decay_mid_multiplier: number    // multiplier for events within mid window
+    decay_old_multiplier: number    // multiplier for older events
 
-    if (error) {
-        console.error("[CRM] rpc get_crm_leads failed, using fallback:", error.message)
-        return getCRMLeadsFallback()
-    }
+    // Tag boosts
+    tag_boosts: { tag: string; boost: number }[]
 
-    return (data || []) as CRMLead[]
+    // Filtering
+    min_score: number
+    max_score: number | null        // null = no upper limit
+    exclude_tags: string[]
+    include_hot_tags: string[]      // always include if they have these tags, regardless of score
+
+    // Display
+    event_lookback_days: number     // how far back to look for events
+}
+
+export const DEFAULT_CRM_CONFIG: CRMScoringConfig = {
+    points_conversion: 50,
+    points_checkout_page: 20,
+    points_click: 10,
+    points_page_view: 2,
+    points_open: 1,
+    points_session_max: 20,
+
+    decay_recent_days: 3,
+    decay_recent_multiplier: 2.0,
+    decay_mid_days: 14,
+    decay_mid_multiplier: 1.0,
+    decay_old_multiplier: 0.2,
+
+    tag_boosts: [
+        { tag: "VIP Account", boost: 30 },
+        { tag: "$300 Off Lead", boost: 40 },
+    ],
+
+    min_score: 5,
+    max_score: null,
+    exclude_tags: ["Purchased", "Test Account"],
+    include_hot_tags: ["VIP Account", "$300 Off Lead", "Free Shipping Lead", "Hesitated at Checkout"],
+
+    event_lookback_days: 30,
 }
 
 /**
- * Fallback: compute engagement scores in JS if the Postgres function isn't installed yet.
- * Less efficient but functional.
+ * Fetches CRM leads with configurable scoring.
+ * All scoring logic runs in JS for full configurability.
  */
-async function getCRMLeadsFallback(): Promise<CRMLead[]> {
+export async function getCRMLeads(config: CRMScoringConfig = DEFAULT_CRM_CONFIG): Promise<CRMLead[]> {
     const supabase = await createClient()
 
-    // 1. Get active subscribers with high-intent tags OR any events
+    // 1. Get active subscribers
     const { data: subscribers, error: subError } = await supabase
         .from("subscribers")
         .select("id, email, first_name, last_name, tags, status")
@@ -50,14 +88,14 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
         return []
     }
 
-    // 2. Get all events from the last 30 days
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+    // 2. Get events within lookback window
+    const lookbackDate = new Date()
+    lookbackDate.setDate(lookbackDate.getDate() - config.event_lookback_days)
 
     const { data: events, error: evError } = await supabase
         .from("subscriber_events")
         .select("subscriber_id, type, url, created_at, metadata")
-        .gte("created_at", thirtyDaysAgo.toISOString())
+        .gte("created_at", lookbackDate.toISOString())
         .not("subscriber_id", "is", null)
 
     if (evError) {
@@ -65,10 +103,10 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
         return []
     }
 
-    // 3. Compute scores in JS
+    // 3. Group events by subscriber
     const now = Date.now()
-    const threeDays = 3 * 24 * 60 * 60 * 1000
-    const fourteenDays = 14 * 24 * 60 * 60 * 1000
+    const recentMs = config.decay_recent_days * 24 * 60 * 60 * 1000
+    const midMs = config.decay_mid_days * 24 * 60 * 60 * 1000
 
     const eventsBySubscriber = new Map<string, typeof events>()
     for (const e of events || []) {
@@ -78,13 +116,13 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
         eventsBySubscriber.set(e.subscriber_id, arr)
     }
 
+    // 4. Score each subscriber
     const leads: CRMLead[] = []
-    const excludeTags = ["Purchased", "Test Account"]
-    const hotTags = ["VIP Account", "$300 Off Lead", "Free Shipping Lead", "Hesitated at Checkout"]
+    const checkoutPatterns = ["/customize", "/buy", "/reserve", "/checkout"]
 
     for (const sub of subscribers) {
-        // Skip purchased / test accounts
-        if (sub.tags?.some((t: string) => excludeTags.includes(t))) continue
+        // Exclude filtered tags
+        if (sub.tags?.some((t: string) => config.exclude_tags.includes(t))) continue
 
         const subEvents = eventsBySubscriber.get(sub.id) || []
         let score = 0
@@ -97,22 +135,20 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
 
             // Base points
             let basePoints = 0
-            if (e.type?.startsWith("conversion_")) basePoints = 50
-            else if (e.type === "page_view" && e.url?.includes("/customize")) basePoints = 20
-            else if (e.type === "page_view" && e.url?.includes("/buy")) basePoints = 20
-            else if (e.type === "page_view" && e.url?.includes("/reserve")) basePoints = 20
+            if (e.type?.startsWith("conversion_")) basePoints = config.points_conversion
+            else if (e.type === "page_view" && checkoutPatterns.some(p => e.url?.includes(p))) basePoints = config.points_checkout_page
             else if (e.type === "session_end") {
                 const dur = Number(e.metadata?.duration_seconds) || 0
-                basePoints = Math.min(dur / 10, 20)
+                basePoints = Math.min(dur / 10, config.points_session_max)
             }
-            else if (e.type === "click") basePoints = 10
-            else if (e.type === "page_view") basePoints = 2
-            else if (e.type === "open") basePoints = 1
+            else if (e.type === "click") basePoints = config.points_click
+            else if (e.type === "page_view") basePoints = config.points_page_view
+            else if (e.type === "open") basePoints = config.points_open
 
             // Time decay
-            let decay = 0.2
-            if (age < threeDays) decay = 2.0
-            else if (age < fourteenDays) decay = 1.0
+            let decay = config.decay_old_multiplier
+            if (age < recentMs) decay = config.decay_recent_multiplier
+            else if (age < midMs) decay = config.decay_mid_multiplier
 
             score += basePoints * decay
 
@@ -120,17 +156,18 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
             const created = new Date(e.created_at)
             if (!lastSeen || created > lastSeen) lastSeen = created
 
-            // Track pages
             if (e.type === "page_view" && e.url) pages.add(e.url)
         }
 
         // Tag boosts
-        if (sub.tags?.includes("VIP Account")) score += 30
-        if (sub.tags?.includes("$300 Off Lead")) score += 40
+        for (const { tag, boost } of config.tag_boosts) {
+            if (sub.tags?.includes(tag)) score += boost
+        }
 
-        // Filter: only return hot leads
-        const hasHotTag = sub.tags?.some((t: string) => hotTags.includes(t))
-        if (score <= 5 && !hasHotTag) continue
+        // Filtering
+        const hasHotTag = sub.tags?.some((t: string) => config.include_hot_tags.includes(t))
+        if (score <= config.min_score && !hasHotTag) continue
+        if (config.max_score !== null && score > config.max_score) continue
 
         leads.push({
             id: sub.id,
@@ -145,7 +182,6 @@ async function getCRMLeadsFallback(): Promise<CRMLead[]> {
         })
     }
 
-    // Sort by score descending, limit 100
     leads.sort((a, b) => b.engagement_score - a.engagement_score)
-    return leads.slice(0, 100)
+    return leads.slice(0, 200)
 }
