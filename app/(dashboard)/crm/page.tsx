@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState, useTransition, useCallback } from "react"
-import { Flame, Clock, Target, ArrowRight, Loader2, Sparkles, MessageCircle, RefreshCw, Settings2, Send } from "lucide-react"
+import { useEffect, useState, useTransition, useCallback, useMemo } from "react"
+import { Flame, Clock, Target, ArrowRight, Loader2, Sparkles, MessageCircle, RefreshCw, Settings2, Send, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDistanceToNow } from "date-fns"
@@ -13,6 +13,7 @@ import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
 import { getCampaignList, getRecentlyUsedTemplateIds, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
 import { type Campaign, type Subscriber } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
+import { SubscriberHistoryTimeline } from "@/components/audience/subscriber-history-timeline"
 
 type Tab = "leads" | "config"
 const CRM_CACHE_KEY = "dp_crm_leads_cache"
@@ -57,6 +58,18 @@ export default function CRMPage() {
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
     const [duplicating, setDuplicating] = useState(false)
     const [recentlyUsedIds, setRecentlyUsedIds] = useState<string[]>([])
+
+    // Expandable history
+    const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null)
+
+    // Pagination
+    const PAGE_SIZE = 25
+    const [currentPage, setCurrentPage] = useState(1)
+    const totalPages = Math.max(1, Math.ceil(leads.length / PAGE_SIZE))
+    const paginatedLeads = useMemo(() => {
+        const start = (currentPage - 1) * PAGE_SIZE
+        return leads.slice(start, start + PAGE_SIZE)
+    }, [leads, currentPage])
 
     const fetchLeads = useCallback(async (config?: CRMScoringConfig, skipCache = false) => {
         const cfg = config || activeConfig
@@ -249,126 +262,137 @@ export default function CRMPage() {
                     {/* Lead Cards */}
                     {!loading && (
                         <div className="grid gap-3">
-                            {leads.map((lead, index) => {
+                            {paginatedLeads.map((lead, index) => {
                                 const isHot = lead.engagement_score > 50
                                 const isWarm = lead.engagement_score > 25
                                 const reasonTag = lead.tags?.find((t: string) => t.startsWith("Reason:"))
                                 const visitedCheckout = lead.recent_pages?.some(
                                     (p: string) => p.includes("customize") || p.includes("checkout") || p.includes("buy") || p.includes("reserve")
                                 )
+                                const isExpanded = expandedLeadId === lead.id
+                                const globalIndex = (currentPage - 1) * PAGE_SIZE + index
 
                                 return (
                                     <div
                                         key={lead.id}
-                                        className={`bg-card border rounded-xl p-5 flex items-center gap-5 transition-colors ${isHot
+                                        className={`bg-card border rounded-xl transition-colors ${isHot
                                             ? "border-red-500/30 hover:border-red-500/50"
                                             : isWarm
                                                 ? "border-amber-500/20 hover:border-amber-500/40"
                                                 : "hover:border-border/80"
                                             }`}
                                     >
-                                        {/* Rank */}
-                                        <div className="text-xs text-muted-foreground font-mono w-5 text-center shrink-0">
-                                            {index + 1}
-                                        </div>
-
-                                        {/* Score Badge */}
-                                        <div
-                                            className={`flex flex-col items-center rounded-lg min-w-[72px] p-2.5 border ${isHot
-                                                ? "bg-red-500/10 border-red-500/20"
-                                                : isWarm
-                                                    ? "bg-amber-500/10 border-amber-500/20"
-                                                    : "bg-muted/50 border-border"
-                                                }`}
-                                        >
-                                            <Flame
-                                                className={`w-4 h-4 ${isHot ? "text-red-500 animate-pulse" : isWarm ? "text-amber-500" : "text-zinc-400"
-                                                    }`}
-                                            />
-                                            <span className="text-xl font-bold mt-0.5">{lead.engagement_score}</span>
-                                        </div>
-
-                                        {/* Lead Info */}
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-base font-semibold truncate">
-                                                {lead.first_name
-                                                    ? `${lead.first_name}${lead.last_name ? ` ${lead.last_name}` : ""}`
-                                                    : lead.email}
-                                            </h3>
-                                            {lead.first_name && (
-                                                <p className="text-xs text-muted-foreground truncate">{lead.email}</p>
-                                            )}
-
-                                            {/* Tags */}
-                                            <div className="flex flex-wrap gap-1.5 mt-2">
-                                                {lead.tags
-                                                    ?.filter((t: string) => !t.startsWith("Reason:"))
-                                                    .slice(0, 5)
-                                                    .map((tag: string) => (
-                                                        <Badge
-                                                            key={tag}
-                                                            variant="outline"
-                                                            className="bg-primary/5 text-primary text-[10px] py-0 px-1.5"
-                                                        >
-                                                            {tag}
-                                                        </Badge>
-                                                    ))}
+                                        <div className="p-5 flex items-center gap-5">
+                                            {/* Rank */}
+                                            <div className="text-xs text-muted-foreground font-mono w-5 text-center shrink-0">
+                                                {globalIndex + 1}
                                             </div>
 
-                                            {/* Objection / Reason tag */}
-                                            {reasonTag && (
-                                                <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-500 italic bg-amber-500/10 px-2.5 py-1 rounded w-fit border border-amber-500/20">
-                                                    <MessageCircle className="w-3 h-3 shrink-0" />
-                                                    <span className="truncate">
-                                                        &ldquo;{reasonTag.replace("Reason: ", "")}&rdquo;
-                                                    </span>
-                                                </div>
-                                            )}
+                                            {/* Score Badge */}
+                                            <div
+                                                className={`flex flex-col items-center rounded-lg min-w-[72px] p-2.5 border ${isHot
+                                                    ? "bg-red-500/10 border-red-500/20"
+                                                    : isWarm
+                                                        ? "bg-amber-500/10 border-amber-500/20"
+                                                        : "bg-muted/50 border-border"
+                                                    }`}
+                                            >
+                                                <Flame
+                                                    className={`w-4 h-4 ${isHot ? "text-red-500 animate-pulse" : isWarm ? "text-amber-500" : "text-zinc-400"
+                                                        }`}
+                                                />
+                                                <span className="text-xl font-bold mt-0.5">{lead.engagement_score}</span>
+                                            </div>
 
-                                            {/* Context */}
-                                            <div className="flex items-center gap-3 mt-2">
-                                                {lead.last_seen_at && (
-                                                    <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                                        <Clock className="w-3 h-3" />
-                                                        {formatDistanceToNow(new Date(lead.last_seen_at), { addSuffix: true })}
+                                            {/* Lead Info */}
+                                            <div className="flex-1 min-w-0">
+                                                <h3 className="text-base font-semibold truncate">
+                                                    {lead.first_name
+                                                        ? `${lead.first_name}${lead.last_name ? ` ${lead.last_name}` : ""}`
+                                                        : lead.email}
+                                                </h3>
+                                                {lead.first_name && (
+                                                    <p className="text-xs text-muted-foreground truncate">{lead.email}</p>
+                                                )}
+
+                                                {/* Tags */}
+                                                <div className="flex flex-wrap gap-1.5 mt-2">
+                                                    {lead.tags
+                                                        ?.filter((t: string) => !t.startsWith("Reason:"))
+                                                        .slice(0, 5)
+                                                        .map((tag: string) => (
+                                                            <Badge
+                                                                key={tag}
+                                                                variant="outline"
+                                                                className="bg-primary/5 text-primary text-[10px] py-0 px-1.5"
+                                                            >
+                                                                {tag}
+                                                            </Badge>
+                                                        ))}
+                                                </div>
+
+                                                {/* Objection / Reason tag */}
+                                                {reasonTag && (
+                                                    <div className="mt-2 flex items-center gap-1.5 text-xs text-amber-500 italic bg-amber-500/10 px-2.5 py-1 rounded w-fit border border-amber-500/20">
+                                                        <MessageCircle className="w-3 h-3 shrink-0" />
+                                                        <span className="truncate">
+                                                            &ldquo;{reasonTag.replace("Reason: ", "")}&rdquo;
+                                                        </span>
                                                     </div>
                                                 )}
-                                                {visitedCheckout && (
-                                                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                                        Visited Checkout
-                                                    </span>
-                                                )}
+
+                                                {/* Context */}
+                                                <div className="flex items-center gap-3 mt-2">
+                                                    {lead.last_seen_at && (
+                                                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                                            <Clock className="w-3 h-3" />
+                                                            {formatDistanceToNow(new Date(lead.last_seen_at), { addSuffix: true })}
+                                                        </div>
+                                                    )}
+                                                    {visitedCheckout && (
+                                                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                                                            Visited Checkout
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Actions */}
+                                            <div className="flex flex-col gap-2 shrink-0">
+                                                <Button
+                                                    size="sm"
+                                                    className="bg-amber-600 hover:bg-amber-500 text-white border-none"
+                                                    disabled
+                                                    title="Coming soon — connect to JIT email drafting"
+                                                >
+                                                    <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                                                    AI 1:1 Draft
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleOpenSelectCampaign(lead)}
+                                                >
+                                                    <Send className="w-3.5 h-3.5 mr-1.5" />
+                                                    Send Campaign
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setExpandedLeadId(isExpanded ? null : lead.id)}
+                                                >
+                                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5 mr-1.5" /> : <ChevronDown className="w-3.5 h-3.5 mr-1.5" />}
+                                                    {isExpanded ? "Hide History" : "View History"}
+                                                </Button>
                                             </div>
                                         </div>
 
-                                        {/* Actions */}
-                                        <div className="flex flex-col gap-2 shrink-0">
-                                            <Button
-                                                size="sm"
-                                                className="bg-amber-600 hover:bg-amber-500 text-white border-none"
-                                                disabled
-                                                title="Coming soon — connect to JIT email drafting"
-                                            >
-                                                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                                                AI 1:1 Draft
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleOpenSelectCampaign(lead)}
-                                            >
-                                                <Send className="w-3.5 h-3.5 mr-1.5" />
-                                                Send Campaign
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => router.push(`/audience/${lead.id}`)}
-                                            >
-                                                View History
-                                                <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
-                                            </Button>
-                                        </div>
+                                        {/* Inline History Timeline */}
+                                        {isExpanded && (
+                                            <div className="border-t border-border/50 px-5 py-4 bg-muted/20">
+                                                <SubscriberHistoryTimeline subscriberId={lead.id} />
+                                            </div>
+                                        )}
                                     </div>
                                 )
                             })}
@@ -384,6 +408,34 @@ export default function CRMPage() {
                                 <Settings2 className="h-3.5 w-3.5 mr-1.5" />
                                 Open Config
                             </Button>
+                        </div>
+                    )}
+
+                    {/* Pagination */}
+                    {!loading && leads.length > PAGE_SIZE && (
+                        <div className="flex items-center justify-between pt-2">
+                            <p className="text-xs text-muted-foreground">
+                                {leads.length === 0 ? "0" : `${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, leads.length)}`} of {leads.length}
+                            </p>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={currentPage <= 1}
+                                    onClick={() => setCurrentPage(p => p - 1)}
+                                >
+                                    <ChevronLeft className="h-4 w-4" />
+                                </Button>
+                                <span className="text-xs text-muted-foreground">Page {currentPage} of {totalPages}</span>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={currentPage >= totalPages}
+                                    onClick={() => setCurrentPage(p => p + 1)}
+                                >
+                                    <ChevronRight className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </div>
                     )}
                 </>
