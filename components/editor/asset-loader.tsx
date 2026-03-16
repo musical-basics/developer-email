@@ -36,8 +36,22 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
         ]).then(([defaults, custom]) => {
             setSavedLinks(defaults)
             setCustomLinks(custom)
+
+            // Auto-populate URL variables from saved default links
+            // This ensures template variables like {{main_cta_url}} get a value
+            // even when the user doesn't manually set them in the asset loader
+            if (defaults) {
+                for (const [key, url] of Object.entries(defaults)) {
+                    if (url && typeof url === "string" && url.trim() !== "") {
+                        // Only auto-fill if the variable exists in the template AND has no value yet
+                        if (variables.includes(key) && !assets[key]) {
+                            onUpdateAsset(key, url)
+                        }
+                    }
+                }
+            }
         })
-    }, [])
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Build non-empty saved links for the dropdown (default + custom)
     const linkEntries = [

@@ -6,7 +6,7 @@ import { AudienceCard, Audience } from "./audience-card"
 import { SenderIdentityCard } from "./sender-identity-card"
 import { PreflightCheckCard } from "./preflight-check-card"
 import { DiscountAuditCard } from "./discount-audit-card"
-import { SendTestCard } from "./send-test-card"
+
 import { LaunchpadCard } from "./launchpad-card"
 import { EmailPreviewCard } from "./email-preview-card"
 import { MergeTagAuditCard } from "./merge-tag-audit-card"
@@ -66,39 +66,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
         setShowConfirmDialog(true)
     }
 
-    const handleSendTest = async (email: string) => {
-        const response = await fetch("/api/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                type: "test",
-                email,
-                campaignId: campaign.id,
-                fromName,
-                fromEmail,
-                clickTracking: trackingFlags.click,
-                openTracking: trackingFlags.open,
-                resendClickTracking: trackingFlags.resendClick,
-                resendOpenTracking: trackingFlags.resendOpen,
-            })
-        })
 
-        const data = await response.json()
-
-        if (!response.ok) {
-            toast({
-                title: "Error sending test email",
-                description: data.error,
-                variant: "destructive"
-            })
-            throw new Error(data.error)
-        } else {
-            toast({
-                title: "Test email sent",
-                description: `Sent to ${email}`
-            })
-        }
-    }
 
     const handleConfirmBroadcast = async () => {
         setShowConfirmDialog(false)
@@ -277,7 +245,7 @@ export function CampaignLaunchChecks({ campaign, audience, targetSubscriber }: C
                             readOnly={campaign.status === "completed"}
                         />
                         <DiscountAuditCard variableValues={campaign.variable_values} />
-                        <SendTestCard onSendTest={handleSendTest} />
+
                         <LaunchpadCard
                             subscriberCount={effectiveSubscriberCount}
                             onLaunch={handleLaunchClick}

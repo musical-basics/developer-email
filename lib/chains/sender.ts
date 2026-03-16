@@ -5,6 +5,7 @@ import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags } from "@/lib/merge-tags";
 import { injectPreheader } from "@/lib/email-preheader";
+import { getDefaultLinks } from "@/app/actions/settings";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
@@ -78,6 +79,12 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
 
     // Multi-discount slots support (with backward compat for legacy single-preset config)
     if (templateVariableValues) {
+        // Resolve default links for URL variable fallback
+        let defaultLinks: Record<string, string> = {};
+        try {
+            defaultLinks = await getDefaultLinks("dreamplay") as unknown as Record<string, string>;
+        } catch { }
+
         const discountSlots: any[] = templateVariableValues.discount_slots || []
         const legacyPresetConfig = templateVariableValues.discount_preset_config
         const legacyIsPerUser = !!templateVariableValues.discount_preset_id && !!legacyPresetConfig
@@ -106,9 +113,12 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
                         finalHtml = finalHtml.replaceAll(slot.preview_code, discountRes.code)
                     }
                     // Also replace discount= param in any URLs
-                    if (slot.target_url_key && templateVariableValues[slot.target_url_key]) {
+                    if (slot.target_url_key) {
+                        // Try variable_values first, then fall back to global default links
                         const targetUrl = templateVariableValues[slot.target_url_key]
-                        if (!targetUrl.includes('discount=')) {
+                            || defaultLinks[slot.target_url_key]
+                            || "";
+                        if (targetUrl && !targetUrl.includes('discount=')) {
                             const escapedUrl = targetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
                             const urlRegex = new RegExp(`(href=["'])${escapedUrl}([^"']*)`, 'g')
                             finalHtml = finalHtml.replace(urlRegex, (match: string, prefix: string, suffix: string) => {

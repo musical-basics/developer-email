@@ -5,6 +5,7 @@ import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags } from "@/lib/merge-tags";
 import { injectPreheader } from "@/lib/email-preheader";
+import { getDefaultLinks } from "@/app/actions/settings";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const supabase = createClient(
@@ -57,7 +58,16 @@ export const sendCampaign = inngest.createFunction(
             return { message: "No recipients found" };
         }
 
-        // 3. Send Emails in Batches
+        // 3. Resolve default links for URL variable fallback (for discount injection)
+        const defaultLinks = await step.run("resolve-default-links", async () => {
+            try {
+                return await getDefaultLinks("dreamplay");
+            } catch {
+                return {};
+            }
+        });
+
+        // 4. Send Emails in Batches
         const result = await step.run("send-emails", async () => {
             const globalHtmlContent = renderTemplate(campaign.html_content || "", campaign.variable_values || {});
 
@@ -127,7 +137,10 @@ export const sendCampaign = inngest.createFunction(
                                     }
                                     const targetUrlKey = slot.target_url_key;
                                     if (targetUrlKey) {
-                                        const targetUrl = campaign.variable_values?.[targetUrlKey];
+                                        // Try variable_values first, then fall back to global default links
+                                        const targetUrl = campaign.variable_values?.[targetUrlKey]
+                                            || (defaultLinks as Record<string, string>)?.[targetUrlKey]
+                                            || "";
                                         if (targetUrl && !targetUrl.includes('discount=')) {
                                             const escapedUrl = targetUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                                             const urlRegex = new RegExp(`(href=["'])${escapedUrl}([^"']*)`, 'g');

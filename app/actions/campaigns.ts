@@ -430,6 +430,13 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
         newVars.discount_slots = discountSlots
     }
 
+    // Resolve default links for URL variable fallback
+    let defaultLinks: Record<string, string> = {};
+    try {
+        const { getDefaultLinks } = await import("@/app/actions/settings");
+        defaultLinks = await getDefaultLinks("dreamplay") as unknown as Record<string, string>;
+    } catch { }
+
     for (const slot of discountSlots) {
         if ((slot.code_mode || "per_user") !== "per_user") continue
         try {
@@ -447,6 +454,10 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
                 slot.preview_code = res.code
                 // Update the target URL with the new code
                 const targetUrlKey = slot.target_url_key
+                // Fall back to default links if URL not in variable_values
+                if (targetUrlKey && !newVars[targetUrlKey] && defaultLinks[targetUrlKey]) {
+                    newVars[targetUrlKey] = defaultLinks[targetUrlKey];
+                }
                 if (targetUrlKey && newVars[targetUrlKey]) {
                     const baseUrl = newVars[targetUrlKey]
                     newVars[targetUrlKey] = baseUrl.includes("discount=")
