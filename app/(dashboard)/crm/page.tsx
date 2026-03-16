@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, useTransition, useCallback } from "react"
-import { Flame, Clock, Target, ArrowRight, Loader2, Sparkles, MessageCircle, RefreshCw, Settings2 } from "lucide-react"
+import { Flame, Clock, Target, ArrowRight, Loader2, Sparkles, MessageCircle, RefreshCw, Settings2, Send } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { formatDistanceToNow } from "date-fns"
@@ -9,6 +9,10 @@ import { useRouter } from "next/navigation"
 import { getCRMLeads } from "@/app/actions/crm"
 import { type CRMLead, type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/lib/crm-types"
 import { CRMConfigPanel, getActiveConfig } from "@/components/crm/crm-config-panel"
+import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
+import { getCampaignList, getRecentlyUsedTemplateIds, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
+import { type Campaign, type Subscriber } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
 
 type Tab = "leads" | "config"
 const CRM_CACHE_KEY = "dp_crm_leads_cache"
@@ -44,6 +48,15 @@ export default function CRMPage() {
     const [activeTab, setActiveTab] = useState<Tab>("leads")
     const [activeConfig, setActiveConfig] = useState<CRMScoringConfig>(DEFAULT_CRM_CONFIG)
     const router = useRouter()
+    const { toast } = useToast()
+
+    // Send Campaign Modal state
+    const [isSelectCampaignOpen, setIsSelectCampaignOpen] = useState(false)
+    const [targetSubscriber, setTargetSubscriber] = useState<Subscriber | null>(null)
+    const [existingCampaigns, setExistingCampaigns] = useState<Campaign[]>([])
+    const [loadingCampaigns, setLoadingCampaigns] = useState(false)
+    const [duplicating, setDuplicating] = useState(false)
+    const [recentlyUsedIds, setRecentlyUsedIds] = useState<string[]>([])
 
     const fetchLeads = useCallback(async (config?: CRMScoringConfig, skipCache = false) => {
         const cfg = config || activeConfig
@@ -80,6 +93,74 @@ export default function CRMPage() {
         setActiveConfig(newConfig)
         setActiveTab("leads")
         fetchLeads(newConfig, true) // always refetch on config change
+    }
+
+    // --- Send Existing Campaign ---
+    const handleOpenSelectCampaign = async (lead: CRMLead) => {
+        // Convert CRMLead to a minimal Subscriber shape for the modal
+        setTargetSubscriber({
+            id: lead.id,
+            email: lead.email,
+            first_name: lead.first_name || "",
+            last_name: lead.last_name || "",
+            country: "", country_code: "", phone_code: "", phone_number: "",
+            shipping_address1: "", shipping_address2: "", shipping_city: "",
+            shipping_zip: "", shipping_province: "",
+            tags: lead.tags || null,
+            status: "active",
+            created_at: "",
+        } as Subscriber)
+        setIsSelectCampaignOpen(true)
+        setLoadingCampaigns(true)
+
+        try {
+            const [campaigns, recentIds] = await Promise.all([
+                getCampaignList(),
+                getRecentlyUsedTemplateIds(),
+            ])
+            setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
+            setRecentlyUsedIds(recentIds)
+        } catch (error) {
+            console.error("Failed to load campaigns", error)
+            toast({ title: "Error loading campaigns", variant: "destructive" })
+        } finally {
+            setLoadingCampaigns(false)
+        }
+    }
+
+    const handleSelectCampaign = async (campaign: Campaign) => {
+        if (!targetSubscriber) return
+
+        setDuplicating(true)
+        try {
+            const name = targetSubscriber.first_name
+                ? `${targetSubscriber.first_name} ${targetSubscriber.last_name || ''}`.trim()
+                : targetSubscriber.email
+
+            const result = await duplicateCampaignForSubscriber(campaign.id, targetSubscriber.id, name)
+
+            if (result.error) {
+                throw new Error(result.error)
+            }
+
+            toast({
+                title: "Campaign Duplicated",
+                description: `Created copy of "${campaign.name}" for ${targetSubscriber.email}. Redirecting...`,
+            })
+
+            if (result.data?.id) {
+                router.push(`/dashboard/${result.data.id}`)
+            }
+            setIsSelectCampaignOpen(false)
+        } catch (error: any) {
+            toast({
+                title: "Error duplicating campaign",
+                description: error.message,
+                variant: "destructive",
+            })
+        } finally {
+            setDuplicating(false)
+        }
     }
 
     return (
@@ -274,6 +355,14 @@ export default function CRMPage() {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
+                                                onClick={() => handleOpenSelectCampaign(lead)}
+                                            >
+                                                <Send className="w-3.5 h-3.5 mr-1.5" />
+                                                Send Campaign
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
                                                 onClick={() => router.push(`/audience/${lead.id}`)}
                                             >
                                                 View History
@@ -299,6 +388,20 @@ export default function CRMPage() {
                     )}
                 </>
             )}
+
+            {/* Send Campaign Modal */}
+            <SendCampaignModal
+                open={isSelectCampaignOpen}
+                onOpenChange={setIsSelectCampaignOpen}
+                campaigns={existingCampaigns}
+                loading={loadingCampaigns}
+                bulkSendMode={false}
+                selectedIds={[]}
+                targetSubscriber={targetSubscriber}
+                recentlyUsedIds={recentlyUsedIds}
+                onSelectCampaign={handleSelectCampaign}
+                duplicating={duplicating}
+            />
         </div>
     )
 }
