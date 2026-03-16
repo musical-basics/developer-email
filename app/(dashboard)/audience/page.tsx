@@ -326,14 +326,34 @@ export default function AudienceManagerPage() {
     }
 
     // Fetch subscriber IDs that have ever clicked a link or visited the website
+    // Paginates through all rows to avoid Supabase's default 1000-row limit
     const fetchClickOrVisitHistory = async () => {
-        const { data, error } = await supabase
-            .from("subscriber_events")
-            .select("subscriber_id")
-            .in("type", ["click", "page_view"])
-        if (!error && data) {
-            setClickOrVisitIds(new Set(data.map((r: { subscriber_id: string }) => r.subscriber_id)))
+        const ids = new Set<string>()
+        let offset = 0
+        const batchSize = 1000
+        let done = false
+
+        while (!done) {
+            const { data, error } = await supabase
+                .from("subscriber_events")
+                .select("subscriber_id")
+                .in("type", ["click", "page_view"])
+                .range(offset, offset + batchSize - 1)
+
+            if (error || !data || data.length === 0) {
+                done = true
+                break
+            }
+
+            for (const row of data) {
+                ids.add((row as { subscriber_id: string }).subscriber_id)
+            }
+
+            if (data.length < batchSize) done = true
+            offset += batchSize
         }
+
+        setClickOrVisitIds(ids)
     }
 
     const fetchTagDefinitions = async () => {
