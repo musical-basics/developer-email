@@ -1620,7 +1620,7 @@ export default function AudienceManagerPage() {
                         onClick={() => setUnsubHistoryFilter(!unsubHistoryFilter)}
                     >
                         <UserCheck className="h-4 w-4" />
-                        Unsub History ({unsubHistoryIds.size})
+                        Unsub History
                     </Button>
 
                     <Button
