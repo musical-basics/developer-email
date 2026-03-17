@@ -1,16 +1,17 @@
 "use client"
 
 import { useEffect, useState, useTransition, useCallback, useMemo } from "react"
-import { Flame, Clock, Target, ArrowRight, Loader2, Sparkles, MessageCircle, RefreshCw, Settings2, Send, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react"
+import { Flame, Clock, Target, ArrowRight, Loader2, Sparkles, MessageCircle, RefreshCw, Settings2, Send, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Mail, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { formatDistanceToNow } from "date-fns"
 import { useRouter } from "next/navigation"
 import { getCRMLeads } from "@/app/actions/crm"
 import { type CRMLead, type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/lib/crm-types"
 import { CRMConfigPanel, getActiveConfig } from "@/components/crm/crm-config-panel"
 import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
-import { getCampaignList, getRecentlyUsedTemplateIds, duplicateCampaignForSubscriber } from "@/app/actions/campaigns"
+import { getCampaignList, getRecentlyUsedTemplateIds, duplicateCampaignForSubscriber, createBulkCampaign } from "@/app/actions/campaigns"
 import { type Campaign, type Subscriber } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { SubscriberHistoryTimeline } from "@/components/audience/subscriber-history-timeline"
@@ -58,6 +59,10 @@ export default function CRMPage() {
     const [loadingCampaigns, setLoadingCampaigns] = useState(false)
     const [duplicating, setDuplicating] = useState(false)
     const [recentlyUsedIds, setRecentlyUsedIds] = useState<string[]>([])
+
+    // Checkbox selection + Bulk Send
+    const [selectedIds, setSelectedIds] = useState<string[]>([])
+    const [bulkSendMode, setBulkSendMode] = useState(false)
 
     // Expandable history
     const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null)
@@ -108,6 +113,49 @@ export default function CRMPage() {
         fetchLeads(newConfig, true) // always refetch on config change
     }
 
+    // --- Checkbox Selection ---
+    const handleSelectAll = () => {
+        const pageIds = paginatedLeads.map((l) => l.id)
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedIds.includes(id))
+        if (allPageSelected) {
+            setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)))
+        } else {
+            setSelectedIds(prev => {
+                const combined = new Set([...prev, ...pageIds])
+                return Array.from(combined)
+            })
+        }
+    }
+
+    const handleSelectOne = (id: string) => {
+        setSelectedIds((prev) => (prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]))
+    }
+
+    const allSelected = paginatedLeads.length > 0 && paginatedLeads.every(l => selectedIds.includes(l.id))
+    const someSelected = selectedIds.length > 0 && !allSelected
+
+    // --- Bulk Send Campaign ---
+    const handleOpenBulkSend = async () => {
+        setBulkSendMode(true)
+        setTargetSubscriber(null)
+        setIsSelectCampaignOpen(true)
+        setLoadingCampaigns(true)
+
+        try {
+            const [campaigns, recentIds] = await Promise.all([
+                getCampaignList(),
+                getRecentlyUsedTemplateIds(),
+            ])
+            setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
+            setRecentlyUsedIds(recentIds)
+        } catch (error) {
+            console.error("Failed to load campaigns", error)
+            toast({ title: "Error loading campaigns", variant: "destructive" })
+        } finally {
+            setLoadingCampaigns(false)
+        }
+    }
+
     // --- Send Existing Campaign ---
     const handleOpenSelectCampaign = async (lead: CRMLead) => {
         // Convert CRMLead to a minimal Subscriber shape for the modal
@@ -123,6 +171,7 @@ export default function CRMPage() {
             status: "active",
             created_at: "",
         } as Subscriber)
+        setBulkSendMode(false)
         setIsSelectCampaignOpen(true)
         setLoadingCampaigns(true)
 
@@ -142,6 +191,41 @@ export default function CRMPage() {
     }
 
     const handleSelectCampaign = async (campaign: Campaign) => {
+        // Bulk send mode — create campaign locked to selected leads and redirect
+        if (bulkSendMode) {
+            setDuplicating(true)
+            try {
+                const result = await createBulkCampaign(campaign.id, selectedIds)
+
+                if (result.error) {
+                    throw new Error(result.error)
+                }
+
+                toast({
+                    title: "Bulk Campaign Created",
+                    description: `Created "${campaign.name}" for ${selectedIds.length} leads. Redirecting to manage...`,
+                })
+
+                setIsSelectCampaignOpen(false)
+                setSelectedIds([])
+                setBulkSendMode(false)
+
+                if (result.data?.id) {
+                    router.push(`/dashboard/${result.data.id}`)
+                }
+            } catch (error: any) {
+                toast({
+                    title: "Error creating bulk campaign",
+                    description: error.message,
+                    variant: "destructive",
+                })
+            } finally {
+                setDuplicating(false)
+            }
+            return
+        }
+
+        // Individual mode — duplicate for single subscriber
         if (!targetSubscriber) return
 
         setDuplicating(true)
@@ -237,8 +321,22 @@ export default function CRMPage() {
             {/* Leads Tab */}
             {activeTab === "leads" && (
                 <>
-                    {/* Score Legend */}
+                    {/* Score Legend + Select All */}
                     <div className="flex items-center gap-6 text-xs text-muted-foreground bg-muted/30 rounded-lg px-4 py-2.5 border border-border">
+                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                                checked={allSelected}
+                                ref={(el) => {
+                                    if (el) {
+                                        const element = el as HTMLButtonElement & { indeterminate: boolean }
+                                        element.indeterminate = someSelected
+                                    }
+                                }}
+                                onCheckedChange={handleSelectAll}
+                            />
+                            <span className="font-medium text-foreground text-xs">Select All</span>
+                        </div>
+                        <span className="border-l border-border h-4" />
                         <span className="font-medium text-foreground">Score Guide:</span>
                         <span className="flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-full bg-red-500" /> 50+ Hot
@@ -250,6 +348,20 @@ export default function CRMPage() {
                             <span className="h-2 w-2 rounded-full bg-zinc-400" /> &lt;25 Interested
                         </span>
                     </div>
+
+                    {/* Selection Action Bar */}
+                    {selectedIds.length > 0 && (
+                        <div className="flex items-center gap-2 p-3 rounded-lg border border-amber-500/30 bg-card">
+                            <Button variant="ghost" size="sm" onClick={() => setSelectedIds([])}>
+                                <X className="h-3.5 w-3.5 mr-1.5" />
+                                Cancel ({selectedIds.length})
+                            </Button>
+                            <Button variant="secondary" size="sm" onClick={handleOpenBulkSend} className="gap-2">
+                                <Mail className="h-4 w-4" />
+                                Bulk Send Campaign
+                            </Button>
+                        </div>
+                    )}
 
                     {/* Loading */}
                     {loading && (
@@ -283,6 +395,14 @@ export default function CRMPage() {
                                             }`}
                                     >
                                         <div className="p-5 flex items-center gap-5">
+                                            {/* Checkbox */}
+                                            <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                                                <Checkbox
+                                                    checked={selectedIds.includes(lead.id)}
+                                                    onCheckedChange={() => handleSelectOne(lead.id)}
+                                                />
+                                            </div>
+
                                             {/* Rank */}
                                             <div className="text-xs text-muted-foreground font-mono w-5 text-center shrink-0">
                                                 {globalIndex + 1}
@@ -447,12 +567,13 @@ export default function CRMPage() {
                 onOpenChange={setIsSelectCampaignOpen}
                 campaigns={existingCampaigns}
                 loading={loadingCampaigns}
-                bulkSendMode={false}
-                selectedIds={[]}
+                bulkSendMode={bulkSendMode}
+                selectedIds={selectedIds}
                 targetSubscriber={targetSubscriber}
                 recentlyUsedIds={recentlyUsedIds}
                 onSelectCampaign={handleSelectCampaign}
                 duplicating={duplicating}
+                onBulkSendModeChange={setBulkSendMode}
             />
         </div>
     )
