@@ -5,6 +5,7 @@ import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags } from "@/lib/merge-tags";
 import { injectPreheader } from "@/lib/email-preheader";
+import { inlineStyles } from "@/lib/email-inline-styles";
 import { getDefaultLinks } from "@/app/actions/settings";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -41,6 +42,8 @@ export async function sendChainEmail(subscriberId: string, email: string, firstN
     };
     rawHtml = renderTemplate(dbTemplate.html_content || "", vars);
     rawHtml = injectPreheader(rawHtml, dbTemplate.variable_values?.preview_text);
+    // Inline CSS class styles into element style attributes (Gmail strips <style> blocks)
+    rawHtml = inlineStyles(rawHtml);
     subject = dbTemplate.subject_line || "No Subject";
     campaignId = dbTemplate.id;
     templateFromName = dbTemplate.variable_values?.from_name || "";

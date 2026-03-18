@@ -6,6 +6,7 @@ import { addPlayButtonsToVideoThumbnails } from "@/lib/video-overlay";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags, applyAllMergeTagsWithLog } from "@/lib/merge-tags";
 import { injectPreheader } from "@/lib/email-preheader";
+import { inlineStyles } from "@/lib/email-inline-styles";
 import { getDefaultLinks } from "@/app/actions/settings";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -41,8 +42,10 @@ export async function POST(request: Request) {
         const globalHtmlContent = renderTemplate(campaign.html_content || "", globalAssets);
         // Inject preview text (preheader) if set
         const htmlWithPreheader = injectPreheader(globalHtmlContent, campaign.variable_values?.preview_text);
+        // Inline all CSS class styles into element style attributes (Gmail strips <style> blocks)
+        const htmlInlined = inlineStyles(htmlWithPreheader);
         // Snapshot email-asset images for broadcast sends (test sends skip this)
-        let htmlContent = htmlWithPreheader;
+        let htmlContent = htmlInlined;
 
         if (type === "test") {
             if (!email) return NextResponse.json({ error: "Test email required" }, { status: 400 });

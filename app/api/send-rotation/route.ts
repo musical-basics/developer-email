@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { Resend } from "resend";
 import { renderTemplate } from "@/lib/render-template";
 import { injectPreheader } from "@/lib/email-preheader";
+import { inlineStyles } from "@/lib/email-inline-styles";
 import { applyAllMergeTags } from "@/lib/merge-tags";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -154,6 +155,8 @@ export async function POST(request: Request) {
                     // Render HTML from template
                     const globalHtml = renderTemplate(template.html_content || "", template.variable_values || {});
                     const htmlWithPreheader = injectPreheader(globalHtml, template.variable_values?.preview_text);
+                    // Inline CSS class styles into element style attributes (Gmail strips <style> blocks)
+                    const htmlWithInlinedStyles = inlineStyles(htmlWithPreheader);
 
                     const unsubscribeFooter = `
 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280; font-family: sans-serif;">
@@ -163,7 +166,7 @@ export async function POST(request: Request) {
   </p>
 </div>
 `;
-                    const htmlWithFooter = htmlWithPreheader + unsubscribeFooter;
+                    const htmlWithFooter = htmlWithInlinedStyles + unsubscribeFooter;
 
                     let campaignSent = 0;
                     let campaignFailed = 0;

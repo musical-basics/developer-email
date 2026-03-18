@@ -5,6 +5,7 @@ import { renderTemplate } from "@/lib/render-template";
 import { createShopifyDiscount } from "@/app/actions/shopify-discount";
 import { applyAllMergeTags } from "@/lib/merge-tags";
 import { injectPreheader } from "@/lib/email-preheader";
+import { inlineStyles } from "@/lib/email-inline-styles";
 import { getDefaultLinks } from "@/app/actions/settings";
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -73,6 +74,8 @@ export const sendCampaign = inngest.createFunction(
 
             // Inject preview text (preheader) if set
             const htmlWithPreheader = injectPreheader(globalHtmlContent, campaign.variable_values?.preview_text);
+            // Inline CSS class styles into element style attributes (Gmail strips <style> blocks)
+            const htmlWithInlinedStyles = inlineStyles(htmlWithPreheader);
 
             // Footer Template
             const unsubscribeFooter = `
@@ -83,7 +86,7 @@ export const sendCampaign = inngest.createFunction(
   </p>
 </div>
 `;
-            const htmlWithFooter = htmlWithPreheader + unsubscribeFooter;
+            const htmlWithFooter = htmlWithInlinedStyles + unsubscribeFooter;
             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://email.dreamplaypianos.com";
 
             let successCount = 0;
