@@ -396,7 +396,7 @@ export async function kickChainStep(processId: string) {
         })
         .eq("id", processId)
 
-    // 7. If not completed, fire a new chain.run for the remaining steps
+    // 7. If not completed, fire a new chain.run starting from the NEW index
     if (!isCompleted) {
         await inngest.send({
             name: "chain.run",
@@ -406,6 +406,7 @@ export async function kickChainStep(processId: string) {
                 subscriberId: proc.subscriber_id,
                 email: subscriber.email,
                 firstName: subscriber.first_name || "",
+                startIndex: newIndex, // skip already-sent steps
                 ...(proc.chain_rotation_id ? { chainRotationId: proc.chain_rotation_id } : {}),
             },
         })

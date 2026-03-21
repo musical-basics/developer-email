@@ -116,10 +116,10 @@ export const genericChainRunner = inngest.createFunction(
         // ─── EXECUTE STEPS SEQUENTIALLY ────────────────
         const sentCampaignIds: string[] = [];
 
-        // Always start from 0 — Inngest's step memoization handles replay.
-        // DO NOT read startIndex from DB — updating current_step_index before sleep
-        // causes the loop to skip past pending sleeps on replay.
-        const startIndex = 0;
+        // For normal runs, start from 0 — Inngest's step memoization handles replay.
+        // For kicked restarts (manual advance), startIndex is passed via event.data
+        // to skip already-sent steps since a fresh run has no memoization cache.
+        const startIndex = event.data.startIndex || 0;
 
         for (let i = startIndex; i < chain.steps.length; i++) {
             const stepDef = chain.steps[i];
