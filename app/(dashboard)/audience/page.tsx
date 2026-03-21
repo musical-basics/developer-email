@@ -102,9 +102,13 @@ import { createClient } from "@/lib/supabase/client"
 import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, createBulkCampaign, getRecentlyUsedTemplateIds } from "@/app/actions/campaigns"
 import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
 import { SendRotationModal } from "@/components/audience/send-rotation-modal"
+import { ChainPickerDialog } from "@/components/audience/chain-picker-dialog"
+import { ChainRotationPickerDialog } from "@/components/audience/chain-rotation-picker-dialog"
+import { BulkAddDialog } from "@/components/audience/bulk-add-dialog"
+import { CsvImportDialog } from "@/components/audience/csv-import-dialog"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
-import { getChainRotations, enrollInChainRotation } from "@/app/actions/chain-rotations"
+import { getChainRotations } from "@/app/actions/chain-rotations"
 import { getTags, ensureTagDefinitions, type TagDefinition } from "@/app/actions/tags"
 import { evaluateTriggersForSubscriber } from "@/app/actions/evaluate-triggers"
 import { useRouter } from "next/navigation"
@@ -229,20 +233,10 @@ export default function AudienceManagerPage() {
     const [isChainRotationPickerOpen, setIsChainRotationPickerOpen] = useState(false)
     const [availableChainRotations, setAvailableChainRotations] = useState<any[]>([])
     const [loadingChainRotations, setLoadingChainRotations] = useState(false)
-    const [enrollingChainRotation, setEnrollingChainRotation] = useState(false)
-    const [selectedChainRotation, setSelectedChainRotation] = useState<any>(null)
 
-    // Bulk Add State
+    // Bulk Add / CSV Import State (dialogs manage their own internal state)
     const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
-    const [bulkEmails, setBulkEmails] = useState("")
-    const [bulkAdding, setBulkAdding] = useState(false)
-
-    // CSV Import State
     const [isCsvImportOpen, setIsCsvImportOpen] = useState(false)
-    const [csvFile, setCsvFile] = useState<File | null>(null)
-    const [csvPreview, setCsvPreview] = useState<string[][]>([])
-    const [csvHeaders, setCsvHeaders] = useState<string[]>([])
-    const [csvImporting, setCsvImporting] = useState(false)
 
     // Bulk Tag State
     const [isBulkTagOpen, setIsBulkTagOpen] = useState(false)
@@ -987,283 +981,9 @@ export default function AudienceManagerPage() {
         }
     }
 
-    const handleBulkEnrollChainRotation = async (rotationId: string, rotationName: string) => {
-        setEnrollingChainRotation(true)
-        try {
-            const result = await enrollInChainRotation(rotationId, selectedIds)
-            if (result.success) {
-                const successCount = result.results?.filter((r: any) => r.success).length || 0
-                toast({
-                    title: "Subscribers enrolled",
-                    description: `${successCount} of ${selectedIds.length} subscriber(s) enrolled into "${rotationName}".`,
-                })
-                setIsChainRotationPickerOpen(false)
-                setSelectedIds([])
-            } else {
-                toast({ title: "Error", description: result.error || "Failed to enroll", variant: "destructive" })
-            }
-        } catch (error) {
-            console.error("Failed to enroll in chain rotation", error)
-            toast({ title: "Enrollment failed", variant: "destructive" })
-        } finally {
-            setEnrollingChainRotation(false)
-        }
-    }
+    // handleBulkEnrollChainRotation moved to ChainRotationPickerDialog
 
-    // Bulk add subscribers from textarea (one email per line)
-    const handleBulkAdd = async () => {
-        const emails = bulkEmails
-            .split(/[\n,;]+/)
-            .map(e => e.trim().toLowerCase())
-            .filter(e => e && e.includes("@"))
 
-        if (emails.length === 0) {
-            toast({ title: "No valid emails found", variant: "destructive" })
-            return
-        }
-
-        const unique = [...new Set(emails)]
-        setBulkAdding(true)
-
-        const rows = unique.map(email => ({
-            email,
-            first_name: "",
-            last_name: "",
-            country: "",
-            country_code: "",
-            phone_code: "",
-            phone_number: "",
-            shipping_address1: "",
-            shipping_address2: "",
-            shipping_city: "",
-            shipping_zip: "",
-            shipping_province: "",
-            tags: [],
-            status: "active" as const,
-        }))
-
-        const { error } = await supabase.from("subscribers").upsert(rows, { onConflict: "email", ignoreDuplicates: true })
-
-        if (error) {
-            toast({ title: "Error adding subscribers", description: error.message, variant: "destructive" })
-        } else {
-            toast({ title: `${unique.length} subscribers added`, description: "Duplicates were skipped." })
-            setIsBulkAddOpen(false)
-            setBulkEmails("")
-            fetchSubscribers()
-        }
-        setBulkAdding(false)
-    }
-
-    // CSV Import - parse file and show preview
-    const handleCsvFileSelect = (file: File) => {
-        setCsvFile(file)
-        const reader = new FileReader()
-        reader.onload = (e) => {
-            const text = e.target?.result as string
-            const lines = text.split(/\r?\n/).filter(l => l.trim())
-            if (lines.length === 0) return
-
-            const parseLine = (line: string): string[] => {
-                const result: string[] = []
-                let current = ""
-                let inQuotes = false
-                for (const char of line) {
-                    if (char === '"') { inQuotes = !inQuotes }
-                    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = "" }
-                    else { current += char }
-                }
-                result.push(current.trim())
-                return result
-            }
-
-            const headers = parseLine(lines[0])
-            setCsvHeaders(headers)
-            const rows = lines.slice(1, 6).map(parseLine)
-            setCsvPreview(rows)
-        }
-        reader.readAsText(file)
-    }
-
-    // CSV Import - smart merge upsert
-    // - New emails: inserted with defaults
-    // - Existing emails: only non-blank CSV fields overwrite; blank cells preserve existing data
-    // - Tags: merged additively (CSV tags are added to existing tags)
-    const handleCsvImport = async () => {
-        if (!csvFile) return
-        setCsvImporting(true)
-
-        const reader = new FileReader()
-        reader.onload = async (e) => {
-            const text = e.target?.result as string
-            const lines = text.split(/\r?\n/).filter(l => l.trim())
-            if (lines.length < 2) {
-                toast({ title: "CSV has no data rows", variant: "destructive" })
-                setCsvImporting(false)
-                return
-            }
-
-            const parseLine = (line: string): string[] => {
-                const result: string[] = []
-                let current = ""
-                let inQuotes = false
-                for (const char of line) {
-                    if (char === '"') { inQuotes = !inQuotes }
-                    else if (char === ',' && !inQuotes) { result.push(current.trim()); current = "" }
-                    else { current += char }
-                }
-                result.push(current.trim())
-                return result
-            }
-
-            const headers = parseLine(lines[0]).map(h => h.toLowerCase().replace(/\s+/g, "_"))
-            const emailIdx = headers.findIndex(h => h === "email" || h === "email_address" || h === "e-mail")
-            if (emailIdx === -1) {
-                toast({ title: "No 'email' column found in CSV", description: "First row must contain headers with an 'email' column.", variant: "destructive" })
-                setCsvImporting(false)
-                return
-            }
-
-            // Map common column names to our fields
-            const idxMap: Record<string, number> = {}
-            headers.forEach((h, i) => {
-                if (h === "first_name" || h === "fname" || h === "first" || h === "firstname") idxMap["first_name"] = i
-                if (h === "last_name" || h === "lname" || h === "last" || h === "lastname") idxMap["last_name"] = i
-                if (h === "country") idxMap["country"] = i
-                if (h === "country_code") idxMap["country_code"] = i
-                if (h === "phone_code") idxMap["phone_code"] = i
-                if (h === "phone" || h === "phone_number" || h === "tel") idxMap["phone_number"] = i
-                if (h === "address" || h === "address_1" || h === "address1" || h === "shipping_address1") idxMap["shipping_address1"] = i
-                if (h === "address_2" || h === "address2" || h === "shipping_address2") idxMap["shipping_address2"] = i
-                if (h === "city" || h === "shipping_city") idxMap["shipping_city"] = i
-                if (h === "zip" || h === "postal_code" || h === "zipcode" || h === "zip_code" || h === "shipping_zip") idxMap["shipping_zip"] = i
-                if (h === "state" || h === "province" || h === "region" || h === "shipping_province") idxMap["shipping_province"] = i
-                if (h === "tags" || h === "tag") idxMap["tags"] = i
-                if (h === "status") idxMap["status"] = i
-            })
-
-            const rows = lines.slice(1).map(parseLine).filter(row => row[emailIdx]?.includes("@"))
-
-            // Build raw parsed rows (keep blanks as empty strings so we know what to skip)
-            const mergeFields = ["first_name", "last_name", "country", "country_code", "phone_code", "phone_number", "shipping_address1", "shipping_address2", "shipping_city", "shipping_zip", "shipping_province"] as const
-            type MergeField = typeof mergeFields[number]
-
-            const csvRows = rows.map(row => {
-                const rawTags = (row[idxMap["tags"]] || "").trim()
-                const rawStatus = (row[idxMap["status"]] || "").trim().toLowerCase()
-                const parsed: Record<string, string | string[]> = {
-                    email: row[emailIdx].toLowerCase().trim(),
-                }
-                for (const f of mergeFields) {
-                    const val = idxMap[f] !== undefined ? (row[idxMap[f]] || "").trim() : ""
-                    parsed[f] = f === "shipping_zip" ? val.replace(/'/g, "") : val
-                }
-                parsed._tags = rawTags ? rawTags.split(/[;,]+/).map((t: string) => t.trim()).filter(Boolean) : []
-                parsed._status = (["active", "inactive", "unsubscribed", "bounced"].includes(rawStatus) ? rawStatus : "")
-                return parsed
-            })
-
-            // Gather all emails to look up existing records
-            const allEmails = csvRows.map(r => r.email as string)
-
-            // Fetch existing subscribers in batches of 500
-            const existingMap = new Map<string, any>()
-            for (let i = 0; i < allEmails.length; i += 500) {
-                const batch = allEmails.slice(i, i + 500)
-                const { data } = await supabase
-                    .from("subscribers")
-                    .select("*")
-                    .in("email", batch)
-                if (data) {
-                    for (const row of data) {
-                        existingMap.set(row.email, row)
-                    }
-                }
-            }
-
-            const toInsert: any[] = []
-            const toUpdate: { id: string; payload: any }[] = []
-
-            for (const csvRow of csvRows) {
-                const email = csvRow.email as string
-                const existing = existingMap.get(email)
-                const csvTags = csvRow._tags as string[]
-                const csvStatus = csvRow._status as string
-
-                if (existing) {
-                    // Merge: only overwrite fields where CSV has a non-blank value
-                    const updates: Record<string, any> = {}
-                    for (const f of mergeFields) {
-                        const csvVal = csvRow[f] as string
-                        if (csvVal) {
-                            updates[f] = csvVal
-                        }
-                    }
-                    // Merge tags additively
-                    if (csvTags.length > 0) {
-                        const existingTags: string[] = existing.tags || []
-                        updates.tags = [...new Set([...existingTags, ...csvTags])]
-                    }
-                    // Only overwrite status if CSV specifies a valid one
-                    if (csvStatus) {
-                        updates.status = csvStatus
-                    }
-                    if (Object.keys(updates).length > 0) {
-                        toUpdate.push({ id: existing.id, payload: updates })
-                    }
-                } else {
-                    // New subscriber: insert with defaults for blank fields
-                    const newSub: Record<string, any> = { email }
-                    for (const f of mergeFields) {
-                        newSub[f] = (csvRow[f] as string) || ""
-                    }
-                    newSub.tags = csvTags
-                    newSub.status = csvStatus || "active"
-                    toInsert.push(newSub)
-                }
-            }
-
-            let addedCount = 0
-            let updatedCount = 0
-
-            // Insert new subscribers in batches
-            for (let i = 0; i < toInsert.length; i += 500) {
-                const chunk = toInsert.slice(i, i + 500)
-                const { error } = await supabase.from("subscribers").insert(chunk)
-                if (error) {
-                    toast({ title: "Error inserting new subscribers", description: error.message, variant: "destructive" })
-                    setCsvImporting(false)
-                    return
-                }
-                addedCount += chunk.length
-            }
-
-            // Update existing subscribers one-by-one (each may have different fields)
-            for (const { id, payload } of toUpdate) {
-                const { error } = await supabase.from("subscribers").update(payload).eq("id", id)
-                if (error) {
-                    console.error(`Failed to update subscriber ${id}:`, error.message)
-                } else {
-                    updatedCount++
-                }
-            }
-
-            const parts: string[] = []
-            if (addedCount > 0) parts.push(`${addedCount} added`)
-            if (updatedCount > 0) parts.push(`${updatedCount} updated`)
-            const skipped = csvRows.length - addedCount - updatedCount
-            if (skipped > 0) parts.push(`${skipped} unchanged`)
-
-            toast({ title: `Import complete`, description: parts.join(", ") + "." })
-            setIsCsvImportOpen(false)
-            setCsvFile(null)
-            setCsvPreview([])
-            setCsvHeaders([])
-            fetchSubscribers()
-            setCsvImporting(false)
-        }
-        reader.readAsText(csvFile)
-    }
 
     // Bulk tag selected subscribers
     const handleBulkTag = async () => {
@@ -2527,296 +2247,40 @@ export default function AudienceManagerPage() {
             />
 
             {/* Chain Picker Dialog */}
-            <Dialog open={isChainPickerOpen} onOpenChange={(open) => { setIsChainPickerOpen(open); if (!open) setBulkChainMode(false) }}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle>{bulkChainMode ? 'Bulk Start Chain' : 'Start Email Chain'}</DialogTitle>
-                        <DialogDescription>
-                            {bulkChainMode
-                                ? `Select a chain to start for ${selectedIds.length} selected subscriber${selectedIds.length !== 1 ? 's' : ''}.`
-                                : `Select a chain to review and start for ${chainTarget?.email}.`
-                            }
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="py-4">
-                        {loadingChains ? (
-                            <div className="flex justify-center py-8">
-                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                            </div>
-                        ) : availableChains.length === 0 ? (
-                            <p className="text-center text-muted-foreground py-8">No chains found. Create one first.</p>
-                        ) : (
-                            <ScrollArea className="h-[300px] pr-4">
-                                <div className="space-y-2">
-                                    {availableChains.map(chain => (
-                                        <div
-                                            key={chain.id}
-                                            onClick={() => {
-                                                if (bulkChainMode) {
-                                                    setIsChainPickerOpen(false)
-                                                    setBulkChainMode(false)
-                                                    router.push(`/chain/${chain.id}?subscriberIds=${selectedIds.join(",")}`)
-                                                } else if (chainTarget) {
-                                                    setIsChainPickerOpen(false)
-                                                    router.push(`/chain/${chain.id}?subscriberId=${chainTarget.id}`)
-                                                }
-                                            }}
-                                            className="p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors"
-                                        >
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <GitBranch className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                                                    <h4 className="font-medium text-sm text-foreground">{chain.name}</h4>
-                                                </div>
-                                                {chain.description && (
-                                                    <p className="text-xs text-muted-foreground line-clamp-2 pl-6">{chain.description}</p>
-                                                )}
-                                                <p className="text-[10px] text-muted-foreground pl-6">
-                                                    {chain.chain_steps?.length || 0} steps · {chain.chain_branches?.length || 0} branches
-                                                </p>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </ScrollArea>
-                        )}
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <ChainPickerDialog
+                open={isChainPickerOpen}
+                onOpenChange={setIsChainPickerOpen}
+                bulkChainMode={bulkChainMode}
+                onBulkChainModeChange={setBulkChainMode}
+                selectedIds={selectedIds}
+                chainTarget={chainTarget}
+                availableChains={availableChains}
+                loadingChains={loadingChains}
+            />
 
             {/* Chain Rotation Picker Dialog */}
-            <Dialog open={isChainRotationPickerOpen} onOpenChange={(open) => { setIsChainRotationPickerOpen(open); if (!open) setSelectedChainRotation(null) }}>
-                <DialogContent className="sm:max-w-md">
-                    {!selectedChainRotation ? (
-                        /* Step 1: Pick a rotation */
-                        <>
-                            <DialogHeader>
-                                <DialogTitle>Bulk Chain Rotation</DialogTitle>
-                                <DialogDescription>
-                                    Select a chain rotation to enroll {selectedIds.length} selected subscriber{selectedIds.length !== 1 ? 's' : ''} into.
-                                </DialogDescription>
-                            </DialogHeader>
-
-                            <div className="py-4">
-                                {loadingChainRotations ? (
-                                    <div className="flex justify-center py-8">
-                                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                                    </div>
-                                ) : availableChainRotations.length === 0 ? (
-                                    <p className="text-center text-muted-foreground py-8">No chain rotations found. Create one first in Chain Rotations.</p>
-                                ) : (
-                                    <ScrollArea className="h-[300px] pr-4">
-                                        <div className="space-y-2">
-                                            {availableChainRotations.map((rot: any) => (
-                                                <div
-                                                    key={rot.id}
-                                                    onClick={() => setSelectedChainRotation(rot)}
-                                                    className="p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors"
-                                                >
-                                                    <div className="space-y-1">
-                                                        <div className="flex items-center gap-2">
-                                                            <RefreshCw className="h-4 w-4 text-primary flex-shrink-0" />
-                                                            <h4 className="font-medium text-sm text-foreground">{rot.name}</h4>
-                                                        </div>
-                                                        <div className="flex flex-wrap gap-1 pl-6">
-                                                            {rot.chains.map((c: any, i: number) => (
-                                                                <span
-                                                                    key={c.id}
-                                                                    className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                                                                        i === (rot.cursor_position || 0) % rot.chains.length
-                                                                            ? "bg-primary/10 text-primary border-primary/30 font-semibold"
-                                                                            : "bg-muted text-muted-foreground border-border"
-                                                                    }`}
-                                                                >
-                                                                    {c.name}
-                                                                </span>
-                                                            ))}
-                                                        </div>
-                                                        <p className="text-[10px] text-muted-foreground pl-6">
-                                                            {rot.chains.length} chains · Cursor at position {(rot.cursor_position || 0) + 1}
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </ScrollArea>
-                                )}
-                            </div>
-                        </>
-                    ) : (
-                        /* Step 2: Confirmation */
-                        <>
-                            <DialogHeader>
-                                <DialogTitle>Confirm Enrollment</DialogTitle>
-                                <DialogDescription>
-                                    Review the details below, then confirm to start enrolling subscribers.
-                                </DialogDescription>
-                            </DialogHeader>
-
-                            <div className="py-4 space-y-4">
-                                {enrollingChainRotation ? (
-                                    <div className="flex flex-col items-center justify-center py-8 gap-2">
-                                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                                        <p className="text-sm text-muted-foreground">Enrolling {selectedIds.length} subscribers…</p>
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* Rotation info */}
-                                        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-                                            <div className="flex items-center gap-2">
-                                                <RefreshCw className="h-4 w-4 text-primary" />
-                                                <span className="font-semibold text-sm">{selectedChainRotation.name}</span>
-                                            </div>
-                                            <div className="flex flex-wrap gap-1 pl-6">
-                                                {selectedChainRotation.chains.map((c: any, i: number) => {
-                                                    const cursor = selectedChainRotation.cursor_position || 0
-                                                    const totalChains = selectedChainRotation.chains.length
-                                                    // How many of selected subscribers land on this chain
-                                                    let count = 0
-                                                    for (let s = 0; s < selectedIds.length; s++) {
-                                                        if ((cursor + s) % totalChains === i) count++
-                                                    }
-                                                    return (
-                                                        <span
-                                                            key={c.id}
-                                                            className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                                                                count > 0
-                                                                    ? "bg-primary/10 text-primary border-primary/30 font-semibold"
-                                                                    : "bg-muted text-muted-foreground border-border"
-                                                            }`}
-                                                        >
-                                                            {c.name} ({count})
-                                                        </span>
-                                                    )
-                                                })}
-                                            </div>
-                                        </div>
-
-                                        {/* Summary */}
-                                        <div className="rounded-lg border border-border p-3 space-y-1">
-                                            <p className="text-sm"><span className="font-medium">{selectedIds.length}</span> subscriber{selectedIds.length !== 1 ? 's' : ''} will be enrolled</p>
-                                            <p className="text-xs text-muted-foreground">Each subscriber will be round-robin assigned to the next chain in the rotation, starting from position {(selectedChainRotation.cursor_position || 0) + 1}.</p>
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="flex justify-end gap-2 pt-1">
-                                            <Button variant="outline" onClick={() => setSelectedChainRotation(null)}>Back</Button>
-                                            <Button onClick={() => handleBulkEnrollChainRotation(selectedChainRotation.id, selectedChainRotation.name)}>
-                                                <UserPlus className="h-4 w-4 mr-2" />
-                                                Confirm & Enroll
-                                            </Button>
-                                        </div>
-                                    </>
-                                )}
-                            </div>
-                        </>
-                    )}
-                </DialogContent>
-            </Dialog>
+            <ChainRotationPickerDialog
+                open={isChainRotationPickerOpen}
+                onOpenChange={setIsChainRotationPickerOpen}
+                selectedIds={selectedIds}
+                availableChainRotations={availableChainRotations}
+                loadingChainRotations={loadingChainRotations}
+                onEnrollComplete={() => setSelectedIds([])}
+            />
 
             {/* Bulk Add Dialog */}
-            <Dialog open={isBulkAddOpen} onOpenChange={setIsBulkAddOpen}>
-                <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Bulk Add Subscribers</DialogTitle>
-                        <DialogDescription>
-                            Paste email addresses below — one per line, or separated by commas.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4 space-y-3">
-                        <Textarea
-                            value={bulkEmails}
-                            onChange={(e) => setBulkEmails(e.target.value)}
-                            placeholder={"john@example.com\njane@example.com\nbob@example.com"}
-                            rows={10}
-                            className="bg-card font-mono text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            {bulkEmails.split(/[\n,;]+/).filter(e => e.trim() && e.includes("@")).length} valid emails detected
-                        </p>
-                    </div>
-                    <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setIsBulkAddOpen(false)}>Cancel</Button>
-                        <Button onClick={handleBulkAdd} disabled={bulkAdding} className="bg-amber-500 text-zinc-900 hover:bg-amber-400">
-                            {bulkAdding ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Adding...</> : "Add All"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <BulkAddDialog
+                open={isBulkAddOpen}
+                onOpenChange={setIsBulkAddOpen}
+                onComplete={fetchSubscribers}
+            />
 
             {/* CSV Import Dialog */}
-            <Dialog open={isCsvImportOpen} onOpenChange={(open) => { setIsCsvImportOpen(open); if (!open) { setCsvFile(null); setCsvPreview([]); setCsvHeaders([]) } }}>
-                <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Import CSV</DialogTitle>
-                        <DialogDescription>
-                            Upload a CSV file with subscriber data. The first row must be headers and must include an &quot;email&quot; column.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4 space-y-4">
-                        {!csvFile ? (
-                            <label className="flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-border p-8 cursor-pointer hover:bg-muted/50 transition-colors">
-                                <FileUp className="h-10 w-10 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">Click to select a CSV file</span>
-                                <input
-                                    type="file"
-                                    accept=".csv,text/csv"
-                                    className="hidden"
-                                    onChange={(e) => e.target.files?.[0] && handleCsvFileSelect(e.target.files[0])}
-                                />
-                            </label>
-                        ) : (
-                            <>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 min-w-0">
-                                        <FileUp className="h-4 w-4 text-amber-500 flex-shrink-0" />
-                                        <span className="text-sm font-medium truncate">{csvFile.name}</span>
-                                        <span className="text-xs text-muted-foreground flex-shrink-0">({(csvFile.size / 1024).toFixed(1)} KB)</span>
-                                    </div>
-                                    <Button variant="ghost" size="sm" onClick={() => { setCsvFile(null); setCsvPreview([]); setCsvHeaders([]) }}>
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                </div>
-
-                                {csvHeaders.length > 0 && (
-                                    <div className="space-y-2">
-                                        <p className="text-xs text-muted-foreground">
-                                            <span className="font-medium text-foreground">{csvHeaders.length}</span> columns detected · Preview (first {csvPreview.length} rows):
-                                        </p>
-                                        <div className="rounded border border-border overflow-auto max-h-[250px]">
-                                            <table className="text-xs">
-                                                <thead className="sticky top-0">
-                                                    <tr className="border-b border-border bg-muted">
-                                                        {csvHeaders.map((h, i) => (
-                                                            <th key={i} className="px-2 py-1.5 text-left font-medium text-foreground whitespace-nowrap">{h}</th>
-                                                        ))}
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {csvPreview.map((row, ri) => (
-                                                        <tr key={ri} className="border-b border-border last:border-0">
-                                                            {csvHeaders.map((_, ci) => (
-                                                                <td key={ci} className="px-2 py-1 text-muted-foreground whitespace-nowrap max-w-[120px] truncate">{row[ci] || ""}</td>
-                                                            ))}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
-                    <div className="flex justify-end gap-2">
-                        <Button variant="outline" onClick={() => setIsCsvImportOpen(false)}>Cancel</Button>
-                        <Button onClick={handleCsvImport} disabled={!csvFile || csvImporting} className="bg-amber-500 text-zinc-900 hover:bg-amber-400">
-                            {csvImporting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Importing...</> : "Import"}
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
+            <CsvImportDialog
+                open={isCsvImportOpen}
+                onOpenChange={setIsCsvImportOpen}
+                onComplete={fetchSubscribers}
+            />
         </div >
     )
 }

@@ -4,7 +4,7 @@
     "maxFileSize": 52428800
   },
   "output": {
-    "filePath": "../dreamplay-email-repomix.xml",
+    "filePath": "dreamplay-email-repomix.xml",
     "style": "xml",
     "parsableStyle": false,
     "fileSummary": true,
@@ -40,7 +40,6 @@
       "scripts/**",
       "supabase/**",
       "hooks/**",
-      "inngest/**",
       "_inngest_lessons.md",
       "all_campaigns.json",
       "campaign_record.json",
@@ -56,6 +55,11 @@
       "lib/parsers/**",
       "app/dnd-editor/**",
       "app/modular-editor/**",
+      "components/editor/**",
+      "app/(dashboard)/migrate/**",
+      "app/(dashboard)/crm/**",
+      "app/(dashboard)/discounts/**",
+      "app/(dashboard)/assets/**",
       "_backup_files/**",
       "docs/**",
       "public/**"
