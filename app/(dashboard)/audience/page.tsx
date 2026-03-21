@@ -103,6 +103,7 @@ import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
 import { SendRotationModal } from "@/components/audience/send-rotation-modal"
 import { getChains, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess } from "@/app/actions/chain-processes"
+import { getChainRotations, enrollInChainRotation } from "@/app/actions/chain-rotations"
 import { getTags, ensureTagDefinitions, type TagDefinition } from "@/app/actions/tags"
 import { evaluateTriggersForSubscriber } from "@/app/actions/evaluate-triggers"
 import { useRouter } from "next/navigation"
@@ -222,6 +223,12 @@ export default function AudienceManagerPage() {
     const [loadingChains, setLoadingChains] = useState(false)
     const [startingChain, setStartingChain] = useState(false)
     const [bulkChainMode, setBulkChainMode] = useState(false)
+
+    // Chain Rotation Bulk Enroll State
+    const [isChainRotationPickerOpen, setIsChainRotationPickerOpen] = useState(false)
+    const [availableChainRotations, setAvailableChainRotations] = useState<any[]>([])
+    const [loadingChainRotations, setLoadingChainRotations] = useState(false)
+    const [enrollingChainRotation, setEnrollingChainRotation] = useState(false)
 
     // Bulk Add State
     const [isBulkAddOpen, setIsBulkAddOpen] = useState(false)
@@ -960,6 +967,44 @@ export default function AudienceManagerPage() {
             toast({ title: "Error loading chains", variant: "destructive" })
         } finally {
             setLoadingChains(false)
+        }
+    }
+
+    // Bulk Chain Rotation — enroll selected subscribers into a chain rotation
+    const handleOpenBulkChainRotation = async () => {
+        setIsChainRotationPickerOpen(true)
+        setLoadingChainRotations(true)
+        try {
+            const rotations = await getChainRotations()
+            setAvailableChainRotations(rotations)
+        } catch (error) {
+            console.error("Failed to load chain rotations", error)
+            toast({ title: "Error loading chain rotations", variant: "destructive" })
+        } finally {
+            setLoadingChainRotations(false)
+        }
+    }
+
+    const handleBulkEnrollChainRotation = async (rotationId: string, rotationName: string) => {
+        setEnrollingChainRotation(true)
+        try {
+            const result = await enrollInChainRotation(rotationId, selectedIds)
+            if (result.success) {
+                const successCount = result.results?.filter((r: any) => r.success).length || 0
+                toast({
+                    title: "Subscribers enrolled",
+                    description: `${successCount} of ${selectedIds.length} subscriber(s) enrolled into "${rotationName}".`,
+                })
+                setIsChainRotationPickerOpen(false)
+                setSelectedIds([])
+            } else {
+                toast({ title: "Error", description: result.error || "Failed to enroll", variant: "destructive" })
+            }
+        } catch (error) {
+            console.error("Failed to enroll in chain rotation", error)
+            toast({ title: "Enrollment failed", variant: "destructive" })
+        } finally {
+            setEnrollingChainRotation(false)
         }
     }
 
@@ -1758,6 +1803,10 @@ export default function AudienceManagerPage() {
                         <RefreshCw className="h-4 w-4" />
                         Send via Rotation
                     </Button>
+                    <Button variant="secondary" onClick={handleOpenBulkChainRotation} className="gap-2">
+                        <RefreshCw className="h-4 w-4" />
+                        Chain Rotation
+                    </Button>
                     <Button variant="destructive" onClick={() => setIsDeleteAlertOpen(true)} className="gap-2">
                         <Trash2 className="h-4 w-4" />
                         Delete Selected
@@ -2523,6 +2572,70 @@ export default function AudienceManagerPage() {
                                                 )}
                                                 <p className="text-[10px] text-muted-foreground pl-6">
                                                     {chain.chain_steps?.length || 0} steps · {chain.chain_branches?.length || 0} branches
+                                                </p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </ScrollArea>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            {/* Chain Rotation Picker Dialog */}
+            <Dialog open={isChainRotationPickerOpen} onOpenChange={setIsChainRotationPickerOpen}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Bulk Chain Rotation</DialogTitle>
+                        <DialogDescription>
+                            Select a chain rotation to enroll {selectedIds.length} selected subscriber{selectedIds.length !== 1 ? 's' : ''} into.
+                            Each subscriber will be round-robin assigned to the next chain.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="py-4">
+                        {loadingChainRotations ? (
+                            <div className="flex justify-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : availableChainRotations.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-8">No chain rotations found. Create one first in Chain Rotations.</p>
+                        ) : enrollingChainRotation ? (
+                            <div className="flex flex-col items-center justify-center py-8 gap-2">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">Enrolling subscribers…</p>
+                            </div>
+                        ) : (
+                            <ScrollArea className="h-[300px] pr-4">
+                                <div className="space-y-2">
+                                    {availableChainRotations.map((rot: any) => (
+                                        <div
+                                            key={rot.id}
+                                            onClick={() => handleBulkEnrollChainRotation(rot.id, rot.name)}
+                                            className="p-3 rounded-lg border border-border cursor-pointer hover:bg-accent transition-colors"
+                                        >
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <RefreshCw className="h-4 w-4 text-primary flex-shrink-0" />
+                                                    <h4 className="font-medium text-sm text-foreground">{rot.name}</h4>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1 pl-6">
+                                                    {rot.chains.map((c: any, i: number) => (
+                                                        <span
+                                                            key={c.id}
+                                                            className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                                                                i === (rot.cursor_position || 0) % rot.chains.length
+                                                                    ? "bg-primary/10 text-primary border-primary/30 font-semibold"
+                                                                    : "bg-muted text-muted-foreground border-border"
+                                                            }`}
+                                                        >
+                                                            {c.name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                                <p className="text-[10px] text-muted-foreground pl-6">
+                                                    {rot.chains.length} chains · Cursor at position {(rot.cursor_position || 0) + 1}
                                                 </p>
                                             </div>
                                         </div>
