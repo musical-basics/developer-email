@@ -121,6 +121,23 @@ export const genericChainRunner = inngest.createFunction(
         // to skip already-sent steps since a fresh run has no memoization cache.
         const startIndex = event.data.startIndex || 0;
 
+        // If manually advanced, the kicked step's wait time is passed in so we sleep
+        // before continuing to the next step
+        if (event.data.initialSleep) {
+            await step.sleep("wait-after-kick", event.data.initialSleep);
+            
+            // Clear the next_step_at after waking up from the initial sleep
+            if (processId) {
+                await step.run("clear-initial-next-step-at", async () => {
+                    const supabase = getSupabase();
+                    await supabase.from("chain_processes").update({
+                        next_step_at: null,
+                        updated_at: new Date().toISOString(),
+                    }).eq("id", processId);
+                });
+            }
+        }
+
         for (let i = startIndex; i < chain.steps.length; i++) {
             const stepDef = chain.steps[i];
 

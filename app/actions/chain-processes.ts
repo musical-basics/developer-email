@@ -370,6 +370,7 @@ export async function kickChainStep(processId: string) {
 
     // Check if the next step needs a wait
     let nextStepAt: string | null = null
+    let inngestDuration: string | null = null
     if (!isCompleted && stepDef.wait_after) {
         // Parse wait duration for the next_step_at display
         const cleaned = stepDef.wait_after.replace(/\(.*\)/, "").trim().toLowerCase()
@@ -378,9 +379,12 @@ export async function kickChainStep(processId: string) {
             const num = parseInt(match[1])
             const unit = match[2]
             let ms = num * 86400000 // default days
-            if (unit.startsWith("min") || unit === "m") ms = num * 60000
-            else if (unit.startsWith("hour") || unit === "h") ms = num * 3600000
-            else if (unit.startsWith("week") || unit === "w") ms = num * 7 * 86400000
+            inngestDuration = `${num}d`
+            
+            if (unit.startsWith("min") || unit === "m") { ms = num * 60000; inngestDuration = `${num}m`; }
+            else if (unit.startsWith("hour") || unit === "h") { ms = num * 3600000; inngestDuration = `${num}h`; }
+            else if (unit.startsWith("week") || unit === "w") { ms = num * 7 * 86400000; inngestDuration = `${num * 7}d`; }
+            
             nextStepAt = new Date(Date.now() + ms).toISOString()
         }
     }
@@ -407,6 +411,7 @@ export async function kickChainStep(processId: string) {
                 email: subscriber.email,
                 firstName: subscriber.first_name || "",
                 startIndex: newIndex, // skip already-sent steps
+                ...(inngestDuration ? { initialSleep: inngestDuration } : {}),
                 ...(proc.chain_rotation_id ? { chainRotationId: proc.chain_rotation_id } : {}),
             },
         })
