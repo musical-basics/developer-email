@@ -794,38 +794,42 @@ function ChainFormDialog({
                                                 </SelectContent>
                                             </Select>
                                         </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-xs text-muted-foreground whitespace-nowrap">Wait</span>
-                                            <Input
-                                                type="number"
-                                                min={0}
-                                                value={parseInt(step.wait_after) || ""}
-                                                onChange={e => {
-                                                    const num = e.target.value
-                                                    const unit = step.wait_after.replace(/^\d+\s*/, "") || "days"
-                                                    updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
-                                                }}
-                                                placeholder="0"
-                                                className="text-xs w-16"
-                                            />
-                                            <Select
-                                                value={step.wait_after.replace(/^\d+\s*/, "").replace(/\s*\(.*\)/, "") || "days"}
-                                                onValueChange={unit => {
-                                                    const num = parseInt(step.wait_after) || 0
-                                                    updateStep(i, "wait_after", num ? `${num} ${unit}` : "")
-                                                }}
-                                            >
-                                                <SelectTrigger className="w-[90px] text-xs">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="minutes" className="text-xs">minutes</SelectItem>
-                                                    <SelectItem value="hours" className="text-xs">hours</SelectItem>
-                                                    <SelectItem value="days" className="text-xs">days</SelectItem>
-                                                    <SelectItem value="weeks" className="text-xs">weeks</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
+                                        {(() => {
+                                            const parsedNum = parseInt(step.wait_after) || 0
+                                            const parsedUnit = step.wait_after.replace(/^\d+\s*/, "").replace(/\s*\(.*\)/, "") || "days"
+                                            return (
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs text-muted-foreground whitespace-nowrap">Wait</span>
+                                                    <Input
+                                                        type="number"
+                                                        min={0}
+                                                        value={parsedNum || ""}
+                                                        onChange={e => {
+                                                            const num = e.target.value
+                                                            updateStep(i, "wait_after", num ? `${num} ${parsedUnit}` : "")
+                                                        }}
+                                                        placeholder="0"
+                                                        className="text-xs w-16"
+                                                    />
+                                                    <Select
+                                                        value={parsedUnit}
+                                                        onValueChange={unit => {
+                                                            updateStep(i, "wait_after", `${parsedNum} ${unit}`)
+                                                        }}
+                                                    >
+                                                        <SelectTrigger className="w-[90px] text-xs">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="minutes" className="text-xs">minutes</SelectItem>
+                                                            <SelectItem value="hours" className="text-xs">hours</SelectItem>
+                                                            <SelectItem value="days" className="text-xs">days</SelectItem>
+                                                            <SelectItem value="weeks" className="text-xs">weeks</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                            )
+                                        })()}
                                     </div>
                                 </div>
                             ))}
