@@ -64,7 +64,7 @@ export async function getSubscriberChains(subscriberId: string) {
             current_step_index,
             created_at,
             updated_at,
-            email_chains ( id, name, slug )
+            email_chains!chain_processes_chain_id_fkey ( id, name, slug )
         `)
         .eq('subscriber_id', subscriberId)
         .order('created_at', { ascending: false })

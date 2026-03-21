@@ -219,7 +219,7 @@ export async function getChainProcesses(): Promise<{ data: ChainProcess[]; error
         .from("chain_processes")
         .select(`
             *,
-            email_chains ( name, chain_steps ( * ), chain_branches ( * ) ),
+            email_chains!chain_processes_chain_id_fkey ( name, chain_steps ( * ), chain_branches ( * ) ),
             subscribers ( email, first_name )
         `)
         .order("created_at", { ascending: false })
