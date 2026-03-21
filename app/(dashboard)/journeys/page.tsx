@@ -22,7 +22,7 @@ import {
 import {
     GitBranch, Mail, Clock, ChevronDown, ChevronUp,
     Zap, ArrowRight, Eye, MousePointer2, Ghost, GraduationCap,
-    Plus, Pencil, Trash2, X, Pause, Play, XCircle, User, Timer, Loader2, CheckCircle2, GripVertical, Star
+    Plus, Pencil, Trash2, X, Pause, Play, XCircle, User, Timer, Loader2, CheckCircle2, GripVertical, Star, SkipForward
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
@@ -30,7 +30,7 @@ import {
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
 import { getCampaignList } from "@/app/actions/campaigns"
-import { getChainProcesses, updateProcessStatus } from "@/app/actions/chain-processes"
+import { getChainProcesses, updateProcessStatus, kickChainStep } from "@/app/actions/chain-processes"
 import type { ChainProcess, ChainProcessHistoryEntry } from "@/lib/types"
 import { CustomerJourneysTab } from "@/components/chains/customer-journeys-tab"
 
@@ -933,6 +933,7 @@ function ChainProcessCard({
 }) {
     const [expanded, setExpanded] = useState(false)
     const [updating, setUpdating] = useState(false)
+    const [kicking, setKicking] = useState(false)
     const { toast } = useToast()
 
     const handleStatusChange = async (newStatus: "active" | "paused" | "cancelled") => {
@@ -988,6 +989,28 @@ function ChainProcessCard({
                                         <Play className="h-3.5 w-3.5 mr-1" /> Resume
                                     </Button>
                                 ) : null}
+                                {process.status === "active" && process.next_step_at && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={async () => {
+                                            setKicking(true)
+                                            const result = await kickChainStep(process.id)
+                                            setKicking(false)
+                                            if (result.success) {
+                                                toast({ title: "Step kicked", description: `Sent "${result.stepLabel}" immediately.${result.completed ? " Chain completed!" : ""}` })
+                                                onStatusChange(process.id, result.completed ? "completed" as any : "active")
+                                            } else {
+                                                toast({ title: "Kick failed", description: result.error, variant: "destructive" })
+                                            }
+                                        }}
+                                        disabled={kicking}
+                                        className="text-sky-400 border-sky-500/30 hover:bg-sky-500/10"
+                                    >
+                                        {kicking ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <SkipForward className="h-3.5 w-3.5 mr-1" />}
+                                        Kick
+                                    </Button>
+                                )}
                                 <Button
                                     variant="outline"
                                     size="sm"

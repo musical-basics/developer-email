@@ -293,3 +293,124 @@ export async function updateProcessStatus(processId: string, newStatus: "active"
     revalidatePath("/journeys")
     return { success: true }
 }
+
+// ─── KICK CHAIN STEP (advance immediately) ─────────────────
+// Manually trigger the next pending step without waiting for the timer.
+// Cancels the current Inngest run, sends the email, and restarts from the new position.
+export async function kickChainStep(processId: string) {
+    const supabase = await createClient()
+
+    // 1. Fetch the process
+    const { data: proc, error: procError } = await supabase
+        .from("chain_processes")
+        .select("*")
+        .eq("id", processId)
+        .single()
+
+    if (procError || !proc) {
+        return { success: false, error: "Process not found" }
+    }
+
+    if (proc.status !== "active") {
+        return { success: false, error: `Process is ${proc.status}, not active` }
+    }
+
+    // 2. Fetch chain steps
+    const { data: steps } = await supabase
+        .from("chain_steps")
+        .select("*")
+        .eq("chain_id", proc.chain_id)
+        .order("position", { ascending: true })
+
+    if (!steps || steps.length === 0) {
+        return { success: false, error: "No steps found for this chain" }
+    }
+
+    const currentIndex = proc.current_step_index || 0
+    if (currentIndex >= steps.length) {
+        return { success: false, error: "Chain already completed all steps" }
+    }
+
+    const stepDef = steps[currentIndex]
+
+    // 3. Fetch subscriber details
+    const { data: subscriber } = await supabase
+        .from("subscribers")
+        .select("email, first_name")
+        .eq("id", proc.subscriber_id)
+        .single()
+
+    if (!subscriber) {
+        return { success: false, error: "Subscriber not found" }
+    }
+
+    // 4. Cancel the current Inngest run
+    await inngest.send({ name: "chain.cancel", data: { processId } })
+
+    // 5. Send the email directly
+    const { sendChainEmail } = await import("@/lib/chains/sender")
+    const sendResult = await sendChainEmail(
+        proc.subscriber_id,
+        subscriber.email,
+        subscriber.first_name || "",
+        stepDef.template_key
+    )
+
+    // 6. Update DB — advance current_step_index, log to history
+    const history = proc.history || []
+    history.push({
+        step_name: stepDef.label,
+        action: "Manual Kick — Email Sent",
+        timestamp: new Date().toISOString(),
+        details: `Campaign: ${sendResult?.campaignId || "N/A"}`,
+    })
+
+    const newIndex = currentIndex + 1
+    const isCompleted = newIndex >= steps.length
+
+    // Check if the next step needs a wait
+    let nextStepAt: string | null = null
+    if (!isCompleted && stepDef.wait_after) {
+        // Parse wait duration for the next_step_at display
+        const cleaned = stepDef.wait_after.replace(/\(.*\)/, "").trim().toLowerCase()
+        const match = cleaned.match(/^(\d+)\s*(day|days|d|hour|hours|h|minute|minutes|min|m|week|weeks|w)$/)
+        if (match) {
+            const num = parseInt(match[1])
+            const unit = match[2]
+            let ms = num * 86400000 // default days
+            if (unit.startsWith("min") || unit === "m") ms = num * 60000
+            else if (unit.startsWith("hour") || unit === "h") ms = num * 3600000
+            else if (unit.startsWith("week") || unit === "w") ms = num * 7 * 86400000
+            nextStepAt = new Date(Date.now() + ms).toISOString()
+        }
+    }
+
+    await supabase
+        .from("chain_processes")
+        .update({
+            current_step_index: newIndex,
+            status: isCompleted ? "completed" : "active",
+            next_step_at: isCompleted ? null : nextStepAt,
+            history,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", processId)
+
+    // 7. If not completed, fire a new chain.run for the remaining steps
+    if (!isCompleted) {
+        await inngest.send({
+            name: "chain.run",
+            data: {
+                processId: proc.id,
+                chainId: proc.chain_id,
+                subscriberId: proc.subscriber_id,
+                email: subscriber.email,
+                firstName: subscriber.first_name || "",
+                ...(proc.chain_rotation_id ? { chainRotationId: proc.chain_rotation_id } : {}),
+            },
+        })
+    }
+
+    revalidatePath("/journeys")
+    return { success: true, completed: isCompleted, stepLabel: stepDef.label }
+}
