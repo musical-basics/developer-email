@@ -33,6 +33,7 @@ const navGroups: NavGroup[] = [
             { name: "Journeys", href: "/journeys", icon: Route },
             { name: "Discounts", href: "/discounts", icon: TicketPercent },
             { name: "Rotations", href: "/rotations", icon: RefreshCw },
+            { name: "Chain Rotations", href: "/chain-rotations", icon: Route },
             { name: "Logs", href: "/logs", icon: ScrollText },
             { name: "Mailchimp Import", href: "/migrate", icon: ArrowDownToLine },
         ],

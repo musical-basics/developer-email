@@ -37,7 +37,7 @@ export const genericChainRunner = inngest.createFunction(
     },
     { event: "chain.run" },
     async ({ event, step }) => {
-        const { processId, chainId, subscriberId, email, firstName } = event.data;
+        const { processId, chainId, subscriberId, email, firstName, chainRotationId } = event.data;
         const supabase = getSupabase();
 
         // ─── Helper: Append to process history in DB ───
@@ -220,6 +220,7 @@ export const genericChainRunner = inngest.createFunction(
                                 sent_from_email: originalCampaign.sent_from_email,
                                 parent_template_id: stepDef.template_key,
                                 total_recipients: 1,
+                                ...(chainRotationId ? { chain_rotation_id: chainRotationId } : {}),
                             })
                             .select("id")
                             .single();

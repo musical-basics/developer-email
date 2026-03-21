@@ -7,7 +7,11 @@ import type { ChainProcess } from "@/lib/types"
 import { duplicateChain } from "@/app/actions/chains"
 
 // ─── START A CHAIN PROCESS ─────────────────────────────────
-export async function startChainProcess(subscriberId: string, chainId: string) {
+export async function startChainProcess(
+    subscriberId: string,
+    chainId: string,
+    rotationOptions?: { chainRotationId?: string; originalChainId?: string }
+) {
     const supabase = await createClient()
 
     // Fetch subscriber details
@@ -179,6 +183,8 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
             status: "active",
             current_step_index: 0,
             history: historyEntries,
+            ...(rotationOptions?.chainRotationId ? { chain_rotation_id: rotationOptions.chainRotationId } : {}),
+            ...(rotationOptions?.originalChainId ? { original_chain_id: rotationOptions.originalChainId } : {}),
         })
         .select("id")
         .single()
@@ -197,6 +203,7 @@ export async function startChainProcess(subscriberId: string, chainId: string) {
             subscriberId,
             email: subscriber.email,
             firstName: subscriber.first_name || "",
+            ...(rotationOptions?.chainRotationId ? { chainRotationId: rotationOptions.chainRotationId } : {}),
         },
     })
 
