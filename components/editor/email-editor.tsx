@@ -8,7 +8,7 @@ import { CopilotPane } from "./copilot-pane"
 import { CampaignPicker } from "./campaign-picker"
 import { DiscountManagerModal } from "./discount-manager-modal"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, Code } from "lucide-react"
+import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, Code, ChevronDown, ChevronUp } from "lucide-react"
 
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -67,6 +67,7 @@ export function EmailEditor({
 }: EmailEditorProps) {
     const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
+    const [settingsCollapsed, setSettingsCollapsed] = useState(false)
 
     // Hide code pane by default for a friendlier view
     const [isCodeOpen, setIsCodeOpen] = useState(false)
@@ -172,74 +173,92 @@ export function EmailEditor({
                         </div>
 
                         {/* Campaign Settings */}
-                        <div className="p-4 border-b border-border bg-muted/20 space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Subject Line</label>
-                                <input
-                                    type="text"
-                                    value={subjectLine}
-                                    onChange={(e) => onSubjectChange(e.target.value)}
-                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
-                                    placeholder="Enter subject line..."
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Preview Text</label>
-                                <textarea
-                                    value={previewText}
-                                    onChange={(e) => onPreviewTextChange(e.target.value)}
-                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary resize-none"
-                                    placeholder="Text shown in inbox before opening..."
-                                    rows={2}
-                                />
-                            </div>
-                            <div className="grid grid-cols-1 gap-2">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Name</label>
-                                    <input
-                                        type="text"
-                                        value={fromName}
-                                        onChange={(e) => onSenderChange("name", e.target.value)}
-                                        className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
-                                        placeholder="Lionel Yu"
-                                    />
+                        <div className="border-b border-border bg-muted/20">
+                            <button
+                                type="button"
+                                onClick={() => setSettingsCollapsed(!settingsCollapsed)}
+                                className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-muted/40 transition-colors"
+                            >
+                                <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wider">Campaign Settings</span>
+                                {settingsCollapsed ? <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />}
+                            </button>
+                            <div
+                                className="overflow-hidden transition-all duration-300 ease-in-out"
+                                style={{
+                                    maxHeight: settingsCollapsed ? '0px' : '600px',
+                                    opacity: settingsCollapsed ? 0 : 1,
+                                }}
+                            >
+                                <div className="px-4 pb-4 space-y-3">
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] uppercase font-semibold text-muted-foreground">Subject Line</label>
+                                        <input
+                                            type="text"
+                                            value={subjectLine}
+                                            onChange={(e) => onSubjectChange(e.target.value)}
+                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                            placeholder="Enter subject line..."
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] uppercase font-semibold text-muted-foreground">Preview Text</label>
+                                        <textarea
+                                            value={previewText}
+                                            onChange={(e) => onPreviewTextChange(e.target.value)}
+                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary resize-none"
+                                            placeholder="Text shown in inbox before opening..."
+                                            rows={2}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-2">
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Name</label>
+                                            <input
+                                                type="text"
+                                                value={fromName}
+                                                onChange={(e) => onSenderChange("name", e.target.value)}
+                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                                placeholder="Lionel Yu"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Email</label>
+                                            <input
+                                                type="text"
+                                                value={fromEmail}
+                                                onChange={(e) => onSenderChange("email", e.target.value)}
+                                                className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
+                                                placeholder="lionel@..."
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] uppercase font-semibold text-muted-foreground">Target Audience</label>
+                                        <select
+                                            value={audienceContext}
+                                            onChange={(e) => onAudienceChange(e.target.value as any)}
+                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary cursor-pointer"
+                                        >
+                                            <option value="dreamplay">DreamPlay</option>
+                                            <option value="musicalbasics">MusicalBasics</option>
+                                            <option value="both">Both (Crossover)</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-[10px] uppercase font-semibold text-muted-foreground">Email Type</label>
+                                        <select
+                                            value={emailType}
+                                            onChange={(e) => onEmailTypeChange(e.target.value as any)}
+                                            className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary cursor-pointer"
+                                        >
+                                            <option value="campaign">Campaign</option>
+                                            <option value="automated">Automated Email</option>
+                                        </select>
+                                    </div>
+                                    <div className="pt-3 border-t border-border mt-3">
+                                        <DiscountManagerModal assets={assets} onAssetsChange={onAssetsChange} templateVariables={extractedVariables} />
+                                    </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] uppercase font-semibold text-muted-foreground">From Email</label>
-                                    <input
-                                        type="text"
-                                        value={fromEmail}
-                                        onChange={(e) => onSenderChange("email", e.target.value)}
-                                        className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary"
-                                        placeholder="lionel@..."
-                                    />
-                                </div>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Target Audience</label>
-                                <select
-                                    value={audienceContext}
-                                    onChange={(e) => onAudienceChange(e.target.value as any)}
-                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary cursor-pointer"
-                                >
-                                    <option value="dreamplay">DreamPlay</option>
-                                    <option value="musicalbasics">MusicalBasics</option>
-                                    <option value="both">Both (Crossover)</option>
-                                </select>
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-[10px] uppercase font-semibold text-muted-foreground">Email Type</label>
-                                <select
-                                    value={emailType}
-                                    onChange={(e) => onEmailTypeChange(e.target.value as any)}
-                                    className="w-full bg-background border border-border rounded px-2 py-1 text-xs focus:outline-none focus:border-primary cursor-pointer"
-                                >
-                                    <option value="campaign">Campaign</option>
-                                    <option value="automated">Automated Email</option>
-                                </select>
-                            </div>
-                            <div className="pt-3 border-t border-border mt-3">
-                                <DiscountManagerModal assets={assets} onAssetsChange={onAssetsChange} templateVariables={extractedVariables} />
                             </div>
                         </div>
 
