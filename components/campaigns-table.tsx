@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, Download, ChevronDown, ChevronUp, Tag, X, FolderInput } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, Download, ChevronDown, ChevronUp, Tag, X, FolderInput, GripVertical } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { useDraggable } from "@dnd-kit/core"
+import { CSS } from "@dnd-kit/utilities"
 
 import { createClient } from "@/lib/supabase/client"
 import { duplicateCampaign, deleteCampaign, toggleTemplateStatus, toggleReadyStatus, updateCampaignCategory, toggleCampaignStarred } from "@/app/actions/campaigns"
@@ -54,9 +56,10 @@ interface CampaignsTableProps {
     serverPagination?: ServerPagination
     showFolderActions?: boolean
     folders?: TemplateFolder[]
+    isRowDraggable?: boolean
 }
 
-export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false, sortBy = "created_at", paginate = false, serverPagination, showFolderActions = false, folders = [] }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false, sortBy = "created_at", paginate = false, serverPagination, showFolderActions = false, folders = [], isRowDraggable = false }: CampaignsTableProps) {
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [newName, setNewName] = useState("")
@@ -289,6 +292,8 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
         return <div className="text-center py-10 text-muted-foreground opacity-50">Loading metrics...</div>
     }
 
+    const colSpan = (showAnalytics ? 9 : 3) + (enableBulkDelete ? 1 : 0) + (isRowDraggable ? 1 : 0)
+
     return (
         <div className="rounded-lg border border-border bg-card">
             <div className="border-b border-border px-6 py-4 flex justify-between items-center">
@@ -318,6 +323,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                 />
                             </TableHead>
                         )}
+                        {isRowDraggable && <TableHead className="w-[40px] px-3"></TableHead>}
                         <TableHead className="text-muted-foreground w-[300px]">Campaign</TableHead>
                         <TableHead className="text-center w-[100px]">Status</TableHead>
                         {/* New Metrics Columns */}
@@ -373,7 +379,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                 <TableBody>
                     {campaigns.length === 0 ? (
                         <TableRow>
-                            <TableCell colSpan={(showAnalytics ? 9 : 3) + (enableBulkDelete ? 1 : 0)} className="text-center py-8 text-muted-foreground">
+                            <TableCell colSpan={colSpan} className="text-center py-8 text-muted-foreground">
                                 No campaigns found. Create one to get started.
                             </TableCell>
                         </TableRow>
@@ -400,7 +406,13 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
 
                             return (
                                 <>
-                                    <TableRow key={campaign.id} className={`border-border ${selectedIds.has(campaign.id) ? 'bg-primary/5' : ''} ${hasBreakdown ? 'cursor-pointer' : ''}`} onClick={hasBreakdown ? () => toggleExpand(campaign.id) : undefined}>
+                                    <DraggableRow
+                                        key={campaign.id}
+                                        campaign={campaign}
+                                        isRowDraggable={isRowDraggable}
+                                        className={`border-border ${selectedIds.has(campaign.id) ? 'bg-primary/5' : ''} ${hasBreakdown ? 'cursor-pointer' : ''}`}
+                                        onClick={hasBreakdown ? () => toggleExpand(campaign.id) : undefined}
+                                    >
                                         {enableBulkDelete && (
                                             <TableCell className="px-3" onClick={(e) => e.stopPropagation()}>
                                                 <Checkbox
@@ -801,11 +813,11 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                 </Button>
                                             </div>
                                         </TableCell>
-                                    </TableRow>
+                                    </DraggableRow>
                                     {/* Per-recipient breakdown drawer */}
                                     {hasBreakdown && isExpanded && (
                                         <TableRow key={`${campaign.id}-breakdown`} className="border-border bg-neutral-900/50">
-                                            <TableCell colSpan={colCount} className="p-0">
+                                            <TableCell colSpan={colSpan} className="p-0">
                                                 <div className="px-6 py-3 space-y-1.5">
                                                     <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Per-Recipient Breakdown</div>
                                                     {campaign.recipient_breakdown!.map((r) => (
@@ -941,5 +953,41 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                 </DialogContent>
             </Dialog>
         </div>
+    )
+}
+
+function DraggableRow({
+    campaign,
+    isRowDraggable,
+    children,
+    ...props
+}: any) {
+    const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+        id: `campaign-${campaign.id}`,
+        data: {
+            type: "Campaign",
+            campaign,
+        },
+        disabled: !isRowDraggable,
+    })
+
+    const style = transform ? {
+        transform: CSS.Translate.toString(transform),
+        zIndex: isDragging ? 50 : "auto",
+        position: isDragging ? "relative" as any : "static" as any,
+        opacity: isDragging ? 0.5 : 1,
+    } : undefined
+
+    return (
+        <TableRow ref={setNodeRef} style={style} {...props}>
+            {isRowDraggable && (
+                <TableCell className="px-3" onClick={(e) => e.stopPropagation()}>
+                    <div {...listeners} {...attributes} className="cursor-grab hover:bg-muted p-1 rounded transition-colors flex items-center justify-center">
+                        <GripVertical className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                </TableCell>
+            )}
+            {children}
+        </TableRow>
     )
 }

@@ -98,16 +98,51 @@ export async function deleteTemplateFolder(id: string) {
 
 export async function moveTemplateToFolder(campaignId: string, folderId: string | null) {
     const supabase = await createClient()
-    const { error } = await supabase
-        .from("campaigns")
-        .update({ template_folder_id: folderId })
-        .eq("id", campaignId)
+    try {
+        const { error } = await supabase
+            .from("campaigns")
+            .update({ template_folder_id: folderId })
+            .eq("id", campaignId)
 
-    if (error) {
-        console.error("Error moving template to folder:", error)
-        return { error: error.message }
+        if (error) {
+            console.error("Error moving template to folder:", error)
+            return { error: error.message }
+        }
+
+        revalidatePath("/campaigns")
+        return { success: true }
+    } catch (e: any) {
+        console.error("Error moving template:", e)
+        return { error: e.message }
     }
+}
 
-    revalidatePath("/campaigns")
-    return { success: true }
+/**
+ * Reorder template folders by updating their sort_order
+ */
+export async function reorderTemplateFolders(folderIds: string[]): Promise<{ error?: string }> {
+    try {
+        const supabase = await createClient()
+
+        // To update multiple records efficiently without a raw SQL postgres function,
+        // we can either execute them sequentially or use a bulk upsert.
+        // Since the number of folders is likely small, sequential updates are fine.
+        for (let i = 0; i < folderIds.length; i++) {
+            const { error } = await supabase
+                .from("template_folders")
+                .update({ sort_order: i })
+                .eq("id", folderIds[i])
+
+            if (error) {
+                console.error("Failed to update sort order for folder", folderIds[i], error)
+                throw new Error(error.message)
+            }
+        }
+
+        revalidatePath("/campaigns")
+        return {}
+    } catch (e: any) {
+        console.error("Error reordering template folders:", e)
+        return { error: e.message }
+    }
 }

@@ -1,11 +1,15 @@
 import { CampaignsTabs } from "@/components/campaigns/campaigns-tabs"
 import { CreateCampaignDialog } from "@/components/campaigns/create-campaign-dialog"
 import { getCampaigns } from "@/app/actions/campaigns"
+import { getTemplateFolders } from "@/app/actions/template-folders"
 
 export const dynamic = "force-dynamic"
 
 export default async function CampaignsPage() {
-    const { campaigns, totalCompleted } = await getCampaigns("campaign")
+    const [{ campaigns, totalCompleted }, folders] = await Promise.all([
+        getCampaigns("campaign"),
+        getTemplateFolders(),
+    ])
 
     return (
         <div className="p-6 space-y-6">
@@ -19,7 +23,7 @@ export default async function CampaignsPage() {
                 <CreateCampaignDialog />
             </div>
 
-            <CampaignsTabs campaigns={campaigns} totalCompleted={totalCompleted} emailType="campaign" />
+            <CampaignsTabs campaigns={campaigns} totalCompleted={totalCompleted} emailType="campaign" folders={folders} />
         </div>
     )
 }
