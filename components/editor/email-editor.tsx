@@ -8,7 +8,8 @@ import { CopilotPane } from "./copilot-pane"
 import { CampaignPicker } from "./campaign-picker"
 import { DiscountManagerModal } from "./discount-manager-modal"
 import { renderTemplate } from "@/lib/render-template"
-import { Monitor, Smartphone, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, Code, ChevronDown, ChevronUp } from "lucide-react"
+import { Monitor, Smartphone, Tablet, Loader2, Check, PanelRightClose, PanelRightOpen, ArrowLeft, Rocket, History, Code, ChevronDown, ChevronUp } from "lucide-react"
+import { TestVariablesPopover } from "./test-variables-popover"
 
 import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
@@ -65,7 +66,8 @@ export function EmailEditor({
     campaignId,
     onRestore
 }: EmailEditorProps) {
-    const [viewMode, setViewMode] = useState<'desktop' | 'mobile'>('desktop')
+    const [viewMode, setViewMode] = useState<'desktop' | 'tablet' | 'mobile-l' | 'mobile'>('desktop')
+    const [testMergeTags, setTestMergeTags] = useState<Record<string, string>>({})
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success'>('idle')
     const [settingsCollapsed, setSettingsCollapsed] = useState(false)
 
@@ -122,9 +124,32 @@ export function EmailEditor({
         onAssetsChange({ ...assets, [key]: value })
     }, [assets, onAssetsChange])
 
+    const STANDARD_TAGS = ["first_name", "last_name", "email", "subscriber_id", "location_city", "location_country", "discount_code", "unsubscribe_url", "unsubscribe_link", "unsubscribe_link_url"]
+
+    const testableVariables = useMemo(() => {
+        return extractedVariables.filter(v => 
+            STANDARD_TAGS.includes(v.toLowerCase()) || 
+            (!assets[v] && !v.includes("url") && !v.includes("img") && !v.includes("src") && !v.endsWith("_fit"))
+        )
+    }, [extractedVariables, assets])
+
     const previewHtml = useMemo(() => {
-        return renderTemplate(html, assets)
-    }, [html, assets])
+        let rendered = renderTemplate(html, assets)
+        if (Object.keys(testMergeTags).length > 0) {
+            rendered = renderTemplate(rendered, testMergeTags)
+        }
+        return rendered
+    }, [html, assets, testMergeTags])
+
+    const previewWidth = useMemo(() => {
+        switch (viewMode) {
+            case 'mobile': return '320px'
+            case 'mobile-l': return '414px'
+            case 'tablet': return '768px'
+            case 'desktop': return '100%'
+            default: return '100%'
+        }
+    }, [viewMode])
 
     const handleSaveClick = async () => {
         if (!onSave) return
@@ -307,9 +332,32 @@ export function EmailEditor({
                                             "p-1.5 rounded-md transition-all",
                                             viewMode === 'desktop' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                                         )}
-                                        title="Desktop View"
+                                        title="Desktop View (100%)"
                                     >
                                         <Monitor className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('tablet')}
+                                        className={cn(
+                                            "p-1.5 rounded-md transition-all",
+                                            viewMode === 'tablet' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                        title="Tablet View (768px)"
+                                    >
+                                        <Tablet className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => setViewMode('mobile-l')}
+                                        className={cn(
+                                            "p-1.5 rounded-md transition-all",
+                                            viewMode === 'mobile-l' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
+                                        )}
+                                        title="Mobile L View (414px)"
+                                    >
+                                        <div className="relative">
+                                            <Smartphone className="w-4 h-4" />
+                                            <span className="absolute -bottom-1 -right-1 text-[8px] font-bold bg-background rounded-full w-2.5 h-2.5 flex items-center justify-center pointer-events-none">L</span>
+                                        </div>
                                     </button>
                                     <button
                                         onClick={() => setViewMode('mobile')}
@@ -317,10 +365,22 @@ export function EmailEditor({
                                             "p-1.5 rounded-md transition-all",
                                             viewMode === 'mobile' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
                                         )}
-                                        title="Mobile View"
+                                        title="Mobile View (320px)"
                                     >
-                                        <Smartphone className="w-4 h-4" />
+                                        <Smartphone className="w-3.5 h-3.5" />
                                     </button>
+                                </div>
+
+                                {/* Test Variables */}
+                                <div className="flex items-center gap-2 border-l border-border pl-2 mr-1">
+                                    <TestVariablesPopover 
+                                        variables={testableVariables}
+                                        testData={testMergeTags}
+                                        onUpdateTestValue={(key, value) => {
+                                            setTestMergeTags(prev => ({ ...prev, [key]: value }))
+                                        }}
+                                        onClearAll={() => setTestMergeTags({})}
+                                    />
                                 </div>
 
                                 {/* Campaign Name Editing */}
@@ -458,8 +518,8 @@ export function EmailEditor({
                         </div>
 
                         <div className="flex-1 overflow-y-auto bg-[#0f0f10] p-8">
-                            <div className="h-fit min-h-[500px] mx-auto transition-all duration-300 bg-white shadow-lg my-8" style={{ maxWidth: viewMode === 'mobile' ? '375px' : '600px' }}>
-                                <PreviewPane html={previewHtml} viewMode={viewMode} />
+                            <div className="h-fit min-h-[500px] mx-auto transition-all duration-300 bg-white shadow-lg my-8 w-full" style={{ maxWidth: previewWidth }}>
+                                <PreviewPane html={previewHtml} viewMode={viewMode === 'desktop' ? 'desktop' : 'mobile'} />
                             </div>
                         </div>
                     </div>

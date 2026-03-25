@@ -240,12 +240,12 @@ export function AudienceCard({ audience, campaign, targetSubscriber }: AudienceC
                             </p>
                         </div>
                     </div>
-                ) : (campaign?.status === "completed" || campaign?.status === "sent") ? (
+                ) : ((campaign?.status as any) === "completed" || (campaign?.status as any) === "sent") ? (
                     <div className="flex items-start gap-4 bg-emerald-500/10 p-4 rounded-lg border border-emerald-500/20">
                         <Users className="h-8 w-8 text-emerald-400 mt-1 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                             <p className="font-bold text-lg text-emerald-400">
-                                {(campaign.total_recipients ?? 0).toLocaleString()} Recipient{(campaign.total_recipients ?? 0) !== 1 ? 's' : ''}
+                                {(campaign?.total_recipients ?? 0).toLocaleString()} Recipient{(campaign?.total_recipients ?? 0) !== 1 ? 's' : ''}
                             </p>
                             <p className="mt-2 text-sm text-emerald-300/60">This campaign has already been sent.</p>
                         </div>

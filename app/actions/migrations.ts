@@ -29,7 +29,7 @@ async function downloadAndCompressRemoteImage(url: string, fallbackFilename: str
             return null
         }
 
-        let buffer = Buffer.from(await response.arrayBuffer()) as Buffer<ArrayBuffer>
+        let buffer: any = Buffer.from(await response.arrayBuffer())
         const originalSize = buffer.length
         let outputType = contentType
 

@@ -17,6 +17,8 @@ import { Upload, ImageIcon, ArrowLeft, Bookmark } from "lucide-react"
 import { AssetPickerModal } from "./asset-picker-modal"
 import { getDefaultLinks, getCustomLinks, type DefaultLinks, type CustomLink } from "@/app/actions/settings"
 
+const STANDARD_TAGS = ["first_name", "last_name", "email", "subscriber_id", "location_city", "location_country", "discount_code", "unsubscribe_url", "unsubscribe_link", "unsubscribe_link_url"]
+
 interface AssetLoaderProps {
     variables: string[]
     assets: Record<string, string>
@@ -152,7 +154,11 @@ export function AssetLoader({ variables, assets, onUpdateAsset, showBackButton =
         }
     })
 
-    const displayVariables = variables.filter(v => !pairedLinkVars.has(v) && !pairedFitVars.has(v))
+    const displayVariables = variables.filter(v => 
+        !pairedLinkVars.has(v) && 
+        !pairedFitVars.has(v) && 
+        !STANDARD_TAGS.includes(v.toLowerCase())
+    )
 
     return (
         <aside className="w-full h-full flex flex-col bg-card overflow-hidden">
