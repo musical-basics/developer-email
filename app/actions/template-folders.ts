@@ -54,7 +54,7 @@ export async function createTemplateFolder(name: string) {
         return { error: error.message }
     }
 
-    revalidatePath("/campaigns")
+    revalidatePath("/dashboard")
     return { data }
 }
 
@@ -74,7 +74,7 @@ export async function renameTemplateFolder(id: string, name: string) {
         return { error: error.message }
     }
 
-    revalidatePath("/campaigns")
+    revalidatePath("/dashboard")
     return { success: true }
 }
 
@@ -92,7 +92,7 @@ export async function deleteTemplateFolder(id: string) {
         return { error: error.message }
     }
 
-    revalidatePath("/campaigns")
+    revalidatePath("/dashboard")
     return { success: true }
 }
 
@@ -109,7 +109,7 @@ export async function moveTemplateToFolder(campaignId: string, folderId: string 
             return { error: error.message }
         }
 
-        revalidatePath("/campaigns")
+        revalidatePath("/dashboard")
         return { success: true }
     } catch (e: any) {
         console.error("Error moving template:", e)
@@ -139,7 +139,7 @@ export async function reorderTemplateFolders(folderIds: string[]): Promise<{ err
             }
         }
 
-        revalidatePath("/campaigns")
+        revalidatePath("/dashboard")
         return {}
     } catch (e: any) {
         console.error("Error reordering template folders:", e)
