@@ -10,12 +10,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Campaign } from "@/lib/types"
 import { formatDistanceToNow } from "date-fns"
-import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, Download, ChevronDown, ChevronUp, Tag, X } from "lucide-react"
+import { Pencil, Copy, LayoutTemplate, PenLine, Trash2, Eye, MousePointer2, Clock, ArrowRight, ExternalLink, ShoppingCart, Star, CheckSquare, Mail, CheckCircle2, Send, BookOpen, Download, ChevronDown, ChevronUp, Tag, X, FolderInput } from "lucide-react"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
 import { createClient } from "@/lib/supabase/client"
 import { duplicateCampaign, deleteCampaign, toggleTemplateStatus, toggleReadyStatus, updateCampaignCategory, toggleCampaignStarred } from "@/app/actions/campaigns"
+import { moveTemplateToFolder, type TemplateFolder } from "@/app/actions/template-folders"
 import { exportToBlog } from "@/app/actions/export-to-blog"
 import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
@@ -51,9 +52,11 @@ interface CampaignsTableProps {
     sortBy?: "created_at" | "updated_at"
     paginate?: boolean
     serverPagination?: ServerPagination
+    showFolderActions?: boolean
+    folders?: TemplateFolder[]
 }
 
-export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false, sortBy = "created_at", paginate = false, serverPagination }: CampaignsTableProps) {
+export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Recent Campaigns", showAnalytics = true, enableBulkDelete = false, sortBy = "created_at", paginate = false, serverPagination, showFolderActions = false, folders = [] }: CampaignsTableProps) {
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null)
     const [deletingId, setDeletingId] = useState<string | null>(null)
     const [newName, setNewName] = useState("")
@@ -71,6 +74,7 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
     const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null)
     const [categoryInput, setCategoryInput] = useState("")
     const [togglingStarredId, setTogglingStarredId] = useState<string | null>(null)
+    const [movingToFolderId, setMovingToFolderId] = useState<string | null>(null)
 
     const toggleExpand = (id: string) => {
         setExpandedRows(prev => {
@@ -651,6 +655,64 @@ export function CampaignsTable({ campaigns = [], loading, onRefresh, title = "Re
                                                             </PopoverContent>
                                                         </Popover>
                                                     </>
+                                                )}
+                                                {/* Move to Folder */}
+                                                {showFolderActions && folders.length > 0 && (
+                                                    <Popover
+                                                        open={movingToFolderId === campaign.id}
+                                                        onOpenChange={(open) => {
+                                                            if (open) setMovingToFolderId(campaign.id)
+                                                            else setMovingToFolderId(null)
+                                                        }}
+                                                    >
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className={`h-8 w-8 ${campaign.template_folder_id
+                                                                    ? "text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                                                                    : "text-muted-foreground hover:text-blue-400 hover:bg-blue-500/10"
+                                                                    }`}
+                                                                title="Move to folder"
+                                                            >
+                                                                <FolderInput className="w-4 h-4" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent className="w-48 p-2" align="end">
+                                                            <div className="space-y-1">
+                                                                <p className="text-xs font-medium text-muted-foreground px-2 py-1">Move to folder</p>
+                                                                {campaign.template_folder_id && (
+                                                                    <button
+                                                                        className="w-full text-left text-xs px-2 py-1.5 rounded hover:bg-accent text-red-400 hover:text-red-300 transition-colors"
+                                                                        onClick={async () => {
+                                                                            await moveTemplateToFolder(campaign.id, null)
+                                                                            setMovingToFolderId(null)
+                                                                            router.refresh()
+                                                                        }}
+                                                                    >
+                                                                        Remove from folder
+                                                                    </button>
+                                                                )}
+                                                                {folders.map(f => (
+                                                                    <button
+                                                                        key={f.id}
+                                                                        className={`w-full text-left text-xs px-2 py-1.5 rounded transition-colors ${
+                                                                            campaign.template_folder_id === f.id
+                                                                                ? "bg-blue-500/10 text-blue-400 font-medium"
+                                                                                : "hover:bg-accent text-foreground"
+                                                                        }`}
+                                                                        onClick={async () => {
+                                                                            await moveTemplateToFolder(campaign.id, f.id)
+                                                                            setMovingToFolderId(null)
+                                                                            router.refresh()
+                                                                        }}
+                                                                    >
+                                                                        {f.name}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
                                                 )}
                                                 <Button
                                                     variant="ghost"

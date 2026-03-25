@@ -71,7 +71,7 @@ export async function getCampaigns(
     // Fetch campaigns (lightweight metadata only)
     let query = supabase
         .from("campaigns")
-        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type, scheduled_at, scheduled_status, category, is_starred_template")
+        .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type, scheduled_at, scheduled_status, category, is_starred_template, template_folder_id")
         .order("created_at", { ascending: false })
 
     if (emailType) {
@@ -254,7 +254,7 @@ export async function getCampaignList() {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
-        .select("id, name, status, subject_line, created_at, is_template, is_ready, category, is_starred_template")
+        .select("id, name, status, subject_line, created_at, is_template, is_ready, category, is_starred_template, template_folder_id")
         .order("created_at", { ascending: false })
 
     if (error) {

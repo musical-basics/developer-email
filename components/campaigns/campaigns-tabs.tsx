@@ -2,16 +2,19 @@
 
 import { useState, useCallback, useTransition } from "react"
 import { CampaignsTable } from "@/components/campaigns-table"
+import { TemplateFolderList } from "@/components/campaigns/template-folder-list"
 import { Campaign } from "@/lib/types"
 import { getCampaigns } from "@/app/actions/campaigns"
+import { type TemplateFolder } from "@/app/actions/template-folders"
 
 interface CampaignsTabsProps {
     campaigns: Campaign[]
     totalCompleted: number
     emailType?: string
+    folders?: TemplateFolder[]
 }
 
-export function CampaignsTabs({ campaigns, totalCompleted, emailType = "campaign" }: CampaignsTabsProps) {
+export function CampaignsTabs({ campaigns, totalCompleted, emailType = "campaign", folders = [] }: CampaignsTabsProps) {
     console.log("[CampaignsTabs] totalCompleted:", totalCompleted, "campaigns.length:", campaigns.length)
     const [activeTab, setActiveTab] = useState<"templates" | "drafts" | "scheduled" | "completed">("templates")
     const [completedCampaigns, setCompletedCampaigns] = useState<Campaign[]>(
@@ -48,13 +51,10 @@ export function CampaignsTabs({ campaigns, totalCompleted, emailType = "campaign
     ]
 
     const tabData = {
-        templates: { title: "Master Templates", campaigns: templates, showAnalytics: false, enableBulkDelete: false, sortBy: "created_at" as const, paginate: false },
         drafts: { title: "Drafts", campaigns: drafts, showAnalytics: false, enableBulkDelete: false, sortBy: "created_at" as const, paginate: false },
         scheduled: { title: "Scheduled Campaigns", campaigns: scheduled, showAnalytics: false, enableBulkDelete: false, sortBy: "created_at" as const, paginate: false },
         completed: { title: "Completed", campaigns: completedCampaigns, showAnalytics: true, enableBulkDelete: true, sortBy: "updated_at" as const, paginate: true },
     }
-
-    const active = tabData[activeTab]
 
     return (
         <div className="space-y-4">
@@ -81,24 +81,27 @@ export function CampaignsTabs({ campaigns, totalCompleted, emailType = "campaign
             </div>
 
             {/* Tab Content */}
-            <CampaignsTable
-                title={active.title}
-                campaigns={active.campaigns}
-                loading={activeTab === "completed" && isPending}
-                showAnalytics={active.showAnalytics}
-                enableBulkDelete={active.enableBulkDelete}
-                sortBy={active.sortBy}
-                paginate={active.paginate}
-                // Server-side pagination for completed tab
-                {...(activeTab === "completed" ? {
-                    serverPagination: {
-                        totalItems: totalCompleted,
-                        currentPage: completedPage,
-                        pageSize: completedPageSize,
-                        onPageChange: handleCompletedPageChange,
-                    }
-                } : {})}
-            />
+            {activeTab === "templates" ? (
+                <TemplateFolderList folders={folders} templates={templates} />
+            ) : (
+                <CampaignsTable
+                    title={tabData[activeTab].title}
+                    campaigns={tabData[activeTab].campaigns}
+                    loading={activeTab === "completed" && isPending}
+                    showAnalytics={tabData[activeTab].showAnalytics}
+                    enableBulkDelete={tabData[activeTab].enableBulkDelete}
+                    sortBy={tabData[activeTab].sortBy}
+                    paginate={tabData[activeTab].paginate}
+                    {...(activeTab === "completed" ? {
+                        serverPagination: {
+                            totalItems: totalCompleted,
+                            currentPage: completedPage,
+                            pageSize: completedPageSize,
+                            onPageChange: handleCompletedPageChange,
+                        }
+                    } : {})}
+                />
+            )}
         </div>
     )
 }

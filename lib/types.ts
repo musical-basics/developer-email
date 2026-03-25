@@ -21,6 +21,7 @@ export interface Campaign {
     is_ready?: boolean
     category?: string | null
     is_starred_template?: boolean
+    template_folder_id?: string | null
     email_type?: string
     sent_from_email?: string | null
     sent_to_emails?: string[]
