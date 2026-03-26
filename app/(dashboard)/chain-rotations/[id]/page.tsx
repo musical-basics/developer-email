@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, use } from "react"
 import { useRouter } from "next/navigation"
 import { getChainRotation, getChainRotationAnalytics, enrollInChainRotation, updateChainRotation } from "@/app/actions/chain-rotations"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { getTags, type TagDefinition } from "@/app/actions/tags"
 import { ArrowLeft, RefreshCw, Users, Eye, MousePointer2, GitBranch, Loader2, UserPlus, CheckCircle2, BarChart3, Search, Tag, X, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -91,7 +92,7 @@ export default function ChainRotationDetailPage({ params }: { params: Promise<{ 
         setTestSubscribers(allData)
 
         // Load tag definitions
-        const { tags: defs } = await getTags()
+        const { tags: defs } = await getTags(DEFAULT_WORKSPACE)
         setTagDefinitions(defs)
 
         setLoadingSubs(false)
@@ -99,7 +100,7 @@ export default function ChainRotationDetailPage({ params }: { params: Promise<{ 
 
     const handleSaveName = async () => {
         if (!editName.trim() || !rotation) return
-        await updateChainRotation(id, editName.trim(), rotation.chain_ids)
+        await updateChainRotation(DEFAULT_WORKSPACE, id, editName.trim(), rotation.chain_ids)
         setEditingName(false)
         fetchData()
         toast({ title: "Name updated" })

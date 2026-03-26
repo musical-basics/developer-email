@@ -13,6 +13,7 @@ import {
     DialogTrigger,
 } from "@/components/ui/dialog"
 import { getCampaignList } from "@/app/actions/campaigns"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { formatDistanceToNow } from "date-fns"
 import { cn } from "@/lib/utils"
 
@@ -40,7 +41,7 @@ export function CampaignPicker({ currentId, editorType, className }: CampaignPic
             const fetchCampaigns = async () => {
                 setLoading(true)
                 try {
-                    const data = await getCampaignList()
+                    const data = await getCampaignList(DEFAULT_WORKSPACE)
                     // Filter or sort if needed, but getCampaignList already sorts by created_at
                     setCampaigns(data as CampaignSummary[])
                 } catch (error) {

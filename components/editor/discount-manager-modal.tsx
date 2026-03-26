@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { getActiveDiscountPresets, type DiscountPreset } from "@/app/actions/discount-presets"
 import { createShopifyDiscount } from "@/app/actions/shopify-discount"
 import { useToast } from "@/hooks/use-toast"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { cn } from "@/lib/utils"
 
 export interface DiscountSlot {
@@ -86,7 +87,7 @@ export function DiscountManagerModal({ assets, onAssetsChange, templateVariables
     useEffect(() => {
         if (open && presets.length === 0) {
             setLoadingPresets(true)
-            getActiveDiscountPresets()
+            getActiveDiscountPresets(DEFAULT_WORKSPACE)
                 .then(setPresets)
                 .catch(() => { })
                 .finally(() => setLoadingPresets(false))

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { RefreshCw, Loader2, ChevronRight } from "lucide-react"
 import { getRotations } from "@/app/actions/rotations"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { useToast } from "@/hooks/use-toast"
 
 interface SendRotationModalProps {
@@ -26,7 +27,7 @@ export function SendRotationModal({ open, onOpenChange, selectedIds }: SendRotat
         if (!open) return
         const fetch = async () => {
             setLoading(true)
-            const data = await getRotations()
+            const data = await getRotations(DEFAULT_WORKSPACE)
             setRotations(data)
             setLoading(false)
         }

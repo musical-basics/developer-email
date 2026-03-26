@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { saveCampaignBackup } from "@/app/actions/campaigns"
 import { getCampaignDossier } from "@/app/actions/audience-intelligence"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 
 const DEFAULT_HTML = `<div><img src="{{hero_src}}" class="w-full" /> <h1>{{headline}}</h1></div>`
 const DEFAULT_ASSETS = {
@@ -66,7 +67,7 @@ function EditorV2Content() {
                 if (data.variable_values?.from_email) setFromEmail(data.variable_values.from_email)
                 if (data.variable_values?.audience_context) setAudienceContext(data.variable_values.audience_context)
 
-                getCampaignDossier(data.id).then(d => setAiDossier(d))
+                getCampaignDossier(data.id, DEFAULT_WORKSPACE).then(d => setAiDossier(d))
             }
             setLoading(false)
         }

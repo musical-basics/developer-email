@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { saveCampaignBackup } from "@/app/actions/campaigns"
 import { getCampaignDossier } from "@/app/actions/audience-intelligence"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 
 const DEFAULT_HTML = `<div><img src="{{hero_src}}" class="w-full" /> <h1>{{headline}}</h1></div>`
 const DEFAULT_ASSETS = {
@@ -71,7 +72,7 @@ function EditorPageContent() {
                 if (data.variable_values?.preview_text) setPreviewText(data.variable_values.preview_text)
 
                 // Fetch AI dossier for behavioral context
-                getCampaignDossier(data.id).then(d => setAiDossier(d))
+                getCampaignDossier(data.id, DEFAULT_WORKSPACE).then(d => setAiDossier(d))
             }
             setLoading(false)
         }

@@ -4,11 +4,12 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 
 // ─── List all rotations ───────────────────────────────────────────
-export async function getRotations() {
+export async function getRotations(workspace: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("rotations")
         .select("*")
+        .eq("workspace", workspace)
         .order("created_at", { ascending: false })
 
     if (error) {
@@ -169,7 +170,7 @@ export async function getRotationAnalytics(rotationId: string) {
 }
 
 // ─── Create rotation ─────────────────────────────────────────────
-export async function createRotation(name: string, campaignIds: string[]) {
+export async function createRotation(workspace: string, name: string, campaignIds: string[]) {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("rotations")
@@ -177,6 +178,7 @@ export async function createRotation(name: string, campaignIds: string[]) {
             name,
             campaign_ids: campaignIds,
             cursor_position: 0,
+            workspace,
         })
         .select()
         .single()
@@ -191,7 +193,7 @@ export async function createRotation(name: string, campaignIds: string[]) {
 }
 
 // ─── Update rotation ─────────────────────────────────────────────
-export async function updateRotation(id: string, name: string, campaignIds: string[]) {
+export async function updateRotation(workspace: string, id: string, name: string, campaignIds: string[]) {
     const supabase = await createClient()
 
     // Get current rotation to check if order changed
@@ -218,6 +220,7 @@ export async function updateRotation(id: string, name: string, campaignIds: stri
         .from("rotations")
         .update(updateData)
         .eq("id", id)
+        .eq("workspace", workspace)
 
     if (error) {
         console.error("Error updating rotation:", error)
@@ -230,7 +233,7 @@ export async function updateRotation(id: string, name: string, campaignIds: stri
 }
 
 // ─── Delete rotation ─────────────────────────────────────────────
-export async function deleteRotation(id: string) {
+export async function deleteRotation(workspace: string, id: string) {
     const supabase = await createClient()
 
     // Null out rotation_id on child campaigns

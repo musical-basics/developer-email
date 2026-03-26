@@ -23,6 +23,7 @@ export interface Campaign {
     is_starred_template?: boolean
     template_folder_id?: string | null
     email_type?: string
+    workspace?: string
     sent_from_email?: string | null
     sent_to_emails?: string[]
     parent_template_id?: string | null
@@ -55,6 +56,7 @@ export interface Subscriber {
     tags: string[] | null
     status: 'active' | 'inactive' | 'unsubscribed' | 'bounced'
     created_at: string
+    workspace?: string
 }
 
 export type ChainProcessStatus = 'active' | 'paused' | 'cancelled' | 'completed'

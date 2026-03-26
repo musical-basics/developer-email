@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react"
 import { useRouter } from "next/navigation"
 import { getRotation, getRotationAnalytics, updateRotation, deleteRotation } from "@/app/actions/rotations"
 import { getCampaignList } from "@/app/actions/campaigns"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { RefreshCw, ArrowLeft, Pencil, Trash2, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -47,7 +48,7 @@ export default function RotationDetailPage({ params }: { params: Promise<{ id: s
         if (!rotation) return
         setEditName(rotation.name)
         setEditCampaignIds(rotation.campaign_ids)
-        const campaigns = await getCampaignList()
+        const campaigns = await getCampaignList(DEFAULT_WORKSPACE)
         setAllTemplates(campaigns.filter((c: any) => c.is_template && c.is_ready))
         setEditOpen(true)
     }
@@ -55,7 +56,7 @@ export default function RotationDetailPage({ params }: { params: Promise<{ id: s
     const handleSaveEdit = async () => {
         if (!editName.trim() || editCampaignIds.length < 2) return
         setSaving(true)
-        const result = await updateRotation(id, editName.trim(), editCampaignIds)
+        const result = await updateRotation(DEFAULT_WORKSPACE, id, editName.trim(), editCampaignIds)
         if (result.success) {
             toast({ title: "Rotation updated" })
             setEditOpen(false)
@@ -68,7 +69,7 @@ export default function RotationDetailPage({ params }: { params: Promise<{ id: s
 
     const handleDelete = async () => {
         if (!confirm("Delete this rotation? Child campaign stats will be preserved.")) return
-        await deleteRotation(id)
+        await deleteRotation(DEFAULT_WORKSPACE, id)
         toast({ title: "Rotation deleted" })
         router.push("/rotations")
     }

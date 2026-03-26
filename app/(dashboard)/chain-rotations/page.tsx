@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { getChainRotations, createChainRotation, deleteChainRotation } from "@/app/actions/chain-rotations"
 import { getChains, type ChainRow } from "@/app/actions/chains"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { RefreshCw, Plus, Trash2, ChevronRight, GitBranch, Route, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,8 +28,8 @@ export default function ChainRotationsPage() {
     const fetchData = async () => {
         setLoading(true)
         const [rots, chainsResult] = await Promise.all([
-            getChainRotations(),
-            getChains(),
+            getChainRotations(DEFAULT_WORKSPACE),
+            getChains(DEFAULT_WORKSPACE),
         ])
         setRotations(rots)
         setMasterChains(chainsResult.data || [])
@@ -40,7 +41,7 @@ export default function ChainRotationsPage() {
     const handleCreate = async () => {
         if (!newName.trim() || selectedChainIds.length < 2) return
         setCreating(true)
-        const result = await createChainRotation(newName.trim(), selectedChainIds)
+        const result = await createChainRotation(DEFAULT_WORKSPACE, newName.trim(), selectedChainIds)
         if (result.success) {
             toast({ title: "Chain rotation created", description: `"${newName}" with ${selectedChainIds.length} chains.` })
             setCreateOpen(false)
@@ -56,7 +57,7 @@ export default function ChainRotationsPage() {
     const handleDelete = async (id: string) => {
         if (!confirm("Delete this chain rotation? Existing chain processes will be preserved.")) return
         setDeletingId(id)
-        await deleteChainRotation(id)
+        await deleteChainRotation(DEFAULT_WORKSPACE, id)
         toast({ title: "Chain rotation deleted" })
         fetchData()
         setDeletingId(null)

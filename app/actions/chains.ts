@@ -51,7 +51,7 @@ export interface ChainFormData {
 }
 
 // ─── GET MASTER CHAINS (subscriber_id is null, not snapshots) ────────────
-export async function getChains(): Promise<{ data: ChainRow[] | null; error: string | null }> {
+export async function getChains(workspace: string): Promise<{ data: ChainRow[] | null; error: string | null }> {
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -61,6 +61,7 @@ export async function getChains(): Promise<{ data: ChainRow[] | null; error: str
             chain_steps ( * ),
             chain_branches ( * )
         `)
+        .eq("workspace", workspace)
         .is("subscriber_id", null)
         .or("is_snapshot.is.null,is_snapshot.eq.false")
         .order("created_at", { ascending: true })
@@ -77,7 +78,7 @@ export async function getChains(): Promise<{ data: ChainRow[] | null; error: str
 }
 
 // ─── GET DRAFT CHAINS (subscriber_id is set, not snapshots) ──────────────
-export async function getDraftChains(): Promise<{ data: ChainRow[] | null; error: string | null }> {
+export async function getDraftChains(workspace: string): Promise<{ data: ChainRow[] | null; error: string | null }> {
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -88,6 +89,7 @@ export async function getDraftChains(): Promise<{ data: ChainRow[] | null; error
             chain_branches ( * ),
             subscribers ( id, email, first_name, last_name )
         `)
+        .eq("workspace", workspace)
         .not("subscriber_id", "is", null)
         .or("is_snapshot.is.null,is_snapshot.eq.false")
         .order("created_at", { ascending: false })
@@ -129,7 +131,7 @@ export async function getDraftChainsForSubscriber(subscriberId: string): Promise
     return { data: sorted, error: null }
 }
 
-export async function createChain(formData: ChainFormData): Promise<{ data: { id: string } | null; error: string | null }> {
+export async function createChain(workspace: string, formData: ChainFormData): Promise<{ data: { id: string } | null; error: string | null }> {
     const supabase = await createClient()
 
     // 1. Insert the chain
@@ -142,6 +144,7 @@ export async function createChain(formData: ChainFormData): Promise<{ data: { id
             trigger_label: formData.trigger_label || null,
             trigger_event: formData.trigger_event,
             subscriber_id: formData.subscriber_id || null,
+            workspace,
         })
         .select("id")
         .single()
@@ -182,7 +185,7 @@ export async function createChain(formData: ChainFormData): Promise<{ data: { id
 }
 
 // ─── UPDATE ────────────────────────────────────────────────
-export async function updateChain(chainId: string, formData: ChainFormData): Promise<{ error: string | null }> {
+export async function updateChain(workspace: string, chainId: string, formData: ChainFormData): Promise<{ error: string | null }> {
     const supabase = await createClient()
 
     // 1. Update chain metadata
@@ -197,6 +200,7 @@ export async function updateChain(chainId: string, formData: ChainFormData): Pro
             updated_at: new Date().toISOString(),
         })
         .eq("id", chainId)
+        .eq("workspace", workspace)
 
     if (chainError) return { error: chainError.message }
 
@@ -238,13 +242,14 @@ export async function updateChain(chainId: string, formData: ChainFormData): Pro
 }
 
 // ─── DELETE ────────────────────────────────────────────────
-export async function deleteChain(chainId: string): Promise<{ error: string | null }> {
+export async function deleteChain(workspace: string, chainId: string): Promise<{ error: string | null }> {
     const supabase = await createClient()
 
     const { error } = await supabase
         .from("email_chains")
         .delete()
         .eq("id", chainId)
+        .eq("workspace", workspace)
 
     if (error) return { error: error.message }
 
@@ -283,7 +288,7 @@ export async function duplicateChain(
         .eq("chain_id", chainId)
         .order("position", { ascending: true })
 
-    // 3. Insert the new chain
+    // 3. Insert the new chain (inherit workspace from source)
     const { data: newChain, error: insertError } = await supabase
         .from("email_chains")
         .insert({
@@ -294,6 +299,7 @@ export async function duplicateChain(
             trigger_event: source.trigger_event,
             subscriber_id: overrides?.subscriber_id !== undefined ? overrides.subscriber_id : source.subscriber_id,
             is_snapshot: overrides?.is_snapshot || false,
+            workspace: source.workspace,
         })
         .select("id")
         .single()

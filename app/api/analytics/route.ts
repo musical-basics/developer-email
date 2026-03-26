@@ -34,14 +34,19 @@ function calcRate(count: number, total: number): number {
     return total > 0 ? Math.round((count / total) * 1000) / 10 : 0
 }
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
+        // Extract workspace from query params
+        const url = new URL(request.url)
+        const workspace = url.searchParams.get('workspace') || 'dreamplay_marketing'
+
         // ─── FETCH ALL RAW DATA ────────────────────────
 
-        // All campaigns
+        // All campaigns (workspace-scoped)
         const { data: allCampaigns } = await supabase
             .from('campaigns')
             .select('id, name, is_template, parent_template_id, total_recipients, variable_values')
+            .eq('workspace', workspace)
 
         // All subscriber events
         const { data: allEvents } = await supabase
@@ -54,15 +59,17 @@ export async function GET() {
             .select('id, chain_id, subscriber_id, status, created_at, updated_at')
             .order('created_at', { ascending: true })
 
-        // All chains
+        // All chains (workspace-scoped)
         const { data: allChains } = await supabase
             .from('email_chains')
             .select('id, name')
+            .eq('workspace', workspace)
 
-        // All subscribers tagged "Test Account" — exclude from stats
+        // All subscribers tagged "Test Account" — exclude from stats (workspace-scoped)
         const { data: testSubscribers } = await supabase
             .from('subscribers')
             .select('id')
+            .eq('workspace', workspace)
             .contains('tags', ['Test Account'])
 
         const testSubIds = new Set((testSubscribers || []).map(s => s.id))
@@ -234,28 +241,10 @@ export async function GET() {
         // Sort: T3 desc → T2 → T1
         chainPerformance.sort((a, b) => b.t3 - a.t3 || b.t2 - a.t2 || b.t1 - a.t1)
 
-        // ─── GROUP BY AUDIENCE CONTEXT ──────────────────
-        type AudienceBucket = "dreamplay" | "musicalbasics" | "both"
-        const audienceBuckets: Record<AudienceBucket, { templates: PerformanceRow[]; chains: PerformanceRow[] }> = {
-            dreamplay: { templates: [], chains: [] },
-            musicalbasics: { templates: [], chains: [] },
-            both: { templates: [], chains: [] },
-        }
-
-        // Group templates by audience
-        for (const template of templates) {
-            const audience = (template as any).variable_values?.audience_context || "dreamplay"
-            const row = templatePerformance.find(r => r.name === template.name)
-            if (row) {
-                const bucket = audienceBuckets[audience as AudienceBucket] || audienceBuckets.dreamplay
-                bucket.templates.push(row)
-            }
-        }
-
         return NextResponse.json({
             templates: templatePerformance,
             chains: chainPerformance,
-            byAudience: audienceBuckets,
+            workspace,
         })
 
     } catch (error) {

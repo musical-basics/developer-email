@@ -37,6 +37,7 @@ const STORAGE_PREFIX = "copilot_sessions_"
 
 import { getAnthropicModels } from "@/app/actions/ai-models"
 import { getTemplateList, getCampaignHtml } from "@/app/actions/campaigns"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { renderTemplate } from "@/lib/render-template"
 
 type ComputeTier = "low" | "medium" | "high"
@@ -248,7 +249,7 @@ export function CopilotPane({ html, onHtmlChange, audienceContext = "dreamplay",
         setIsRefPickerOpen(true)
         setLoadingTemplates(true)
         try {
-            const templates = await getTemplateList()
+            const templates = await getTemplateList(DEFAULT_WORKSPACE)
             setRefTemplates(templates)
         } catch (e) {
             console.error("Failed to load templates", e)

@@ -12,6 +12,7 @@ import { type CRMLead, type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/lib/c
 import { CRMConfigPanel, getActiveConfig } from "@/components/crm/crm-config-panel"
 import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
 import { getCampaignList, getRecentlyUsedTemplateIds, duplicateCampaignForSubscriber, createBulkCampaign } from "@/app/actions/campaigns"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { type Campaign, type Subscriber } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { SubscriberHistoryTimeline } from "@/components/audience/subscriber-history-timeline"
@@ -143,8 +144,8 @@ export default function CRMPage() {
 
         try {
             const [campaigns, recentIds] = await Promise.all([
-                getCampaignList(),
-                getRecentlyUsedTemplateIds(),
+                getCampaignList(DEFAULT_WORKSPACE),
+                getRecentlyUsedTemplateIds(DEFAULT_WORKSPACE),
             ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
             setRecentlyUsedIds(recentIds)
@@ -177,8 +178,8 @@ export default function CRMPage() {
 
         try {
             const [campaigns, recentIds] = await Promise.all([
-                getCampaignList(),
-                getRecentlyUsedTemplateIds(),
+                getCampaignList(DEFAULT_WORKSPACE),
+                getRecentlyUsedTemplateIds(DEFAULT_WORKSPACE),
             ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
             setRecentlyUsedIds(recentIds)

@@ -19,7 +19,7 @@ interface SmartTags {
  * 
  * Returns a string that gets injected into the system instruction.
  */
-export async function getCampaignDossier(campaignId: string): Promise<string> {
+export async function getCampaignDossier(campaignId: string, workspace: string): Promise<string> {
     if (!campaignId) return ""
 
     // Fetch campaign
@@ -27,6 +27,7 @@ export async function getCampaignDossier(campaignId: string): Promise<string> {
         .from("campaigns")
         .select("variable_values")
         .eq("id", campaignId)
+        .eq("workspace", workspace)
         .single()
 
     if (!campaign) return ""
@@ -41,6 +42,7 @@ export async function getCampaignDossier(campaignId: string): Promise<string> {
             .from("subscribers")
             .select("smart_tags, tags, first_name, location_country")
             .eq("id", subscriberId)
+            .eq("workspace", workspace)
             .single()
 
         if (!subscriber) return ""

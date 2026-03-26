@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, Loader2, Tag, Users, X, Check, Star } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getTags, createTag, updateTag, deleteTag, toggleTagStar, TagDefinition } from "@/app/actions/tags"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 
 export default function TagsPage() {
     const [tags, setTags] = useState<TagDefinition[]>([])
@@ -22,7 +23,7 @@ export default function TagsPage() {
 
     const fetchTags = useCallback(async () => {
         setLoading(true)
-        const { tags: data } = await getTags()
+        const { tags: data } = await getTags(DEFAULT_WORKSPACE)
         setTags(data)
         setLoading(false)
     }, [])
@@ -36,7 +37,7 @@ export default function TagsPage() {
         if (!name) return
 
         setSavingNew(true)
-        const { tag, error } = await createTag(name, newTagColor)
+        const { tag, error } = await createTag(DEFAULT_WORKSPACE, name, newTagColor)
         if (error) {
             console.error("Error creating tag:", error)
         } else {
@@ -75,7 +76,7 @@ export default function TagsPage() {
         }
 
         if (Object.keys(updates).length > 0) {
-            const { error } = await updateTag(editingId, updates)
+            const { error } = await updateTag(DEFAULT_WORKSPACE, editingId, updates)
             if (error) {
                 console.error("Error updating tag:", error)
             } else {
@@ -94,7 +95,7 @@ export default function TagsPage() {
         if (!confirm(msg)) return
 
         setDeletingId(tag.id)
-        const { error } = await deleteTag(tag.id)
+        const { error } = await deleteTag(DEFAULT_WORKSPACE, tag.id)
         if (error) {
             console.error("Error deleting tag:", error)
         } else {
@@ -116,7 +117,7 @@ export default function TagsPage() {
     const saveColor = async () => {
         if (!colorPickingId) return
         setSaving(true)
-        const { error } = await updateTag(colorPickingId, { color: pendingColor })
+        const { error } = await updateTag(DEFAULT_WORKSPACE, colorPickingId, { color: pendingColor })
         if (error) {
             console.error("Error updating color:", error)
         } else {
@@ -331,7 +332,7 @@ export default function TagsPage() {
                                         <div className="flex items-center gap-1">
                                             <button
                                                 onClick={async () => {
-                                                    const { error } = await toggleTagStar(tag.id, !tag.is_starred)
+                                                    const { error } = await toggleTagStar(DEFAULT_WORKSPACE, tag.id, !tag.is_starred)
                                                     if (!error) await fetchTags()
                                                 }}
                                                 className={cn(

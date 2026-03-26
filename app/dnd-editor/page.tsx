@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { saveCampaignBackup } from "@/app/actions/campaigns"
 import { getCampaignDossier } from "@/app/actions/audience-intelligence"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import type { EmailDesign } from "@/lib/dnd-blocks/types"
 import { serializeBlocks, deserializeBlocks } from "@/lib/dnd-blocks/types"
 import { compileBlocksToHtml } from "@/lib/dnd-blocks/compiler"
@@ -70,7 +71,7 @@ function DndEditorPageContent() {
                 if (data.variable_values?.from_email) setFromEmail(data.variable_values.from_email)
                 if (data.variable_values?.audience_context) setAudienceContext(data.variable_values.audience_context)
 
-                getCampaignDossier(data.id).then(d => setAiDossier(d))
+                getCampaignDossier(data.id, DEFAULT_WORKSPACE).then(d => setAiDossier(d))
             }
             setLoading(false)
         }

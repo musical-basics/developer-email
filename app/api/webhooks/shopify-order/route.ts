@@ -42,6 +42,10 @@ export async function POST(request: Request) {
 
         const order = JSON.parse(rawBody);
 
+        // Extract workspace from URL query params (default: dreamplay_marketing)
+        const url = new URL(request.url);
+        const workspace = url.searchParams.get('workspace') || 'dreamplay_marketing';
+
         // Extract customer info from the order
         const customer = order.customer || {};
         const shippingAddress = order.shipping_address || order.billing_address || {};
@@ -71,11 +75,12 @@ export async function POST(request: Request) {
 
         console.log(`[Shopify Webhook] Processing order ${orderName} for ${email} ($${totalPrice} ${currency})`);
 
-        // Check if subscriber already exists
+        // Check if subscriber already exists (workspace-scoped)
         const { data: existingUser } = await supabase
             .from("subscribers")
             .select("id, tags")
             .eq("email", email)
+            .eq("workspace", workspace)
             .single();
 
         // Track previous tags so we know which ones are newly added
@@ -105,7 +110,8 @@ export async function POST(request: Request) {
                 shipping_city: city,
                 shipping_zip: zip,
                 shipping_province: province,
-            }, { onConflict: "email" })
+                workspace,
+            }, { onConflict: "email, workspace" })
             .select()
             .single();
 
@@ -187,6 +193,7 @@ export async function POST(request: Request) {
                                     trigger_event: masterChain.trigger_event,
                                     subscriber_id: null,
                                     is_snapshot: true,
+                                    workspace: masterChain.workspace,
                                 })
                                 .select("id")
                                 .single();
@@ -288,6 +295,7 @@ export async function POST(request: Request) {
                                     first_name: firstName || "",
                                     last_name: lastName || "",
                                     tags: mergedTags,
+                                    workspace,
                                 }),
                             });
 

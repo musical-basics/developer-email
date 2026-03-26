@@ -21,22 +21,24 @@ export interface DiscountPreset {
     created_at: string
 }
 
-export async function getDiscountPresets(): Promise<DiscountPreset[]> {
+export async function getDiscountPresets(workspace: string): Promise<DiscountPreset[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("discount_presets")
         .select("*")
+        .eq("workspace", workspace)
         .order("created_at", { ascending: true })
 
     if (error) throw new Error(error.message)
     return (data || []) as DiscountPreset[]
 }
 
-export async function getActiveDiscountPresets(): Promise<DiscountPreset[]> {
+export async function getActiveDiscountPresets(workspace: string): Promise<DiscountPreset[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("discount_presets")
         .select("*")
+        .eq("workspace", workspace)
         .eq("is_active", true)
         .order("sort_order", { ascending: true })
 
@@ -44,42 +46,44 @@ export async function getActiveDiscountPresets(): Promise<DiscountPreset[]> {
     return (data || []) as DiscountPreset[]
 }
 
-export async function createDiscountPreset(preset: Omit<DiscountPreset, "id" | "created_at">) {
+export async function createDiscountPreset(workspace: string, preset: Omit<DiscountPreset, "id" | "created_at">) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("discount_presets")
-        .insert(preset)
+        .insert({ ...preset, workspace })
 
     if (error) throw new Error(error.message)
     revalidatePath("/discounts")
     return { success: true }
 }
 
-export async function updateDiscountPreset(id: string, preset: Partial<Omit<DiscountPreset, "id" | "created_at">>) {
+export async function updateDiscountPreset(workspace: string, id: string, preset: Partial<Omit<DiscountPreset, "id" | "created_at">>) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("discount_presets")
         .update(preset)
         .eq("id", id)
+        .eq("workspace", workspace)
 
     if (error) throw new Error(error.message)
     revalidatePath("/discounts")
     return { success: true }
 }
 
-export async function deleteDiscountPreset(id: string) {
+export async function deleteDiscountPreset(workspace: string, id: string) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("discount_presets")
         .delete()
         .eq("id", id)
+        .eq("workspace", workspace)
 
     if (error) throw new Error(error.message)
     revalidatePath("/discounts")
     return { success: true }
 }
 
-export async function reorderDiscountPresets(orderedIds: string[]) {
+export async function reorderDiscountPresets(workspace: string, orderedIds: string[]) {
     const supabase = await createClient()
     // Batch update sort_order for each preset
     for (let i = 0; i < orderedIds.length; i++) {
@@ -87,6 +91,7 @@ export async function reorderDiscountPresets(orderedIds: string[]) {
             .from("discount_presets")
             .update({ sort_order: i })
             .eq("id", orderedIds[i])
+            .eq("workspace", workspace)
         if (error) throw new Error(error.message)
     }
     revalidatePath("/discounts")

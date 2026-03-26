@@ -16,11 +16,12 @@ export interface SavedView {
     updated_at?: string
 }
 
-export async function getSavedViews(): Promise<SavedView[]> {
+export async function getSavedViews(workspace: string): Promise<SavedView[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("audience_saved_views")
         .select("*")
+        .eq("workspace", workspace)
         .order("created_at", { ascending: true })
 
     if (error) {
@@ -30,7 +31,7 @@ export async function getSavedViews(): Promise<SavedView[]> {
     return data || []
 }
 
-export async function createSavedView(view: {
+export async function createSavedView(workspace: string, view: {
     name: string
     search_query: string
     selected_tags: string[]
@@ -42,7 +43,7 @@ export async function createSavedView(view: {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("audience_saved_views")
-        .insert(view)
+        .insert({ ...view, workspace })
         .select()
         .single()
 
@@ -54,12 +55,13 @@ export async function createSavedView(view: {
     return data
 }
 
-export async function deleteSavedView(id: string): Promise<boolean> {
+export async function deleteSavedView(workspace: string, id: string): Promise<boolean> {
     const supabase = await createClient()
     const { error } = await supabase
         .from("audience_saved_views")
         .delete()
         .eq("id", id)
+        .eq("workspace", workspace)
 
     if (error) {
         console.error("Error deleting saved view:", error)
@@ -70,6 +72,7 @@ export async function deleteSavedView(id: string): Promise<boolean> {
 }
 
 export async function updateSavedView(
+    workspace: string,
     id: string,
     updates: Partial<Omit<SavedView, "id" | "created_at" | "updated_at">>
 ): Promise<SavedView | null> {
@@ -78,6 +81,7 @@ export async function updateSavedView(
         .from("audience_saved_views")
         .update(updates)
         .eq("id", id)
+        .eq("workspace", workspace)
         .select()
         .single()
 

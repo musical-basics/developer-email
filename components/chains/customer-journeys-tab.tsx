@@ -27,6 +27,7 @@ import {
 import { getChains, getDraftChainsForSubscriber, type ChainRow } from "@/app/actions/chains"
 import { startChainProcess, updateProcessStatus } from "@/app/actions/chain-processes"
 import { getTags, type TagDefinition } from "@/app/actions/tags"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { formatDistanceToNow } from "date-fns"
 
 // ─── Types ─────────────────────────────────────────────────
@@ -113,7 +114,7 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
 
     useEffect(() => {
         fetchSubscribers()
-        getTags().then(({ tags }) => setTagDefinitions(tags))
+        getTags(DEFAULT_WORKSPACE).then(({ tags }) => setTagDefinitions(tags))
     }, [fetchSubscribers])
 
     // Toggle inline expansion
@@ -157,7 +158,7 @@ export function CustomerJourneysTab({ onStartNewChain }: { onStartNewChain?: (su
         setLoadingPicker(true)
         // Fetch both master chains and subscriber-specific drafts in parallel
         const [mastersResult, draftsResult] = await Promise.all([
-            masterChains.length === 0 ? getChains() : Promise.resolve({ data: masterChains }),
+            masterChains.length === 0 ? getChains(DEFAULT_WORKSPACE) : Promise.resolve({ data: masterChains }),
             expandedId ? getDraftChainsForSubscriber(expandedId) : Promise.resolve({ data: [] as ChainRow[] }),
         ])
         setMasterChains(mastersResult.data || [])

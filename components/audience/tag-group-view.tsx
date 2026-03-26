@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Send, Users, Tag } from "lucide-react"
 import { createCampaignForTag } from "@/app/actions/campaigns"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
@@ -51,7 +52,7 @@ export function TagGroupView({ subscribers }: TagGroupViewProps) {
 
     const handleSendToTag = async (tagName: string) => {
         try {
-            const result = await createCampaignForTag(tagName)
+            const result = await createCampaignForTag(DEFAULT_WORKSPACE, tagName)
 
             if (result.error) {
                 throw new Error(result.error)

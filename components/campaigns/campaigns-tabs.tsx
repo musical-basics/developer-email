@@ -5,6 +5,7 @@ import { CampaignsTable } from "@/components/campaigns-table"
 import { TemplateFolderList } from "@/components/campaigns/template-folder-list"
 import { Campaign } from "@/lib/types"
 import { getCampaigns } from "@/app/actions/campaigns"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { type TemplateFolder } from "@/app/actions/template-folders"
 
 interface CampaignsTabsProps {
@@ -32,7 +33,7 @@ export function CampaignsTabs({ campaigns, totalCompleted, emailType = "campaign
 
     const handleCompletedPageChange = useCallback((page: number, pageSize: number) => {
         startTransition(async () => {
-            const result = await getCampaigns(emailType, { completedPage: page, completedPageSize: pageSize })
+            const result = await getCampaigns(DEFAULT_WORKSPACE, emailType, { completedPage: page, completedPageSize: pageSize })
             const newCompleted = result.campaigns
                 .filter((c: Campaign) => ["sent", "completed", "active"].includes(c.status) && !c.is_template)
                 .sort((a: Campaign, b: Campaign) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())

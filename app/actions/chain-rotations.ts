@@ -5,11 +5,12 @@ import { revalidatePath } from "next/cache"
 import { startChainProcess } from "@/app/actions/chain-processes"
 
 // ─── List all chain rotations ─────────────────────────────────────
-export async function getChainRotations() {
+export async function getChainRotations(workspace: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("chain_rotations")
         .select("*")
+        .eq("workspace", workspace)
         .order("created_at", { ascending: false })
 
     if (error) {
@@ -273,7 +274,7 @@ export async function enrollInChainRotation(
 }
 
 // ─── Create chain rotation ────────────────────────────────────────
-export async function createChainRotation(name: string, chainIds: string[]) {
+export async function createChainRotation(workspace: string, name: string, chainIds: string[]) {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("chain_rotations")
@@ -281,6 +282,7 @@ export async function createChainRotation(name: string, chainIds: string[]) {
             name,
             chain_ids: chainIds,
             cursor_position: 0,
+            workspace,
         })
         .select()
         .single()
@@ -295,7 +297,7 @@ export async function createChainRotation(name: string, chainIds: string[]) {
 }
 
 // ─── Update chain rotation ────────────────────────────────────────
-export async function updateChainRotation(id: string, name: string, chainIds: string[]) {
+export async function updateChainRotation(workspace: string, id: string, name: string, chainIds: string[]) {
     const supabase = await createClient()
 
     const { data: current } = await supabase
@@ -332,7 +334,7 @@ export async function updateChainRotation(id: string, name: string, chainIds: st
 }
 
 // ─── Delete chain rotation ────────────────────────────────────────
-export async function deleteChainRotation(id: string) {
+export async function deleteChainRotation(workspace: string, id: string) {
     const supabase = await createClient()
 
     // Null out chain_rotation_id on campaigns

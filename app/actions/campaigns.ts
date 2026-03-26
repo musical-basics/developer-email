@@ -9,6 +9,7 @@ export async function createCampaign(prevState: any, formData: FormData) {
     const supabase = await createClient()
     const name = formData.get("name") as string
     const emailType = (formData.get("email_type") as string) || "campaign"
+    const workspace = (formData.get("workspace") as string) || "dreamplay_marketing"
 
     if (!name || name.trim() === "") {
         return { error: "Campaign name is required" }
@@ -22,6 +23,7 @@ export async function createCampaign(prevState: any, formData: FormData) {
                 status: "draft",
                 subject_line: "",
                 email_type: emailType,
+                workspace,
             },
         ])
         .select()
@@ -57,6 +59,7 @@ async function batchedIn<T>(
 }
 
 export async function getCampaigns(
+    workspace: string,
     emailType?: string,
     opts?: { completedPage?: number; completedPageSize?: number }
 ) {
@@ -72,6 +75,7 @@ export async function getCampaigns(
     let query = supabase
         .from("campaigns")
         .select("id, name, status, subject_line, created_at, updated_at, total_recipients, total_opens, total_clicks, average_read_time, resend_email_id, is_template, is_ready, variable_values, sent_from_email, email_type, scheduled_at, scheduled_status, category, is_starred_template, template_folder_id")
+        .eq("workspace", workspace)
         .order("created_at", { ascending: false })
 
     if (emailType) {
@@ -250,11 +254,12 @@ export async function getCampaigns(
 }
 
 
-export async function getCampaignList() {
+export async function getCampaignList(workspace: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
         .select("id, name, status, subject_line, created_at, is_template, is_ready, category, is_starred_template, template_folder_id")
+        .eq("workspace", workspace)
         .order("created_at", { ascending: false })
 
     if (error) {
@@ -265,11 +270,12 @@ export async function getCampaignList() {
     return data || []
 }
 
-export async function getTemplateList() {
+export async function getTemplateList(workspace: string) {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("campaigns")
         .select("id, name, created_at")
+        .eq("workspace", workspace)
         .eq("is_template", true)
         .order("created_at", { ascending: false })
 
@@ -312,7 +318,7 @@ export async function duplicateCampaign(campaignId: string) {
         return { error: "Failed to fetch original campaign" }
     }
 
-    // 2. Create new campaign with copied data
+    // 2. Create new campaign with copied data (inherit workspace)
     const { data, error: insertError } = await supabase
         .from("campaigns")
         .insert([
@@ -322,6 +328,7 @@ export async function duplicateCampaign(campaignId: string) {
                 email_type: original.email_type || "campaign",
                 subject_line: original.subject_line,
                 html_content: original.html_content,
+                workspace: original.workspace,
                 variable_values: (() => {
                     const { subscriber_id, ...rest } = original.variable_values || {};
                     return rest;
@@ -342,7 +349,7 @@ export async function duplicateCampaign(campaignId: string) {
     return { data }
 }
 
-export async function createCampaignForTag(tagName: string) {
+export async function createCampaignForTag(workspace: string, tagName: string) {
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -354,6 +361,7 @@ export async function createCampaignForTag(tagName: string) {
                 subject_line: `(Draft) Update for ${tagName}`,
                 html_content: "",
                 variable_values: { target_tag: tagName },
+                workspace,
             },
         ])
         .select()
@@ -368,7 +376,7 @@ export async function createCampaignForTag(tagName: string) {
     return { data }
 }
 
-export async function createCampaignForSubscriber(subscriberId: string, email: string, name: string) {
+export async function createCampaignForSubscriber(workspace: string, subscriberId: string, email: string, name: string) {
     const supabase = await createClient()
 
     const { data, error } = await supabase
@@ -379,6 +387,7 @@ export async function createCampaignForSubscriber(subscriberId: string, email: s
                 status: "draft",
                 subject_line: `(Draft) Message for ${name || email}`,
                 html_content: "",
+                workspace,
                 variable_values: {
                     subscriber_id: subscriberId // Store this to lock targeting later if needed
                 }
@@ -476,7 +485,7 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
         }
     }
 
-    // 4. Create new campaign copy with subscriber lock
+    // 4. Create new campaign copy with subscriber lock (inherit workspace)
     const { data, error: insertError } = await supabase
         .from("campaigns")
         .insert([
@@ -487,6 +496,7 @@ export async function duplicateCampaignForSubscriber(campaignId: string, subscri
                 subject_line: original.subject_line,
                 html_content: original.html_content,
                 variable_values: newVars,
+                workspace: original.workspace,
                 parent_template_id: original.is_template ? original.id : (original.parent_template_id || null),
             },
         ])
@@ -587,13 +597,14 @@ export async function toggleCampaignStarred(campaignId: string, isStarred: boole
     return { success: true }
 }
 
-export async function getRecentlyUsedTemplateIds(): Promise<string[]> {
+export async function getRecentlyUsedTemplateIds(workspace: string): Promise<string[]> {
     const supabase = await createClient()
 
     // Find the 5 most recently used templates by looking at child campaigns
     const { data, error } = await supabase
         .from("campaigns")
         .select("parent_template_id, created_at")
+        .eq("workspace", workspace)
         .not("parent_template_id", "is", null)
         .order("created_at", { ascending: false })
         .limit(50)
@@ -753,7 +764,7 @@ export async function createBulkCampaign(
     // Remove any single subscriber_id lock
     delete newVars.subscriber_id
 
-    // 3. Create child campaign
+    // 3. Create child campaign (inherit workspace)
     const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
     const { data, error: insertError } = await supabase
         .from("campaigns")
@@ -763,6 +774,7 @@ export async function createBulkCampaign(
             subject_line: original.subject_line,
             html_content: original.html_content,
             variable_values: newVars,
+            workspace: original.workspace,
             parent_template_id: original.is_template ? original.id : (original.parent_template_id || null),
         }])
         .select("id")

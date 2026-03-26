@@ -15,7 +15,8 @@ import { inngest } from "@/inngest/client"
 export async function evaluateTriggersForSubscriber(
     subscriberId: string,
     newTags: string[],
-    previousTags: string[] = []
+    previousTags: string[] = [],
+    workspace: string = 'dreamplay_marketing'
 ) {
     const addedTags = newTags.filter(t => !previousTags.includes(t))
 
@@ -40,12 +41,13 @@ export async function evaluateTriggersForSubscriber(
         return { fired: 0, error: "Subscriber not found" }
     }
 
-    // Find active triggers matching the newly added tags
+    // Find active triggers matching the newly added tags (workspace-scoped)
     const { data: triggers, error: tErr } = await supabase
         .from("email_triggers")
         .select("*")
         .eq("trigger_type", "subscriber_tag")
         .eq("is_active", true)
+        .eq("workspace", workspace)
         .in("trigger_value", addedTags)
 
     if (tErr) {
@@ -103,7 +105,7 @@ export async function evaluateTriggersForSubscriber(
                     }
                 }
 
-                // Snapshot the chain
+                // Snapshot the chain (inherit workspace)
                 const { data: snapshot, error: snapErr } = await supabase
                     .from("email_chains")
                     .insert({
@@ -114,6 +116,7 @@ export async function evaluateTriggersForSubscriber(
                         trigger_event: masterChain.trigger_event,
                         subscriber_id: null,
                         is_snapshot: true,
+                        workspace: masterChain.workspace,
                     })
                     .select("id")
                     .single()
@@ -217,6 +220,7 @@ export async function evaluateTriggersForSubscriber(
                         first_name: subscriber.first_name || "",
                         last_name: subscriber.last_name || "",
                         tags: newTags,
+                        workspace,
                     }),
                 })
 

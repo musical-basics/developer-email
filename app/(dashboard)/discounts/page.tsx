@@ -16,6 +16,7 @@ import {
     reorderDiscountPresets,
     type DiscountPreset
 } from "@/app/actions/discount-presets"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 
 
 type PresetDraft = Omit<DiscountPreset, "id" | "created_at"> & { id?: string }
@@ -41,7 +42,7 @@ export default function DiscountsPage() {
 
     const loadPresets = async () => {
         try {
-            const data = await getDiscountPresets()
+            const data = await getDiscountPresets(DEFAULT_WORKSPACE)
             setPresets(data)
             const d: Record<string, PresetDraft> = {}
             data.forEach(p => { d[p.id] = { ...p } })
@@ -91,7 +92,7 @@ export default function DiscountsPage() {
         try {
             const draft = drafts[id]
             const { id: _id, ...rest } = draft as any
-            await updateDiscountPreset(id, rest)
+            await updateDiscountPreset(DEFAULT_WORKSPACE, id, rest)
             toast({ title: "Saved", description: `"${draft.name}" updated.` })
             await loadPresets()
         } catch (e: any) {
@@ -110,7 +111,7 @@ export default function DiscountsPage() {
                 setSavingId(null)
                 return
             }
-            await createDiscountPreset(preset)
+            await createDiscountPreset(DEFAULT_WORKSPACE, preset)
             toast({ title: "Created", description: `"${preset.name}" added.` })
             setNewPresets(prev => prev.filter((_, i) => i !== idx))
             await loadPresets()
@@ -124,7 +125,7 @@ export default function DiscountsPage() {
     const handleDelete = async (id: string, name: string) => {
         setDeletingId(id)
         try {
-            await deleteDiscountPreset(id)
+            await deleteDiscountPreset(DEFAULT_WORKSPACE, id)
             toast({ title: "Deleted", description: `"${name}" removed.` })
             await loadPresets()
         } catch (e: any) {
@@ -140,7 +141,7 @@ export default function DiscountsPage() {
         const next = !draft.is_active
         updateDraft(id, "is_active", next)
         try {
-            await updateDiscountPreset(id, { is_active: next })
+            await updateDiscountPreset(DEFAULT_WORKSPACE, id, { is_active: next })
             toast({ title: next ? "Enabled" : "Disabled", description: `"${draft.name}" is now ${next ? "active" : "inactive"}.` })
             await loadPresets()
         } catch (e: any) {
@@ -177,7 +178,7 @@ export default function DiscountsPage() {
 
         // Persist the new order
         try {
-            await reorderDiscountPresets(reordered.map(p => p.id))
+            await reorderDiscountPresets(DEFAULT_WORKSPACE, reordered.map(p => p.id))
         } catch (e: any) {
             toast({ title: "Error", description: "Failed to save order.", variant: "destructive" })
             await loadPresets() // revert on failure

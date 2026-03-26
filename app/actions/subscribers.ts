@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 
 // ─── SOFT-DELETE SUBSCRIBER ────────────────────────────────
 // Sets status to "deleted" instead of physically removing the row.
-export async function softDeleteSubscriber(id: string): Promise<{ error: string | null }> {
+export async function softDeleteSubscriber(workspace: string, id: string): Promise<{ error: string | null }> {
     console.log("[softDeleteSubscriber] Starting soft-delete for subscriber:", id)
     const supabase = await createClient()
 
@@ -14,6 +14,7 @@ export async function softDeleteSubscriber(id: string): Promise<{ error: string 
         .from("subscribers")
         .update({ status: "deleted" })
         .eq("id", id)
+        .eq("workspace", workspace)
         .select("id, status")
 
     if (error) {
@@ -27,7 +28,7 @@ export async function softDeleteSubscriber(id: string): Promise<{ error: string 
 }
 
 // ─── BULK SOFT-DELETE SUBSCRIBERS ──────────────────────────
-export async function bulkSoftDeleteSubscribers(ids: string[]): Promise<{ error: string | null }> {
+export async function bulkSoftDeleteSubscribers(workspace: string, ids: string[]): Promise<{ error: string | null }> {
     if (ids.length === 0) return { error: null }
 
     const supabase = await createClient()
@@ -36,6 +37,7 @@ export async function bulkSoftDeleteSubscribers(ids: string[]): Promise<{ error:
         .from("subscribers")
         .update({ status: "deleted" })
         .in("id", ids)
+        .eq("workspace", workspace)
 
     if (error) return { error: error.message }
 

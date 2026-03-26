@@ -62,7 +62,7 @@ async function logTriggerEvent(
 }
 
 // ─── Trigger execution (fire-and-forget) ──────────────────────────────
-async function executeTriggers(subscriberTags: string[], subscriberId: string, subscriberEmail: string) {
+async function executeTriggers(subscriberTags: string[], subscriberId: string, subscriberEmail: string, workspace: string) {
     await logTriggerEvent("info", "Trigger execution started", {
         subscriber_email: subscriberEmail,
         subscriber_id: subscriberId,
@@ -76,6 +76,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
             .select("*")
             .eq("trigger_type", "subscriber_tag")
             .eq("is_active", true)
+            .eq("workspace", workspace)
             .in("trigger_value", subscriberTags);
 
         if (tErr) {
@@ -172,6 +173,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                             trigger_event: chainRow.trigger_event,
                             subscriber_id: null,
                             is_snapshot: true,
+                            workspace: chainRow.workspace,
                         })
                         .select("id")
                         .single();
@@ -415,6 +417,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
                         status: "draft",
                         is_template: false,
                         parent_template_id: campaign.id,
+                        workspace,
                         variable_values: {
                             ...(campaign.variable_values || {}),
                             subscriber_ids: [subscriberId],
@@ -577,7 +580,7 @@ async function executeTriggers(subscriberTags: string[], subscriberId: string, s
 
 export async function POST(request: Request) {
     try {
-        const { email, first_name, last_name, tags, city, country, ip_address, temp_session_id } = await request.json();
+        const { email, first_name, last_name, tags, city, country, ip_address, temp_session_id, workspace: rawWorkspace } = await request.json();
 
         if (!email) {
             return NextResponse.json(
@@ -586,6 +589,7 @@ export async function POST(request: Request) {
             );
         }
 
+        const workspace = rawWorkspace || 'dreamplay_marketing';
         const finalTags = tags && Array.isArray(tags) ? tags : ["Website Import"];
 
         await logTriggerEvent("info", "Subscribe webhook received", {
@@ -593,6 +597,7 @@ export async function POST(request: Request) {
             tags: finalTags,
             city,
             country,
+            workspace,
         });
 
         // 🏷️ Auto-create tag_definitions for any new tags
@@ -600,6 +605,7 @@ export async function POST(request: Request) {
             const { data: existingDefs } = await supabase
                 .from("tag_definitions")
                 .select("name")
+                .eq("workspace", workspace)
                 .in("name", finalTags);
 
             const existingNames = new Set((existingDefs || []).map((d: any) => d.name));
@@ -609,6 +615,7 @@ export async function POST(request: Request) {
                 const newDefs = missingTags.map((name: string) => ({
                     name,
                     color: "#6b7280",
+                    workspace,
                 }));
                 await supabase.from("tag_definitions").insert(newDefs);
                 await logTriggerEvent("info", `Auto-created tag definitions: ${missingTags.join(", ")}`, { tags: missingTags });
@@ -620,6 +627,7 @@ export async function POST(request: Request) {
             .from("subscribers")
             .select("tags, status")
             .eq("email", email)
+            .eq("workspace", workspace)
             .single();
 
         let mergedTags = finalTags;
@@ -640,8 +648,9 @@ export async function POST(request: Request) {
                 ...(shouldSetActive ? { status: "active" } : {}),
                 location_city: city,
                 location_country: country,
-                ip_address: ip_address
-            }, { onConflict: "email" })
+                ip_address: ip_address,
+                workspace,
+            }, { onConflict: "email, workspace" })
             .select()
             .single();
 
@@ -673,7 +682,7 @@ export async function POST(request: Request) {
                 new_tags: newTags,
                 existing_tags: existingUser?.tags || [],
             });
-            await executeTriggers(newTags, data.id, email);
+            await executeTriggers(newTags, data.id, email, workspace);
         } else {
             await logTriggerEvent("warn", "No new tags — skipping trigger execution", {
                 email,

@@ -30,6 +30,7 @@ import {
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
 import { getCampaignList } from "@/app/actions/campaigns"
+import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { getChainProcesses, updateProcessStatus, kickChainStep } from "@/app/actions/chain-processes"
 import type { ChainProcess, ChainProcessHistoryEntry } from "@/lib/types"
 import { CustomerJourneysTab } from "@/components/chains/customer-journeys-tab"
@@ -319,7 +320,7 @@ function ChainFormDialog({
 
     useEffect(() => {
         if (open) {
-            getCampaignList().then(data => setCampaigns(data.filter((c: any) => c.is_template === true)))
+            getCampaignList(DEFAULT_WORKSPACE).then(data => setCampaigns(data.filter((c: any) => c.is_template === true)))
         }
     }, [open])
 
@@ -1131,7 +1132,7 @@ export default function ChainsPage() {
     const { toast } = useToast()
 
     const fetchChains = useCallback(async () => {
-        const { data, error } = await getChains()
+        const { data, error } = await getChains(DEFAULT_WORKSPACE)
         if (error) {
             toast({ title: "Error", description: error, variant: "destructive" })
         } else {
@@ -1164,14 +1165,14 @@ export default function ChainsPage() {
         }
 
         if (chainId) {
-            const { error } = await updateChain(chainId, saveData)
+            const { error } = await updateChain(DEFAULT_WORKSPACE, chainId, saveData)
             if (error) {
                 toast({ title: "Error updating chain", description: error, variant: "destructive" })
                 return
             }
             toast({ title: "Chain updated", description: `"${formData.name}" has been updated.` })
         } else {
-            const { error } = await createChain(saveData)
+            const { error } = await createChain(DEFAULT_WORKSPACE, saveData)
             if (error) {
                 toast({ title: "Error creating chain", description: error, variant: "destructive" })
                 return
@@ -1191,7 +1192,7 @@ export default function ChainsPage() {
     const handleDelete = async () => {
         if (!deleteTarget) return
         setDeleting(true)
-        const { error } = await deleteChain(deleteTarget.id)
+        const { error } = await deleteChain(DEFAULT_WORKSPACE, deleteTarget.id)
         if (error) {
             toast({ title: "Error deleting chain", description: error, variant: "destructive" })
         } else {
@@ -1219,7 +1220,7 @@ export default function ChainsPage() {
     // Fetch draft chains
     const fetchDrafts = useCallback(async () => {
         setLoadingDrafts(true)
-        const { data } = await getDraftChains()
+        const { data } = await getDraftChains(DEFAULT_WORKSPACE)
         setDraftChains(data || [])
         setLoadingDrafts(false)
     }, [])

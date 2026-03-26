@@ -26,11 +26,12 @@ export interface EmailTrigger {
     chain_name?: string
 }
 
-export async function getTriggers(): Promise<EmailTrigger[]> {
+export async function getTriggers(workspace: string): Promise<EmailTrigger[]> {
     const supabase = await createClient()
     const { data, error } = await supabase
         .from("email_triggers")
         .select("*, campaigns(name), email_chains(name)")
+        .eq("workspace", workspace)
         .order("created_at", { ascending: true })
 
     if (error) {
@@ -45,7 +46,7 @@ export async function getTriggers(): Promise<EmailTrigger[]> {
     }))
 }
 
-export async function createTrigger(trigger: Omit<EmailTrigger, "id" | "created_at" | "campaign_name" | "chain_name">) {
+export async function createTrigger(workspace: string, trigger: Omit<EmailTrigger, "id" | "created_at" | "campaign_name" | "chain_name">) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("email_triggers")
@@ -59,6 +60,7 @@ export async function createTrigger(trigger: Omit<EmailTrigger, "id" | "created_
             generate_discount: trigger.generate_discount,
             discount_config: trigger.discount_config,
             is_active: trigger.is_active,
+            workspace,
         })
 
     if (error) throw new Error(error.message)
@@ -66,24 +68,26 @@ export async function createTrigger(trigger: Omit<EmailTrigger, "id" | "created_
     return { success: true }
 }
 
-export async function updateTrigger(id: string, updates: Partial<Omit<EmailTrigger, "id" | "created_at" | "campaign_name" | "chain_name">>) {
+export async function updateTrigger(workspace: string, id: string, updates: Partial<Omit<EmailTrigger, "id" | "created_at" | "campaign_name" | "chain_name">>) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("email_triggers")
         .update(updates)
         .eq("id", id)
+        .eq("workspace", workspace)
 
     if (error) throw new Error(error.message)
     revalidatePath("/triggers")
     return { success: true }
 }
 
-export async function deleteTrigger(id: string) {
+export async function deleteTrigger(workspace: string, id: string) {
     const supabase = await createClient()
     const { error } = await supabase
         .from("email_triggers")
         .delete()
         .eq("id", id)
+        .eq("workspace", workspace)
 
     if (error) throw new Error(error.message)
     revalidatePath("/triggers")
