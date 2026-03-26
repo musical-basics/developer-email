@@ -4,8 +4,9 @@ import { getCampaigns } from "@/app/actions/campaigns"
 
 export const dynamic = "force-dynamic"
 
-export default async function AutomatedEmailsPage() {
-    const { campaigns, totalCompleted } = await getCampaigns("automated")
+export default async function AutomatedEmailsPage({ params }: { params: Promise<{ workspace: string }> }) {
+    const { workspace } = await params
+    const { campaigns, totalCompleted } = await getCampaigns(workspace, "automated")
 
     return (
         <div className="p-6 space-y-6">

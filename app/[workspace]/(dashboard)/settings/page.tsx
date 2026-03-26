@@ -1,13 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { Save, Brain, Loader2, Link2, Music, Piano, ArrowRightLeft, Bot, Zap, Flame, Cpu, MousePointerClick, Eye, Plus, Trash2, Send } from "lucide-react"
+import { useParams } from "next/navigation"
+import { Save, Brain, Loader2, Link2, Bot, Zap, Flame, Cpu, MousePointerClick, Eye, Plus, Trash2, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
 import { getAnthropicModels } from "@/app/actions/ai-models"
@@ -32,30 +32,48 @@ const LINK_LABELS: Record<keyof DefaultLinks, string> = {
 }
 
 
+// Map workspace slugs → settings keys
+const WORKSPACE_TO_AUDIENCE: Record<string, string> = {
+    dreamplay_marketing: "dreamplay",
+    dreamplay_support: "dreamplay",
+    musicalbasics: "musicalbasics",
+    crossover: "crossover",
+}
+const WORKSPACE_TO_BRAND: Record<string, string> = {
+    dreamplay_marketing: "dreamplay",
+    dreamplay_support: "dreamplay",
+    musicalbasics: "musicalbasics",
+    crossover: "musicalbasics",
+}
+const WORKSPACE_LABELS: Record<string, string> = {
+    dreamplay_marketing: "DreamPlay Marketing",
+    dreamplay_support: "DreamPlay Support",
+    musicalbasics: "MusicalBasics",
+    crossover: "Crossover",
+}
+
 export default function SettingsPage() {
+    const { workspace } = useParams<{ workspace: string }>()
+    const audience = WORKSPACE_TO_AUDIENCE[workspace] || "dreamplay"
+    const brand = WORKSPACE_TO_BRAND[workspace] || "dreamplay"
+    const wsLabel = WORKSPACE_LABELS[workspace] || workspace
+
     // ─── Context State ──────────────────────────────
-    const [ctxMusicalBasics, setCtxMusicalBasics] = useState("")
-    const [ctxDreamPlay, setCtxDreamPlay] = useState("")
-    const [ctxCrossover, setCtxCrossover] = useState("")
+    const [context, setContext] = useState("")
 
     // ─── Links State ────────────────────────────────
-    const [linksMB, setLinksMB] = useState<DefaultLinks>({
-        unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
-        shipping_url: "", main_cta_url: "", main_activate_url: "", crowdfunding_cta_url: "", homepage_url: ""
-    })
-    const [linksDP, setLinksDP] = useState<DefaultLinks>({
+    const [links, setLinks] = useState<DefaultLinks>({
         unsubscribe_url: "", privacy_url: "", contact_url: "", about_url: "",
         shipping_url: "", main_cta_url: "", main_activate_url: "", crowdfunding_cta_url: "", homepage_url: ""
     })
 
     const [loading, setLoading] = useState(true)
-    const [savingContext, setSavingContext] = useState<string | null>(null)
-    const [savingLinks, setSavingLinks] = useState<string | null>(null)
+    const [savingContext, setSavingContext] = useState(false)
+    const [savingLinks, setSavingLinks] = useState(false)
 
     // ─── Custom Links State ──────────────────────────
-    const [customLinksDP, setCustomLinksDP] = useState<CustomLink[]>([])
-    const [customLinksMB, setCustomLinksMB] = useState<CustomLink[]>([])
-    const [savingCustomLinks, setSavingCustomLinks] = useState<string | null>(null)
+    const [customLinks, setCustomLinks] = useState<CustomLink[]>([])
+    const [savingCustomLinks, setSavingCustomLinks] = useState(false)
 
     // ─── Tier Model State ────────────────────────────
     const [modelLow, setModelLow] = useState("claude-haiku-4-5-20251001")
@@ -76,23 +94,15 @@ export default function SettingsPage() {
     useEffect(() => {
         async function loadAll() {
             try {
-                const [mb, dp, cross, lMB, lDP, clDP, clMB, trackingMap] = await Promise.all([
-                    getCompanyContext("musicalbasics"),
-                    getCompanyContext("dreamplay"),
-                    getCompanyContext("crossover"),
-                    getDefaultLinks("musicalbasics"),
-                    getDefaultLinks("dreamplay"),
-                    getCustomLinks("dreamplay"),
-                    getCustomLinks("musicalbasics"),
+                const [ctx, lnk, cl, trackingMap] = await Promise.all([
+                    getCompanyContext(audience as any),
+                    getDefaultLinks(brand as any),
+                    getCustomLinks(brand as any),
                     getAllTrackingSettings(),
                 ])
-                setCtxMusicalBasics(mb)
-                setCtxDreamPlay(dp)
-                setCtxCrossover(cross)
-                setLinksMB(lMB)
-                setLinksDP(lDP)
-                setCustomLinksDP(clDP)
-                setCustomLinksMB(clMB)
+                setContext(ctx)
+                setLinks(lnk)
+                setCustomLinks(cl)
 
                 // Merge DB tracking settings with defaults
                 const loadedTracking: Record<string, TrackingFlags> = {}
@@ -122,63 +132,42 @@ export default function SettingsPage() {
         getAnthropicModels().then(models => {
             if (models.length > 0) setAvailableModels(models)
         })
-    }, [])
+    }, [audience, brand])
 
     // ─── Save Handlers ──────────────────────────────
-    const handleSaveContext = async (audience: AudienceContext) => {
-        setSavingContext(audience)
+    const handleSaveContext = async () => {
+        setSavingContext(true)
         try {
-            const text = audience === "musicalbasics" ? ctxMusicalBasics
-                : audience === "dreamplay" ? ctxDreamPlay : ctxCrossover
-            await saveCompanyContext(audience, text)
-            toast({ title: "Context Saved", description: `${audience} context updated.` })
+            await saveCompanyContext(audience as any, context)
+            toast({ title: "Context Saved", description: `${wsLabel} context updated.` })
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" })
         } finally {
-            setSavingContext(null)
+            setSavingContext(false)
         }
     }
 
-
-    const handleSaveLinks = async (brand: Brand) => {
-        setSavingLinks(brand)
+    const handleSaveLinks = async () => {
+        setSavingLinks(true)
         try {
-            const links = brand === "musicalbasics" ? linksMB : linksDP
-            await saveDefaultLinks(brand, links)
-            toast({ title: "Links Saved", description: `${brand} links updated.` })
+            await saveDefaultLinks(brand as any, links)
+            toast({ title: "Links Saved", description: `${wsLabel} links updated.` })
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" })
         } finally {
-            setSavingLinks(null)
+            setSavingLinks(false)
         }
     }
 
-    const updateLink = (brand: Brand, key: keyof DefaultLinks, value: string) => {
-        if (brand === "musicalbasics") {
-            setLinksMB(prev => ({ ...prev, [key]: value }))
-        } else {
-            setLinksDP(prev => ({ ...prev, [key]: value }))
-        }
-    }
-
-    const handleSaveCustomLinks = async (brand: Brand) => {
-        setSavingCustomLinks(brand)
+    const handleSaveCustomLinks = async () => {
+        setSavingCustomLinks(true)
         try {
-            const links = brand === "musicalbasics" ? customLinksMB : customLinksDP
-            await saveCustomLinks(brand, links)
-            toast({ title: "Custom Links Saved", description: `${brand} custom links updated.` })
+            await saveCustomLinks(brand as any, customLinks)
+            toast({ title: "Custom Links Saved", description: `${wsLabel} custom links updated.` })
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" })
         } finally {
-            setSavingCustomLinks(null)
-        }
-    }
-
-    const updateCustomLinks = (brand: Brand, links: CustomLink[]) => {
-        if (brand === "musicalbasics") {
-            setCustomLinksMB(links)
-        } else {
-            setCustomLinksDP(links)
+            setSavingCustomLinks(false)
         }
     }
 
@@ -193,9 +182,9 @@ export default function SettingsPage() {
     return (
         <div className="p-6 max-w-4xl mx-auto">
             <div className="mb-6">
-                <h1 className="text-2xl font-bold text-foreground">Settings</h1>
+                <h1 className="text-2xl font-bold text-foreground">{wsLabel} Settings</h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                    Configure AI context and default links per brand. The AI Copilot uses this data when generating email templates.
+                    Configure AI context and default links for this workspace. The AI Copilot uses this data when generating email templates.
                 </p>
             </div>
             {/* ─── Copilot Model Tiers Card ─── */}
@@ -404,111 +393,31 @@ export default function SettingsPage() {
                 </CardContent>
             </Card>
 
-            <Tabs defaultValue="dreamplay" className="space-y-6">
-                <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="dreamplay" className="flex items-center gap-2">
-                        <Piano className="w-4 h-4" />
-                        DreamPlay
-                    </TabsTrigger>
-                    <TabsTrigger value="musicalbasics" className="flex items-center gap-2">
-                        <Music className="w-4 h-4" />
-                        MusicalBasics
-                    </TabsTrigger>
-                    <TabsTrigger value="crossover" className="flex items-center gap-2">
-                        <ArrowRightLeft className="w-4 h-4" />
-                        Crossover
-                    </TabsTrigger>
-                </TabsList>
-
-                {/* ─── DreamPlay Tab ─── */}
-                <TabsContent value="dreamplay" className="space-y-6">
-                    <BrandContextCard
-                        title="DreamPlay Context"
-                        description="Company and product context for the DreamPlay brand."
-                        value={ctxDreamPlay}
-                        onChange={setCtxDreamPlay}
-                        onSave={() => handleSaveContext("dreamplay")}
-                        saving={savingContext === "dreamplay"}
-                    />
-                    <BrandLinksCard
-                        title="DreamPlay Links"
-                        links={linksDP}
-                        onChange={(key, val) => updateLink("dreamplay", key, val)}
-                        onSave={() => handleSaveLinks("dreamplay")}
-                        saving={savingLinks === "dreamplay"}
-                    />
-                    <CustomLinksCard
-                        title="DreamPlay Custom Links"
-                        links={customLinksDP}
-                        onChange={(links) => updateCustomLinks("dreamplay", links)}
-                        onSave={() => handleSaveCustomLinks("dreamplay")}
-                        saving={savingCustomLinks === "dreamplay"}
-                    />
-                </TabsContent>
-
-                {/* ─── MusicalBasics Tab ─── */}
-                <TabsContent value="musicalbasics" className="space-y-6">
-                    <BrandContextCard
-                        title="MusicalBasics Context"
-                        description="Company and product context for MusicalBasics."
-                        value={ctxMusicalBasics}
-                        onChange={setCtxMusicalBasics}
-                        onSave={() => handleSaveContext("musicalbasics")}
-                        saving={savingContext === "musicalbasics"}
-                    />
-                    <BrandLinksCard
-                        title="MusicalBasics Links"
-                        links={linksMB}
-                        onChange={(key, val) => updateLink("musicalbasics", key, val)}
-                        onSave={() => handleSaveLinks("musicalbasics")}
-                        saving={savingLinks === "musicalbasics"}
-                    />
-                    <CustomLinksCard
-                        title="MusicalBasics Custom Links"
-                        links={customLinksMB}
-                        onChange={(links) => updateCustomLinks("musicalbasics", links)}
-                        onSave={() => handleSaveCustomLinks("musicalbasics")}
-                        saving={savingCustomLinks === "musicalbasics"}
-                    />
-                </TabsContent>
-
-                {/* ─── Crossover Tab ─── */}
-                <TabsContent value="crossover" className="space-y-6">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <Brain className="w-5 h-5 text-purple-400" />
-                                Crossover Context
-                            </CardTitle>
-                            <CardDescription>
-                                This context is injected when the Target Audience is set to &ldquo;Both&rdquo;.
-                                Use it to explain to the AI how to bridge your two brands &mdash; for example:
-                                &ldquo;The reader originally subscribed for MusicalBasics content, but also has interest in DreamPlay.
-                                Focus 80% on music, 20% on the keyboard product. Introduce DreamPlay organically.&rdquo;
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <Textarea
-                                value={ctxCrossover}
-                                onChange={(e) => setCtxCrossover(e.target.value)}
-                                placeholder="Describe the audience hierarchy and how to blend both brands..."
-                                rows={8}
-                            />
-                            <Button
-                                onClick={() => handleSaveContext("crossover")}
-                                disabled={savingContext === "crossover"}
-                            >
-                                {savingContext === "crossover" ? (
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                ) : (
-                                    <Save className="w-4 h-4 mr-2" />
-                                )}
-                                Save Crossover Context
-                            </Button>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+            {/* ─── Workspace Context & Links ─── */}
+            <div className="space-y-6">
+                <BrandContextCard
+                    title={`${wsLabel} Context`}
+                    description={`Company and product context for ${wsLabel}.`}
+                    value={context}
+                    onChange={setContext}
+                    onSave={handleSaveContext}
+                    saving={savingContext}
+                />
+                <BrandLinksCard
+                    title={`${wsLabel} Links`}
+                    links={links}
+                    onChange={(key, val) => setLinks(prev => ({ ...prev, [key]: val }))}
+                    onSave={handleSaveLinks}
+                    saving={savingLinks}
+                />
+                <CustomLinksCard
+                    title={`${wsLabel} Custom Links`}
+                    links={customLinks}
+                    onChange={setCustomLinks}
+                    onSave={handleSaveCustomLinks}
+                    saving={savingCustomLinks}
+                />
+            </div>
         </div>
     )
 }

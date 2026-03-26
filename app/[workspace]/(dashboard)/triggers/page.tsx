@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useParams } from "next/navigation"
 import { Zap, Plus, Trash2, Power, Loader2, TicketPercent, Mail, Pencil, Save, X, GitBranch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,7 +10,6 @@ import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { getTriggers, createTrigger, updateTrigger, deleteTrigger, type EmailTrigger } from "@/app/actions/triggers"
 import { getTags, type TagDefinition } from "@/app/actions/tags"
-import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { createClient } from "@/lib/supabase/client"
 
 interface CampaignOption {
@@ -23,6 +23,7 @@ interface ChainOption {
 }
 
 export default function TriggersPage() {
+    const { workspace } = useParams<{ workspace: string }>()
     const [triggers, setTriggers] = useState<EmailTrigger[]>([])
     const [automatedEmails, setAutomatedEmails] = useState<CampaignOption[]>([])
     const [chains, setChains] = useState<ChainOption[]>([])
@@ -62,7 +63,7 @@ export default function TriggersPage() {
 
     const loadData = async () => {
         setLoading(true)
-        const [triggerData, tagData] = await Promise.all([getTriggers(DEFAULT_WORKSPACE), getTags(DEFAULT_WORKSPACE)])
+        const [triggerData, tagData] = await Promise.all([getTriggers(workspace), getTags(workspace)])
 
         // Fetch automated emails and chains for dropdowns
         const supabase = createClient()
@@ -109,7 +110,7 @@ export default function TriggersPage() {
         }
         setSaving("new")
         try {
-            await createTrigger(DEFAULT_WORKSPACE, {
+            await createTrigger(workspace, {
                 name: newName.trim(),
                 trigger_type: "subscriber_tag",
                 trigger_value: newTriggerValue,
@@ -158,7 +159,7 @@ export default function TriggersPage() {
         }
         setSaving(triggerId)
         try {
-            await updateTrigger(DEFAULT_WORKSPACE, triggerId, {
+            await updateTrigger(workspace, triggerId, {
                 name: editName.trim(),
                 trigger_value: editTriggerValue,
                 action_type: editActionType,
@@ -185,7 +186,7 @@ export default function TriggersPage() {
     const handleToggle = async (trigger: EmailTrigger) => {
         setSaving(trigger.id)
         try {
-            await updateTrigger(DEFAULT_WORKSPACE, trigger.id, { is_active: !trigger.is_active })
+            await updateTrigger(workspace, trigger.id, { is_active: !trigger.is_active })
             await loadData()
         } catch (e: any) {
             toast({ title: "Error", description: e.message, variant: "destructive" })
@@ -197,7 +198,7 @@ export default function TriggersPage() {
         if (!confirm(`Delete trigger "${trigger.name}"?`)) return
         setDeleting(trigger.id)
         try {
-            await deleteTrigger(DEFAULT_WORKSPACE, trigger.id)
+            await deleteTrigger(workspace, trigger.id)
             toast({ title: "Deleted", description: `"${trigger.name}" has been removed.` })
             await loadData()
         } catch (e: any) {

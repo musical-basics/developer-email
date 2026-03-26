@@ -1,10 +1,9 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { getRotations, createRotation, deleteRotation } from "@/app/actions/rotations"
 import { getCampaignList } from "@/app/actions/campaigns"
-import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { RefreshCw, Plus, Trash2, ChevronRight, Layers, Clock, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,6 +13,7 @@ import { useToast } from "@/hooks/use-toast"
 import { cn } from "@/lib/utils"
 
 export default function RotationsPage() {
+    const { workspace } = useParams<{ workspace: string }>()
     const router = useRouter()
     const { toast } = useToast()
     const [rotations, setRotations] = useState<any[]>([])
@@ -30,8 +30,8 @@ export default function RotationsPage() {
     const fetchData = async () => {
         setLoading(true)
         const [rots, campaigns] = await Promise.all([
-            getRotations(DEFAULT_WORKSPACE),
-            getCampaignList(DEFAULT_WORKSPACE),
+            getRotations(workspace),
+            getCampaignList(workspace),
         ])
         setRotations(rots)
         setTemplates(campaigns.filter((c: any) => c.is_template && c.is_ready))
@@ -43,7 +43,7 @@ export default function RotationsPage() {
     const handleCreate = async () => {
         if (!newName.trim() || selectedTemplateIds.length < 2) return
         setCreating(true)
-        const result = await createRotation(DEFAULT_WORKSPACE, newName.trim(), selectedTemplateIds)
+        const result = await createRotation(workspace, newName.trim(), selectedTemplateIds)
         if (result.success) {
             toast({ title: "Rotation created", description: `"${newName}" with ${selectedTemplateIds.length} campaigns.` })
             setCreateOpen(false)
@@ -59,7 +59,7 @@ export default function RotationsPage() {
     const handleDelete = async (id: string) => {
         if (!confirm("Delete this rotation? Child campaign stats will be preserved.")) return
         setDeletingId(id)
-        await deleteRotation(DEFAULT_WORKSPACE, id)
+        await deleteRotation(workspace, id)
         toast({ title: "Rotation deleted" })
         fetchData()
         setDeletingId(null)

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useEffect, useState } from "react"
-import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare, ArrowDownToLine, ScrollText, RefreshCw, Target } from "lucide-react"
+import { Home, Mail, Users, PenTool, BarChart3, Settings, Music, Layers, ImageIcon, Route, MousePointerSquareDashed, Zap, Brain, Tag, TicketPercent, BotMessageSquare, ArrowDownToLine, ScrollText, RefreshCw, Target, ArrowLeft } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 
@@ -49,9 +49,33 @@ const navGroups: NavGroup[] = [
     },
 ]
 
+// Map workspace slugs to display names
+const WORKSPACE_LABELS: Record<string, string> = {
+    dreamplay_marketing: "DreamPlay Marketing",
+    dreamplay_support: "DreamPlay Support",
+    musicalbasics: "MusicalBasics",
+    crossover: "Crossover",
+}
+
+const WORKSPACE_COLORS: Record<string, string> = {
+    dreamplay_marketing: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+    dreamplay_support: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+    musicalbasics: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+    crossover: "bg-violet-500/20 text-violet-300 border-violet-500/30",
+}
+
 export function AppSidebar() {
     const pathname = usePathname()
     const [pendingCount, setPendingCount] = useState(0)
+
+    // Extract workspace from URL: /dreamplay_marketing/audience → "dreamplay_marketing"
+    const segments = pathname.split("/").filter(Boolean)
+    const workspace = segments[0] || "dreamplay_marketing"
+    const workspaceLabel = WORKSPACE_LABELS[workspace] || workspace
+    const workspaceColor = WORKSPACE_COLORS[workspace] || "bg-muted text-muted-foreground"
+
+    // The "local" path within the workspace for active-state detection
+    const localPath = "/" + segments.slice(1).join("/")
 
     // Fetch pending AI draft count
     useEffect(() => {
@@ -80,12 +104,25 @@ export function AppSidebar() {
     return (
         <aside className="fixed left-0 top-0 z-40 h-screen w-64 border-r border-border bg-card">
             <div className="flex h-full flex-col">
-                {/* Brand */}
-                <div className="flex h-16 items-center gap-3 border-b border-border px-6">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
-                        <Music className="h-5 w-5 text-primary-foreground" />
+                {/* Brand + Workspace Indicator */}
+                <div className="border-b border-border px-4 py-3 space-y-2">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary">
+                            <Music className="h-5 w-5 text-primary-foreground" />
+                        </div>
+                        <span className="text-lg font-semibold text-foreground">Engine</span>
                     </div>
-                    <span className="text-lg font-semibold text-foreground">Musical Basics</span>
+                    <div className={cn("flex items-center justify-between rounded-md border px-2.5 py-1.5 text-xs font-medium", workspaceColor)}>
+                        <span className="truncate">{workspaceLabel}</span>
+                        <Link
+                            href="/"
+                            className="flex items-center gap-1 text-[10px] opacity-70 hover:opacity-100 transition-opacity"
+                            title="Switch Workspace"
+                        >
+                            <ArrowLeft className="h-3 w-3" />
+                            Switch
+                        </Link>
+                    </div>
                 </div>
 
                 {/* Navigation */}
@@ -99,11 +136,16 @@ export function AppSidebar() {
                             )}
                             <div className="space-y-1">
                                 {group.items.map((item) => {
-                                    const isActive = pathname === item.href
+                                    // Editor links stay outside workspace routing
+                                    const isEditorLink = ["/editor", "/modular-editor", "/dnd-editor", "/editor-v2"].includes(item.href)
+                                    const fullHref = isEditorLink ? item.href : `/${workspace}${item.href === "/" ? "" : item.href}`
+                                    const isActive = isEditorLink
+                                        ? pathname === item.href
+                                        : localPath === item.href || (item.href === "/" && localPath === "/")
                                     return (
                                         <Link
                                             key={item.name}
-                                            href={item.href}
+                                            href={fullHref}
                                             className={cn(
                                                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                                                 isActive
@@ -123,10 +165,10 @@ export function AppSidebar() {
                     {/* Below separator */}
                     <div className="pt-4 mt-4 border-t border-border space-y-1">
                         <Link
-                            href="/approvals"
+                            href={`/${workspace}/approvals`}
                             className={cn(
                                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                                pathname === "/approvals"
+                                localPath === "/approvals"
                                     ? "bg-violet-500/20 text-violet-300"
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                             )}
@@ -140,10 +182,10 @@ export function AppSidebar() {
                             )}
                         </Link>
                         <Link
-                            href="/settings"
+                            href={`/${workspace}/settings`}
                             className={cn(
                                 "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                                pathname === "/settings"
+                                localPath === "/settings"
                                     ? "bg-primary/10 text-primary"
                                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                             )}
@@ -156,7 +198,7 @@ export function AppSidebar() {
 
                 {/* Footer */}
                 <div className="border-t border-border p-4">
-                    <p className="text-xs text-muted-foreground">Musical Basics Engine v1.0</p>
+                    <p className="text-xs text-muted-foreground">Musical Basics Engine v2.0</p>
                 </div>
             </div>
         </aside>

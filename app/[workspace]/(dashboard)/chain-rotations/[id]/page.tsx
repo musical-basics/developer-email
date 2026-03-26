@@ -1,9 +1,8 @@
 "use client"
 
 import { useEffect, useState, useMemo, use } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { getChainRotation, getChainRotationAnalytics, enrollInChainRotation, updateChainRotation } from "@/app/actions/chain-rotations"
-import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { getTags, type TagDefinition } from "@/app/actions/tags"
 import { ArrowLeft, RefreshCw, Users, Eye, MousePointer2, GitBranch, Loader2, UserPlus, CheckCircle2, BarChart3, Search, Tag, X, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -14,8 +13,8 @@ import { createClient } from "@/lib/supabase/client"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 
-export default function ChainRotationDetailPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params)
+export default function ChainRotationDetailPage({ params }: { params: Promise<{ id: string; workspace: string }> }) {
+    const { id, workspace } = use(params)
     const router = useRouter()
     const { toast } = useToast()
 
@@ -92,7 +91,7 @@ export default function ChainRotationDetailPage({ params }: { params: Promise<{ 
         setTestSubscribers(allData)
 
         // Load tag definitions
-        const { tags: defs } = await getTags(DEFAULT_WORKSPACE)
+        const { tags: defs } = await getTags(workspace)
         setTagDefinitions(defs)
 
         setLoadingSubs(false)
@@ -100,7 +99,7 @@ export default function ChainRotationDetailPage({ params }: { params: Promise<{ 
 
     const handleSaveName = async () => {
         if (!editName.trim() || !rotation) return
-        await updateChainRotation(DEFAULT_WORKSPACE, id, editName.trim(), rotation.chain_ids)
+        await updateChainRotation(workspace, id, editName.trim(), rotation.chain_ids)
         setEditingName(false)
         fetchData()
         toast({ title: "Name updated" })

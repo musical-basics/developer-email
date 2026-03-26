@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
+import { useParams } from "next/navigation"
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -30,7 +31,6 @@ import {
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
 import { getCampaignList } from "@/app/actions/campaigns"
-import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { getChainProcesses, updateProcessStatus, kickChainStep } from "@/app/actions/chain-processes"
 import type { ChainProcess, ChainProcessHistoryEntry } from "@/lib/types"
 import { CustomerJourneysTab } from "@/components/chains/customer-journeys-tab"
@@ -290,6 +290,7 @@ function ChainFormDialog({
     onSave,
     subscriberName,
     forceDraftMode,
+    workspace,
 }: {
     open: boolean
     onOpenChange: (open: boolean) => void
@@ -297,6 +298,7 @@ function ChainFormDialog({
     onSave: (data: ChainFormData, chainId?: string) => Promise<void>
     subscriberName?: string
     forceDraftMode?: boolean
+    workspace: string
 }) {
     const isEditingDraft = !!editingChain?.subscriber_id
     const isDraftMode = forceDraftMode || (!!subscriberName && !editingChain) || isEditingDraft
@@ -320,7 +322,7 @@ function ChainFormDialog({
 
     useEffect(() => {
         if (open) {
-            getCampaignList(DEFAULT_WORKSPACE).then(data => setCampaigns(data.filter((c: any) => c.is_template === true)))
+            getCampaignList(workspace).then(data => setCampaigns(data.filter((c: any) => c.is_template === true)))
         }
     }, [open])
 
@@ -1113,6 +1115,7 @@ function ChainProcessCard({
 
 // ─── MAIN PAGE ─────────────────────────────────────────────
 export default function ChainsPage() {
+    const { workspace } = useParams<{ workspace: string }>()
     const [chains, setChains] = useState<ChainRow[]>([])
     const [loading, setLoading] = useState(true)
     const [formOpen, setFormOpen] = useState(false)
@@ -1132,7 +1135,7 @@ export default function ChainsPage() {
     const { toast } = useToast()
 
     const fetchChains = useCallback(async () => {
-        const { data, error } = await getChains(DEFAULT_WORKSPACE)
+        const { data, error } = await getChains(workspace)
         if (error) {
             toast({ title: "Error", description: error, variant: "destructive" })
         } else {
@@ -1165,14 +1168,14 @@ export default function ChainsPage() {
         }
 
         if (chainId) {
-            const { error } = await updateChain(DEFAULT_WORKSPACE, chainId, saveData)
+            const { error } = await updateChain(workspace, chainId, saveData)
             if (error) {
                 toast({ title: "Error updating chain", description: error, variant: "destructive" })
                 return
             }
             toast({ title: "Chain updated", description: `"${formData.name}" has been updated.` })
         } else {
-            const { error } = await createChain(DEFAULT_WORKSPACE, saveData)
+            const { error } = await createChain(workspace, saveData)
             if (error) {
                 toast({ title: "Error creating chain", description: error, variant: "destructive" })
                 return
@@ -1192,7 +1195,7 @@ export default function ChainsPage() {
     const handleDelete = async () => {
         if (!deleteTarget) return
         setDeleting(true)
-        const { error } = await deleteChain(DEFAULT_WORKSPACE, deleteTarget.id)
+        const { error } = await deleteChain(workspace, deleteTarget.id)
         if (error) {
             toast({ title: "Error deleting chain", description: error, variant: "destructive" })
         } else {
@@ -1220,7 +1223,7 @@ export default function ChainsPage() {
     // Fetch draft chains
     const fetchDrafts = useCallback(async () => {
         setLoadingDrafts(true)
-        const { data } = await getDraftChains(DEFAULT_WORKSPACE)
+        const { data } = await getDraftChains(workspace)
         setDraftChains(data || [])
         setLoadingDrafts(false)
     }, [])
@@ -1474,6 +1477,7 @@ export default function ChainsPage() {
                 onSave={handleSave}
                 subscriberName={draftSubscriberName || undefined}
                 forceDraftMode={forceDraftMode}
+                workspace={workspace}
             />
 
             {/* Delete Confirmation */}

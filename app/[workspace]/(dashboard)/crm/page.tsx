@@ -6,13 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { formatDistanceToNow } from "date-fns"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { getCRMLeads } from "@/app/actions/crm"
 import { type CRMLead, type CRMScoringConfig, DEFAULT_CRM_CONFIG } from "@/lib/crm-types"
 import { CRMConfigPanel, getActiveConfig } from "@/components/crm/crm-config-panel"
 import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
 import { getCampaignList, getRecentlyUsedTemplateIds, duplicateCampaignForSubscriber, createBulkCampaign } from "@/app/actions/campaigns"
-import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { type Campaign, type Subscriber } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { SubscriberHistoryTimeline } from "@/components/audience/subscriber-history-timeline"
@@ -45,6 +44,7 @@ function setCachedLeads(config: CRMScoringConfig, leads: CRMLead[]) {
 }
 
 export default function CRMPage() {
+    const { workspace } = useParams<{ workspace: string }>()
     const [leads, setLeads] = useState<CRMLead[]>([])
     const [loading, setLoading] = useState(true)
     const [isPending, startTransition] = useTransition()
@@ -144,8 +144,8 @@ export default function CRMPage() {
 
         try {
             const [campaigns, recentIds] = await Promise.all([
-                getCampaignList(DEFAULT_WORKSPACE),
-                getRecentlyUsedTemplateIds(DEFAULT_WORKSPACE),
+                getCampaignList(workspace),
+                getRecentlyUsedTemplateIds(workspace),
             ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
             setRecentlyUsedIds(recentIds)
@@ -178,8 +178,8 @@ export default function CRMPage() {
 
         try {
             const [campaigns, recentIds] = await Promise.all([
-                getCampaignList(DEFAULT_WORKSPACE),
-                getRecentlyUsedTemplateIds(DEFAULT_WORKSPACE),
+                getCampaignList(workspace),
+                getRecentlyUsedTemplateIds(workspace),
             ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
             setRecentlyUsedIds(recentIds)

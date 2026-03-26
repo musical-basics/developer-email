@@ -100,7 +100,6 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { createClient } from "@/lib/supabase/client"
 import { createCampaignForSubscriber, getCampaignList, duplicateCampaignForSubscriber, createBulkCampaign, getRecentlyUsedTemplateIds } from "@/app/actions/campaigns"
-import { DEFAULT_WORKSPACE } from "@/lib/workspace"
 import { SendCampaignModal } from "@/components/audience/send-campaign-modal"
 import { SendRotationModal } from "@/components/audience/send-rotation-modal"
 import { ChainPickerDialog } from "@/components/audience/chain-picker-dialog"
@@ -112,7 +111,7 @@ import { startChainProcess } from "@/app/actions/chain-processes"
 import { getChainRotations } from "@/app/actions/chain-rotations"
 import { getTags, ensureTagDefinitions, type TagDefinition } from "@/app/actions/tags"
 import { evaluateTriggersForSubscriber } from "@/app/actions/evaluate-triggers"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Subscriber, Campaign } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { softDeleteSubscriber, bulkSoftDeleteSubscribers } from "@/app/actions/subscribers"
@@ -149,6 +148,7 @@ function formatDate(dateString: string): string {
 }
 
 export default function AudienceManagerPage() {
+    const { workspace } = useParams<{ workspace: string }>()
     const [subscribers, setSubscribers] = useState<Subscriber[]>([])
     const [loading, setLoading] = useState(true)
     const [lastSentSubjects, setLastSentSubjects] = useState<Record<string, { subject: string; sentAt: string }>>({})
@@ -361,7 +361,7 @@ export default function AudienceManagerPage() {
     }
 
     const fetchTagDefinitions = async () => {
-        const { tags: defs } = await getTags(DEFAULT_WORKSPACE)
+        const { tags: defs } = await getTags(workspace)
         setTagDefinitions(defs)
     }
 
@@ -371,7 +371,7 @@ export default function AudienceManagerPage() {
         fetchUnsubHistory()
         fetchClickOrVisitHistory()
         // Load saved views from DB
-        getSavedViews(DEFAULT_WORKSPACE).then(views => {
+        getSavedViews(workspace).then(views => {
             setSavedViews(views)
             // Apply active view filters
             const activeId = localStorage.getItem(ACTIVE_VIEW_KEY)
@@ -408,7 +408,7 @@ export default function AudienceManagerPage() {
 
     const handleSaveView = async () => {
         if (!newViewName.trim()) return
-        const created = await createSavedView(DEFAULT_WORKSPACE, {
+        const created = await createSavedView(workspace, {
             name: newViewName.trim(),
             search_query: searchQuery,
             selected_tags: selectedTags,
@@ -427,7 +427,7 @@ export default function AudienceManagerPage() {
     }
 
     const handleDeleteView = async (viewId: string) => {
-        const ok = await deleteSavedView(DEFAULT_WORKSPACE, viewId)
+        const ok = await deleteSavedView(workspace, viewId)
         if (ok) {
             setSavedViews(prev => prev.filter(v => v.id !== viewId))
             if (activeViewId === viewId) clearActiveView()
@@ -436,7 +436,7 @@ export default function AudienceManagerPage() {
 
     const handleRenameView = async (viewId: string) => {
         if (!renameViewName.trim()) return
-        const updated = await updateSavedView(DEFAULT_WORKSPACE, viewId, { name: renameViewName.trim() })
+        const updated = await updateSavedView(workspace, viewId, { name: renameViewName.trim() })
         if (updated) {
             setSavedViews(prev => prev.map(v => v.id === viewId ? updated : v))
         }
@@ -445,7 +445,7 @@ export default function AudienceManagerPage() {
     }
 
     const handleUpdateViewFilters = async (viewId: string) => {
-        const updated = await updateSavedView(DEFAULT_WORKSPACE, viewId, {
+        const updated = await updateSavedView(workspace, viewId, {
             search_query: searchQuery,
             selected_tags: selectedTags,
             excluded_tags: excludedTags,
@@ -656,7 +656,7 @@ export default function AudienceManagerPage() {
 
         // Ensure any new tags have a tag_definitions entry
         if (payload.tags.length > 0) {
-            await ensureTagDefinitions(DEFAULT_WORKSPACE, payload.tags)
+            await ensureTagDefinitions(workspace, payload.tags)
         }
 
         if (isNewSubscriber) {
@@ -690,7 +690,7 @@ export default function AudienceManagerPage() {
             const addedTags = savedTags.filter((t: string) => !prevTags.includes(t))
             if (addedTags.length > 0 && formData.id) {
                 console.log("[audience] New tags added, evaluating triggers:", addedTags)
-                evaluateTriggersForSubscriber(formData.id, savedTags, prevTags, DEFAULT_WORKSPACE)
+                evaluateTriggersForSubscriber(formData.id, savedTags, prevTags, workspace)
                     .then(res => console.log("[audience] Trigger evaluation result:", res))
                     .catch(err => console.error("[audience] Trigger evaluation error:", err))
             }
@@ -702,7 +702,7 @@ export default function AudienceManagerPage() {
     }
 
     const handleDelete = async (id: string) => {
-        const { error } = await softDeleteSubscriber(DEFAULT_WORKSPACE, id)
+        const { error } = await softDeleteSubscriber(workspace, id)
 
         if (error) {
             toast({
@@ -723,7 +723,7 @@ export default function AudienceManagerPage() {
     const handleBulkDelete = async () => {
         if (selectedIds.length === 0) return
 
-        const { error } = await bulkSoftDeleteSubscribers(DEFAULT_WORKSPACE, selectedIds)
+        const { error } = await bulkSoftDeleteSubscribers(workspace, selectedIds)
 
         if (error) {
             toast({
@@ -778,7 +778,7 @@ export default function AudienceManagerPage() {
                 ? `${subscriber.first_name} ${subscriber.last_name || ''}`.trim()
                 : ''
 
-            const result = await createCampaignForSubscriber(DEFAULT_WORKSPACE, subscriber.id, subscriber.email, name)
+            const result = await createCampaignForSubscriber(workspace, subscriber.id, subscriber.email, name)
 
             if (result.error) {
                 throw new Error(result.error)
@@ -808,8 +808,8 @@ export default function AudienceManagerPage() {
 
         try {
             const [campaigns, recentIds] = await Promise.all([
-                getCampaignList(DEFAULT_WORKSPACE),
-                getRecentlyUsedTemplateIds(DEFAULT_WORKSPACE),
+                getCampaignList(workspace),
+                getRecentlyUsedTemplateIds(workspace),
             ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
             setRecentlyUsedIds(recentIds)
@@ -899,8 +899,8 @@ export default function AudienceManagerPage() {
 
         try {
             const [campaigns, recentIds] = await Promise.all([
-                getCampaignList(DEFAULT_WORKSPACE),
-                getRecentlyUsedTemplateIds(DEFAULT_WORKSPACE),
+                getCampaignList(workspace),
+                getRecentlyUsedTemplateIds(workspace),
             ])
             setExistingCampaigns((campaigns as Campaign[]).filter(c => c.is_template === true))
             setRecentlyUsedIds(recentIds)
@@ -917,7 +917,7 @@ export default function AudienceManagerPage() {
         setIsChainPickerOpen(true)
         setLoadingChains(true)
         try {
-            const { data } = await getChains(DEFAULT_WORKSPACE)
+            const { data } = await getChains(workspace)
             setAvailableChains(data || [])
         } catch (error) {
             console.error("Failed to load chains", error)
@@ -957,7 +957,7 @@ export default function AudienceManagerPage() {
         setIsChainPickerOpen(true)
         setLoadingChains(true)
         try {
-            const { data } = await getChains(DEFAULT_WORKSPACE)
+            const { data } = await getChains(workspace)
             setAvailableChains(data || [])
         } catch (error) {
             console.error("Failed to load chains", error)
@@ -972,7 +972,7 @@ export default function AudienceManagerPage() {
         setIsChainRotationPickerOpen(true)
         setLoadingChainRotations(true)
         try {
-            const rotations = await getChainRotations(DEFAULT_WORKSPACE)
+            const rotations = await getChainRotations(workspace)
             setAvailableChainRotations(rotations)
         } catch (error) {
             console.error("Failed to load chain rotations", error)

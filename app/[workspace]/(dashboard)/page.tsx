@@ -5,9 +5,10 @@ import { getTemplateFolders } from "@/app/actions/template-folders"
 
 export const dynamic = "force-dynamic"
 
-export default async function CampaignsPage() {
+export default async function DashboardHomePage({ params }: { params: Promise<{ workspace: string }> }) {
+    const { workspace } = await params
     const [{ campaigns, totalCompleted }, folders] = await Promise.all([
-        getCampaigns("campaign"),
+        getCampaigns(workspace, "campaign"),
         getTemplateFolders(),
     ])
 
