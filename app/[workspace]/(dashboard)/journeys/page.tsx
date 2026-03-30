@@ -31,7 +31,7 @@ import {
     type ChainRow, type ChainFormData
 } from "@/app/actions/chains"
 import { getCampaignList } from "@/app/actions/campaigns"
-import { getChainProcesses, updateProcessStatus, kickChainStep } from "@/app/actions/chain-processes"
+import { getChainProcesses, updateProcessStatus, kickChainStep, pauseAllActiveProcesses, resumeAllPausedProcesses } from "@/app/actions/chain-processes"
 import type { ChainProcess, ChainProcessHistoryEntry } from "@/lib/types"
 import { CustomerJourneysTab } from "@/components/chains/customer-journeys-tab"
 
@@ -1126,6 +1126,8 @@ export default function ChainsPage() {
     const [activeTab, setActiveTab] = useState<"journeys" | "templates" | "running" | "drafts">("journeys")
     const [processes, setProcesses] = useState<ChainProcess[]>([])
     const [loadingProcesses, setLoadingProcesses] = useState(false)
+    const [pausingAll, setPausingAll] = useState(false)
+    const [resumingAll, setResumingAll] = useState(false)
     // Draft chains state
     const [draftChains, setDraftChains] = useState<ChainRow[]>([])
     const [loadingDrafts, setLoadingDrafts] = useState(false)
@@ -1217,7 +1219,45 @@ export default function ChainsPage() {
         }
     }
 
+    const handlePauseAllChains = async () => {
+        setPausingAll(true)
+        const result = await pauseAllActiveProcesses()
+        setPausingAll(false)
+
+        if (!result.success) {
+            toast({ title: "Error", description: result.error || "Failed to pause chains", variant: "destructive" })
+            return
+        }
+
+        if (result.pausedCount === 0) {
+            toast({ title: "No active chains", description: "All chains are already paused or completed." })
+        } else {
+            toast({ title: "All active chains paused", description: `Paused ${result.pausedCount} chain${result.pausedCount === 1 ? "" : "s"}.` })
+        }
+        fetchProcesses()
+    }
+
+    const handleResumeAllChains = async () => {
+        setResumingAll(true)
+        const result = await resumeAllPausedProcesses()
+        setResumingAll(false)
+
+        if (!result.success) {
+            toast({ title: "Error", description: result.error || "Failed to resume chains", variant: "destructive" })
+            return
+        }
+
+        if (result.resumedCount === 0) {
+            toast({ title: "No paused chains", description: "All chains are already active or completed." })
+        } else {
+            toast({ title: "All paused chains resumed", description: `Resumed ${result.resumedCount} chain${result.resumedCount === 1 ? "" : "s"}.` })
+        }
+        fetchProcesses()
+    }
+
     const activeProcesses = processes.filter(p => p.status === "active" || p.status === "paused")
+    const activelyRunningProcesses = processes.filter(p => p.status === "active")
+    const pausedProcesses = processes.filter(p => p.status === "paused")
     const completedProcesses = processes.filter(p => p.status === "completed" || p.status === "cancelled")
 
     // Fetch draft chains
@@ -1353,7 +1393,31 @@ export default function ChainsPage() {
                             {/* Active Processes */}
                             {activeProcesses.length > 0 && (
                                 <div className="space-y-3">
-                                    <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active / Paused</h2>
+                                    <div className="flex items-center justify-between gap-3">
+                                        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">Active / Paused</h2>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handlePauseAllChains}
+                                                disabled={pausingAll || resumingAll || activelyRunningProcesses.length === 0}
+                                                className="text-amber-400 border-amber-500/30 hover:bg-amber-500/10"
+                                            >
+                                                {pausingAll ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Pause className="h-3.5 w-3.5 mr-1" />}
+                                                Pause All Chains
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleResumeAllChains}
+                                                disabled={resumingAll || pausingAll || pausedProcesses.length === 0}
+                                                className="text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                            >
+                                                {resumingAll ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Play className="h-3.5 w-3.5 mr-1" />}
+                                                Resume All Chains
+                                            </Button>
+                                        </div>
+                                    </div>
                                     {activeProcesses.map(p => (
                                         <ChainProcessCard key={p.id} process={p} onStatusChange={handleProcessStatusChange} />
                                     ))}

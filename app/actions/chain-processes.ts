@@ -294,6 +294,102 @@ export async function updateProcessStatus(processId: string, newStatus: "active"
     return { success: true }
 }
 
+// ─── PAUSE ALL ACTIVE PROCESSES ───────────────────────────
+export async function pauseAllActiveProcesses() {
+    const supabase = await createClient()
+
+    const { data: processes, error: fetchError } = await supabase
+        .from("chain_processes")
+        .select("id, history")
+        .eq("status", "active")
+
+    if (fetchError) {
+        console.error("Error loading active processes:", fetchError)
+        return { success: false, error: fetchError.message, pausedCount: 0 }
+    }
+
+    if (!processes || processes.length === 0) {
+        return { success: true, pausedCount: 0 }
+    }
+
+    const timestamp = new Date().toISOString()
+
+    for (const process of processes) {
+        const history = process.history || []
+        history.push({
+            step_name: "System",
+            action: "Chain Paused",
+            timestamp,
+        })
+
+        const { error: updateError } = await supabase
+            .from("chain_processes")
+            .update({
+                status: "paused",
+                history,
+                updated_at: timestamp,
+            })
+            .eq("id", process.id)
+
+        if (updateError) {
+            console.error("Error pausing process:", process.id, updateError)
+            return { success: false, error: updateError.message, pausedCount: 0 }
+        }
+    }
+
+    revalidatePath("/journeys")
+    return { success: true, pausedCount: processes.length }
+}
+
+// ─── RESUME ALL PAUSED PROCESSES ──────────────────────────
+export async function resumeAllPausedProcesses() {
+    const supabase = await createClient()
+
+    const { data: processes, error: fetchError } = await supabase
+        .from("chain_processes")
+        .select("id, history")
+        .eq("status", "paused")
+
+    if (fetchError) {
+        console.error("Error loading paused processes:", fetchError)
+        return { success: false, error: fetchError.message, resumedCount: 0 }
+    }
+
+    if (!processes || processes.length === 0) {
+        return { success: true, resumedCount: 0 }
+    }
+
+    const timestamp = new Date().toISOString()
+
+    for (const process of processes) {
+        const history = process.history || []
+        history.push({
+            step_name: "System",
+            action: "Chain Resumed",
+            timestamp,
+        })
+
+        const { error: updateError } = await supabase
+            .from("chain_processes")
+            .update({
+                status: "active",
+                history,
+                updated_at: timestamp,
+            })
+            .eq("id", process.id)
+
+        if (updateError) {
+            console.error("Error resuming process:", process.id, updateError)
+            return { success: false, error: updateError.message, resumedCount: 0 }
+        }
+
+        await inngest.send({ name: "chain.resume", data: { processId: process.id } })
+    }
+
+    revalidatePath("/journeys")
+    return { success: true, resumedCount: processes.length }
+}
+
 // ─── KICK CHAIN STEP (advance immediately) ─────────────────
 // Manually trigger the next pending step without waiting for the timer.
 // Cancels the current Inngest run, sends the email, and restarts from the new position.
